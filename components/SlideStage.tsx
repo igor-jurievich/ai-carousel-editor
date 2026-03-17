@@ -26,6 +26,7 @@ type SlideStageProps = {
   onTransformElement?: (elementId: string, updates: Record<string, number>) => void;
   onStartTextEditing?: (elementId: string) => void;
   stageRef?: (node: Konva.Stage | null) => void;
+  showSlideBadge?: boolean;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -85,6 +86,24 @@ function clampPosition(position: { x: number; y: number }, bounds: DragBounds) {
     x: clamp(position.x, bounds.minX, bounds.maxX),
     y: clamp(position.y, bounds.minY, bounds.maxY)
   };
+}
+
+function estimateTextHeight(element: TextElement, width: number) {
+  const lineHeight = element.lineHeight ?? 1.1;
+  const approxCharsPerLine = Math.max(6, Math.floor(width / Math.max(8, element.fontSize * 0.58)));
+  const paragraphs = element.text.replace(/\r/g, "").split("\n");
+  let lines = 0;
+
+  for (const paragraph of paragraphs) {
+    const normalized = paragraph.trim();
+    if (!normalized) {
+      lines += 1;
+      continue;
+    }
+    lines += Math.max(1, Math.ceil(normalized.length / approxCharsPerLine));
+  }
+
+  return Math.ceil(lines * element.fontSize * lineHeight + element.fontSize * 0.4);
 }
 
 function SlideImageNode({
@@ -222,6 +241,7 @@ function SlideTextNode({
       opacity={element.opacity}
       rotation={element.rotation}
       letterSpacing={element.letterSpacing}
+      textDecoration={element.textDecoration}
       draggable={interactive && selected}
       dragDistance={10}
       dragBoundFunc={dragBoundFunc}
@@ -251,7 +271,8 @@ export function SlideStage({
   onUpdateElementPosition,
   onTransformElement,
   onStartTextEditing,
-  stageRef
+  stageRef,
+  showSlideBadge = true
 }: SlideStageProps) {
   const scale = useMemo(() => width / canvasWidth, [canvasWidth, width]);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -268,27 +289,51 @@ export function SlideStage({
     transformerRef.current.getLayer()?.batchDraw();
   }, [interactive, selectedElementId, slide.elements]);
 
+  const selectedElement = selectedElementId
+    ? slide.elements.find((element) => element.id === selectedElementId) ?? null
+    : null;
+
   const handleTransformEnd = (element: CanvasElement, node: Konva.Node) => {
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
     const maxWidth =
       element.type === "text"
-        ? Math.max(60, canvasWidth - TEXT_SAFE_AREA.insetX * 2)
+        ? Math.max(120, canvasWidth - TEXT_SAFE_AREA.insetX * 2)
         : canvasWidth;
     const maxHeight =
       element.type === "text"
-        ? Math.max(28, canvasHeight - TEXT_SAFE_AREA.insetTop - TEXT_SAFE_AREA.insetBottom)
+        ? Math.max(42, canvasHeight - TEXT_SAFE_AREA.insetTop - TEXT_SAFE_AREA.insetBottom)
         : canvasHeight;
-    const nextWidth = clamp(
+    let nextWidth = clamp(
       element.width * scaleX,
-      element.type === "text" ? 60 : 30,
+      element.type === "text" ? 120 : 30,
       maxWidth
     );
-    const nextHeight = clamp(
+    let nextHeight = clamp(
       element.height * scaleY,
-      element.type === "text" ? 28 : 24,
+      element.type === "text" ? 42 : 24,
       maxHeight
     );
+
+    if (element.type === "image") {
+      const aspect = element.width / Math.max(1, element.height);
+      if (Math.abs(scaleX - 1) >= Math.abs(scaleY - 1)) {
+        nextHeight = clamp(nextWidth / aspect, 24, maxHeight);
+        if (nextHeight >= maxHeight) {
+          nextWidth = clamp(nextHeight * aspect, 30, maxWidth);
+        }
+      } else {
+        nextWidth = clamp(nextHeight * aspect, 30, maxWidth);
+        if (nextWidth >= maxWidth) {
+          nextHeight = clamp(nextWidth / aspect, 24, maxHeight);
+        }
+      }
+    }
+
+    if (element.type === "text") {
+      nextHeight = clamp(estimateTextHeight(element, nextWidth), 42, maxHeight);
+    }
+
     const bounds = resolveDragBounds(element, canvasWidth, canvasHeight, nextWidth, nextHeight);
     const clampedPosition = clampPosition({ x: node.x(), y: node.y() }, bounds);
     const updates: Record<string, number> = {
@@ -298,10 +343,6 @@ export function SlideStage({
       height: nextHeight,
       rotation: node.rotation()
     };
-
-    if (element.type === "text") {
-      updates.fontSize = clamp(element.fontSize * scaleY, 14, 220);
-    }
 
     node.scaleX(1);
     node.scaleY(1);
@@ -347,7 +388,14 @@ export function SlideStage({
           listening={false}
         />
 
-        {slide.elements.map((element) => {
+        {slide.elements
+          .filter((element) => {
+            if (showSlideBadge) {
+              return true;
+            }
+            return element.metaKey !== "slide-chip" && element.metaKey !== "slide-chip-text";
+          })
+          .map((element) => {
           const selected = selectedElementId === element.id;
           const dragBounds = resolveDragBounds(element, canvasWidth, canvasHeight);
 
@@ -408,13 +456,19 @@ export function SlideStage({
               onTransformEnd={(node) => handleTransformEnd(element, node)}
             />
           );
-        })}
+          })}
 
         {interactive ? (
           <Transformer
             ref={transformerRef}
             rotateEnabled
             flipEnabled={false}
+            keepRatio={selectedElement?.type === "image"}
+            enabledAnchors={
+              selectedElement?.type === "text"
+                ? ["middle-left", "middle-right"]
+                : ["top-left", "top-right", "bottom-left", "bottom-right"]
+            }
             borderStroke="#72d6cb"
             anchorFill="#ffffff"
             anchorStroke="#2d6f69"

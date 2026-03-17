@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import {
+  BACKGROUND_STYLE_PRESETS,
   FOOTER_VARIANTS,
   FONT_OPTIONS,
+  getPrimaryTemplates,
   getTemplatesByCategory,
   TEMPLATE_CATEGORY_LABELS
 } from "@/lib/carousel";
+import { AppIcon } from "@/components/icons";
 import type {
   CanvasElement,
   CarouselTemplateId,
@@ -54,6 +57,10 @@ type SettingsPanelProps = {
   onFooterVariantChange: (value: FooterVariantId) => void;
   onUpdateElement: (elementId: string, updater: (element: CanvasElement) => CanvasElement) => void;
   onCenterSelectedElement: () => void;
+  showSlideBadge: boolean;
+  onToggleSlideBadge: () => void;
+  disabled?: boolean;
+  previewMode?: boolean;
 };
 
 export function SettingsPanel({
@@ -90,9 +97,15 @@ export function SettingsPanel({
   onProfileSubtitleChange,
   onFooterVariantChange,
   onUpdateElement,
-  onCenterSelectedElement
+  onCenterSelectedElement,
+  showSlideBadge,
+  onToggleSlideBadge,
+  disabled = false,
+  previewMode = false
 }: SettingsPanelProps) {
+  const [showExtendedTemplates, setShowExtendedTemplates] = useState(false);
   const visibleTemplates = getTemplatesByCategory(activeTemplateCategory);
+  const primaryTemplates = getPrimaryTemplates();
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const currentTemplate = visibleTemplates.find((template) => template.id === activeTemplateId);
   const activeIndex = Math.max(
@@ -136,6 +149,18 @@ export function SettingsPanel({
         : "Выбрана фигура"
     : null;
 
+  if (previewMode) {
+    return (
+      <section className="settings-card">
+        <h3>Preview mode</h3>
+        <div className="settings-hint">
+          Режим просмотра скрывает управляющие элементы на canvas. Отключите Preview, чтобы
+          вернуться к редактированию.
+        </div>
+      </section>
+    );
+  }
+
   return (
     <>
       <section className="settings-card">
@@ -151,8 +176,12 @@ export function SettingsPanel({
               type="button"
               className="ghost-chip ghost-chip-small"
               onClick={() => onInsertSlideAt(activeIndex + 1)}
+              disabled={disabled}
             >
-              + Добавить
+              <span className="chip-with-icon">
+                <AppIcon name="plus" size={14} />
+                Добавить
+              </span>
             </button>
           </div>
 
@@ -165,13 +194,16 @@ export function SettingsPanel({
                     type="button"
                     className={`slides-list-item ${isActive ? "active" : ""}`}
                     onClick={() => onSelectSlide(item.id)}
+                    disabled={disabled}
                   >
                     <span className="slides-list-index">{index + 1}</span>
                     <span className="slides-list-copy">
                       <strong>{item.name}</strong>
                       <span>{item.templateId ?? "custom"}</span>
                     </span>
-                    <span className="slides-list-arrow">›</span>
+                    <span className="slides-list-arrow">
+                      <AppIcon name="chevron-right" size={14} />
+                    </span>
                   </button>
 
                   <button
@@ -180,9 +212,9 @@ export function SettingsPanel({
                     onClick={() => onDeleteSlide(item.id)}
                     title="Удалить слайд"
                     aria-label={`Удалить слайд ${index + 1}`}
-                    disabled={slides.length <= 1}
+                    disabled={slides.length <= 1 || disabled}
                   >
-                    ⌫
+                    <AppIcon name="trash" size={14} />
                   </button>
                 </div>
               );
@@ -191,100 +223,167 @@ export function SettingsPanel({
         </div>
 
         <div className="settings-block">
-          <span className="settings-label">Категория шаблонов</span>
-          <div className="segment-control">
-            {(Object.keys(TEMPLATE_CATEGORY_LABELS) as TemplateCategoryId[]).map((category) => (
+          <span className="settings-label">Быстрый старт: 3 базовых шаблона</span>
+          <div className="template-grid template-grid-primary">
+            {primaryTemplates.map((template) => (
               <button
-                key={category}
+                key={template.id}
                 type="button"
-                className={`segment-item ${activeTemplateCategory === category ? "active" : ""}`}
-                onClick={() => onTemplateCategoryChange(category)}
+                className={`template-card ${template.id === activeTemplateId ? "active" : ""}`}
+                onClick={() => onApplyTemplate(template.id)}
+                disabled={disabled}
               >
-                {TEMPLATE_CATEGORY_LABELS[category]}
+                <span
+                  className="template-preview"
+                  style={{
+                    background:
+                      template.accentAlt
+                        ? `linear-gradient(140deg, ${template.background} 0%, ${template.surface} 56%, ${template.accentAlt} 100%)`
+                        : template.background
+                  }}
+                >
+                  <span className="template-preview-sheen" />
+                  <span
+                    className="template-preview-chip"
+                    style={{ backgroundColor: template.accent }}
+                  />
+                  <span
+                    className="template-preview-title"
+                    style={{ color: template.titleColor }}
+                  >
+                    {getTemplatePreviewHeadline(template)}
+                  </span>
+                  <span className="template-preview-lines">
+                    <span style={{ backgroundColor: template.bodyColor }} />
+                    <span style={{ backgroundColor: template.bodyColor }} />
+                    <span style={{ backgroundColor: template.bodyColor }} />
+                  </span>
+                  <span className="template-preview-footer" style={{ color: template.bodyColor }}>
+                    @creator <strong>→</strong>
+                  </span>
+                </span>
+                <span className="template-card-meta">
+                  <strong>{template.name}</strong>
+                  <span>{getTemplatePreviewCaption(template)}</span>
+                </span>
               </button>
             ))}
-          </div>
-        </div>
-
-        <div className="settings-block">
-          <span className="settings-label">Шаблоны внутри категории</span>
-          <div className="segment-control">
-            <button
-              type="button"
-              className={`segment-item ${templateScope === "slide" ? "active" : ""}`}
-              onClick={() => onTemplateScopeChange("slide")}
-            >
-              Этот слайд
-            </button>
-            <button
-              type="button"
-              className={`segment-item ${templateScope === "all" ? "active" : ""}`}
-              onClick={() => onTemplateScopeChange("all")}
-            >
-              Вся карусель
-            </button>
           </div>
 
           <button
             type="button"
             className="template-disclosure"
-            onClick={() => setTemplatesOpen((value) => !value)}
+            onClick={() => setShowExtendedTemplates((value) => !value)}
+            disabled={disabled}
           >
             <span>
-              <strong>{currentTemplate?.name ?? "Выберите шаблон"}</strong>
-              <span>{currentTemplate?.description ?? "Открыть список шаблонов"}</span>
+              <strong>{showExtendedTemplates ? "Скрыть расширенную библиотеку" : "Расширенная библиотека"}</strong>
+              <span>{currentTemplate?.description ?? "Дополнительные шаблоны"}</span>
             </span>
-            <span>{templatesOpen ? "˄" : "˅"}</span>
+            <span>{showExtendedTemplates ? "Свернуть" : "Открыть"}</span>
           </button>
 
-          {templatesOpen ? (
-            <div className="template-grid">
-              {visibleTemplates.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  className={`template-card ${template.id === activeTemplateId ? "active" : ""}`}
-                  onClick={() => {
-                    onApplyTemplate(template.id);
-                    setTemplatesOpen(false);
-                  }}
-                >
-                  <span
-                    className="template-preview"
-                    style={{
-                      background:
-                        template.accentAlt
-                          ? `linear-gradient(140deg, ${template.background} 0%, ${template.surface} 56%, ${template.accentAlt} 100%)`
-                          : template.background
-                    }}
+          {showExtendedTemplates ? (
+            <>
+              <span className="settings-label">Категория шаблонов</span>
+              <div className="segment-control">
+                {(Object.keys(TEMPLATE_CATEGORY_LABELS) as TemplateCategoryId[]).map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    className={`segment-item ${activeTemplateCategory === category ? "active" : ""}`}
+                    onClick={() => onTemplateCategoryChange(category)}
+                    disabled={disabled}
                   >
-                    <span className="template-preview-sheen" />
-                    <span
-                      className="template-preview-chip"
-                      style={{ backgroundColor: template.accent }}
-                    />
-                    <span
-                      className="template-preview-title"
-                      style={{ color: template.titleColor }}
-                    >
-                      {getTemplatePreviewHeadline(template)}
-                    </span>
-                    <span className="template-preview-lines">
-                      <span style={{ backgroundColor: template.bodyColor }} />
-                      <span style={{ backgroundColor: template.bodyColor }} />
-                      <span style={{ backgroundColor: template.bodyColor }} />
-                    </span>
-                    <span className="template-preview-footer" style={{ color: template.bodyColor }}>
-                      @creator <strong>→</strong>
-                    </span>
-                  </span>
-                  <span className="template-card-meta">
-                    <strong>{template.name}</strong>
-                    <span>{getTemplatePreviewCaption(template)}</span>
-                  </span>
+                    {TEMPLATE_CATEGORY_LABELS[category]}
+                  </button>
+                ))}
+              </div>
+
+              <span className="settings-label">Применение</span>
+              <div className="segment-control">
+                <button
+                  type="button"
+                  className={`segment-item ${templateScope === "slide" ? "active" : ""}`}
+                  onClick={() => onTemplateScopeChange("slide")}
+                  disabled={disabled}
+                >
+                  Этот слайд
                 </button>
-              ))}
-            </div>
+                <button
+                  type="button"
+                  className={`segment-item ${templateScope === "all" ? "active" : ""}`}
+                  onClick={() => onTemplateScopeChange("all")}
+                  disabled={disabled}
+                >
+                  Вся карусель
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className="template-disclosure"
+                onClick={() => setTemplatesOpen((value) => !value)}
+                disabled={disabled}
+              >
+                <span>
+                  <strong>{currentTemplate?.name ?? "Выберите шаблон"}</strong>
+                  <span>{currentTemplate?.description ?? "Открыть список шаблонов"}</span>
+                </span>
+                <span>{templatesOpen ? "Скрыть" : "Показать"}</span>
+              </button>
+
+              {templatesOpen ? (
+                <div className="template-grid">
+                  {visibleTemplates.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      className={`template-card ${template.id === activeTemplateId ? "active" : ""}`}
+                      onClick={() => {
+                        onApplyTemplate(template.id);
+                        setTemplatesOpen(false);
+                      }}
+                      disabled={disabled}
+                    >
+                      <span
+                        className="template-preview"
+                        style={{
+                          background:
+                            template.accentAlt
+                              ? `linear-gradient(140deg, ${template.background} 0%, ${template.surface} 56%, ${template.accentAlt} 100%)`
+                              : template.background
+                        }}
+                      >
+                        <span className="template-preview-sheen" />
+                        <span
+                          className="template-preview-chip"
+                          style={{ backgroundColor: template.accent }}
+                        />
+                        <span
+                          className="template-preview-title"
+                          style={{ color: template.titleColor }}
+                        >
+                          {getTemplatePreviewHeadline(template)}
+                        </span>
+                        <span className="template-preview-lines">
+                          <span style={{ backgroundColor: template.bodyColor }} />
+                          <span style={{ backgroundColor: template.bodyColor }} />
+                          <span style={{ backgroundColor: template.bodyColor }} />
+                        </span>
+                        <span className="template-preview-footer" style={{ color: template.bodyColor }}>
+                          @creator <strong>→</strong>
+                        </span>
+                      </span>
+                      <span className="template-card-meta">
+                        <strong>{template.name}</strong>
+                        <span>{getTemplatePreviewCaption(template)}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </>
           ) : null}
         </div>
 
@@ -297,7 +396,7 @@ export function SettingsPanel({
                 type="button"
                 className={`segment-item ${activeFormat === format ? "active" : ""}`}
                 onClick={() => onFormatChange(format)}
-                disabled={isGenerating || isExporting}
+                disabled={isGenerating || isExporting || disabled}
               >
                 {format}
               </button>
@@ -313,18 +412,38 @@ export function SettingsPanel({
               type="color"
               value={slide.background}
               onChange={(event) => onBackgroundChange(event.target.value)}
+              disabled={disabled}
             />
             <span>{slide.background}</span>
           </label>
+          <span className="settings-label">Стили фона</span>
+          <div className="mobile-style-grid">
+            {BACKGROUND_STYLE_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="mobile-style-chip"
+                onClick={() => onApplyTemplate(preset.templateId)}
+                disabled={disabled}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
           <div className="field-row">
-            <button type="button" className="ghost-chip" onClick={onUploadBackgroundImage}>
+            <button
+              type="button"
+              className="ghost-chip"
+              onClick={onUploadBackgroundImage}
+              disabled={disabled}
+            >
               Загрузить фон
             </button>
             <button
               type="button"
               className="ghost-chip ghost-chip-muted"
               onClick={onRemoveBackgroundImage}
-              disabled={!hasBackgroundImage}
+              disabled={!hasBackgroundImage || disabled}
             >
               Удалить фон
             </button>
@@ -340,6 +459,7 @@ export function SettingsPanel({
                 type="button"
                 className={`segment-item ${footerVariant === variant.id ? "active" : ""}`}
                 onClick={() => onFooterVariantChange(variant.id)}
+                disabled={disabled}
               >
                 {variant.label}
               </button>
@@ -353,6 +473,7 @@ export function SettingsPanel({
               value={profileHandle}
               onChange={(event) => onProfileHandleChange(event.target.value)}
               placeholder="@username"
+              disabled={disabled}
             />
           </label>
 
@@ -363,8 +484,18 @@ export function SettingsPanel({
               value={profileSubtitle}
               onChange={(event) => onProfileSubtitleChange(event.target.value)}
               placeholder="Подпись"
+              disabled={disabled}
             />
           </label>
+
+          <button
+            type="button"
+            className={`ghost-chip ${showSlideBadge ? "" : "ghost-chip-muted"}`}
+            onClick={onToggleSlideBadge}
+            disabled={disabled}
+          >
+            {showSlideBadge ? "Скрыть бейдж слайда" : "Показать бейдж слайда"}
+          </button>
         </div>
       </section>
 
@@ -374,7 +505,12 @@ export function SettingsPanel({
 
         {selectedElement ? (
           <div className="field-grid">
-            <button type="button" className="ghost-chip" onClick={onCenterSelectedElement}>
+            <button
+              type="button"
+              className="ghost-chip"
+              onClick={onCenterSelectedElement}
+              disabled={disabled}
+            >
               Center element
             </button>
 
@@ -392,6 +528,7 @@ export function SettingsPanel({
                         text: event.target.value
                       }))
                     }
+                    disabled={disabled}
                   />
                 </label>
 
@@ -401,6 +538,78 @@ export function SettingsPanel({
                     если нужна полная версия.
                   </div>
                 ) : null}
+
+                <div className="field-label">
+                  Форматирование
+                  <div className="icon-segment">
+                    <button
+                      type="button"
+                      className={`icon-segment-item ${
+                        selectedElement.fontStyle?.includes("bold") ? "active" : ""
+                      }`}
+                      onClick={() =>
+                        updateTextElement((element) => ({
+                          ...element,
+                          fontStyle: toggleFontStyleToken(element.fontStyle, "bold")
+                        }))
+                      }
+                      disabled={disabled}
+                    >
+                      <AppIcon name="bold" size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`icon-segment-item ${
+                        selectedElement.fontStyle?.includes("italic") ? "active" : ""
+                      }`}
+                      onClick={() =>
+                        updateTextElement((element) => ({
+                          ...element,
+                          fontStyle: toggleFontStyleToken(element.fontStyle, "italic")
+                        }))
+                      }
+                      disabled={disabled}
+                    >
+                      <AppIcon name="italic" size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`icon-segment-item ${
+                        selectedElement.textDecoration?.includes("underline") ? "active" : ""
+                      }`}
+                      onClick={() =>
+                        updateTextElement((element) => ({
+                          ...element,
+                          textDecoration: toggleTextDecorationToken(
+                            element.textDecoration,
+                            "underline"
+                          )
+                        }))
+                      }
+                      disabled={disabled}
+                    >
+                      <AppIcon name="underline" size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`icon-segment-item ${
+                        selectedElement.textDecoration?.includes("line-through") ? "active" : ""
+                      }`}
+                      onClick={() =>
+                        updateTextElement((element) => ({
+                          ...element,
+                          textDecoration: toggleTextDecorationToken(
+                            element.textDecoration,
+                            "line-through"
+                          )
+                        }))
+                      }
+                      disabled={disabled}
+                    >
+                      <AppIcon name="strike" size={14} />
+                    </button>
+                  </div>
+                </div>
 
                 <div className="field-row">
                   <label className="field-label">
@@ -414,6 +623,7 @@ export function SettingsPanel({
                           fontFamily: event.target.value
                         }))
                       }
+                      disabled={disabled}
                     >
                       {FONT_OPTIONS.map((font) => (
                         <option key={font} value={font}>
@@ -434,11 +644,52 @@ export function SettingsPanel({
                           align: event.target.value as "left" | "center" | "right"
                         }))
                       }
+                      disabled={disabled}
                     >
                       <option value="left">Left</option>
                       <option value="center">Center</option>
                       <option value="right">Right</option>
                     </select>
+                  </label>
+                </div>
+
+                <div className="field-row">
+                  <label className="field-label">
+                    Межстрочный
+                    <input
+                      className="field"
+                      type="number"
+                      min={0.8}
+                      max={2}
+                      step={0.02}
+                      value={selectedElement.lineHeight ?? 1.1}
+                      onChange={(event) =>
+                        updateTextElement((element) => ({
+                          ...element,
+                          lineHeight: Number(event.target.value) || element.lineHeight
+                        }))
+                      }
+                      disabled={disabled}
+                    />
+                  </label>
+
+                  <label className="field-label">
+                    Интервал
+                    <input
+                      className="field"
+                      type="number"
+                      min={-2}
+                      max={12}
+                      step={0.1}
+                      value={selectedElement.letterSpacing ?? 0}
+                      onChange={(event) =>
+                        updateTextElement((element) => ({
+                          ...element,
+                          letterSpacing: Number(event.target.value) || 0
+                        }))
+                      }
+                      disabled={disabled}
+                    />
                   </label>
                 </div>
 
@@ -457,6 +708,7 @@ export function SettingsPanel({
                           fontSize: Number(event.target.value) || element.fontSize
                         }))
                       }
+                      disabled={disabled}
                     />
                   </label>
 
@@ -472,6 +724,7 @@ export function SettingsPanel({
                           fill: event.target.value
                         }))
                       }
+                      disabled={disabled}
                     />
                   </label>
                 </div>
@@ -491,6 +744,7 @@ export function SettingsPanel({
                       src: event.target.value
                     }))
                   }
+                  disabled={disabled}
                 />
               </label>
             ) : null}
@@ -518,7 +772,7 @@ export function SettingsPanel({
                 type="button"
                 className="segment-item"
                 onClick={() => onFormatChange(preset.format)}
-                disabled={isExporting || isGenerating}
+                disabled={isExporting || isGenerating || disabled}
                 title={preset.hint}
               >
                 {preset.label}
@@ -532,7 +786,7 @@ export function SettingsPanel({
             type="button"
             className={`segment-item ${exportMode === "zip" ? "active" : ""}`}
             onClick={() => onExportModeChange("zip")}
-            disabled={isExporting || isGenerating}
+            disabled={isExporting || isGenerating || disabled}
           >
             ZIP
           </button>
@@ -540,7 +794,7 @@ export function SettingsPanel({
             type="button"
             className={`segment-item ${exportMode === "png" ? "active" : ""}`}
             onClick={() => onExportModeChange("png")}
-            disabled={isExporting || isGenerating}
+            disabled={isExporting || isGenerating || disabled}
           >
             PNG
           </button>
@@ -548,7 +802,7 @@ export function SettingsPanel({
             type="button"
             className={`segment-item ${exportMode === "jpg" ? "active" : ""}`}
             onClick={() => onExportModeChange("jpg")}
-            disabled={isExporting || isGenerating}
+            disabled={isExporting || isGenerating || disabled}
           >
             JPG
           </button>
@@ -556,7 +810,7 @@ export function SettingsPanel({
             type="button"
             className={`segment-item ${exportMode === "pdf" ? "active" : ""}`}
             onClick={() => onExportModeChange("pdf")}
-            disabled={isExporting || isGenerating}
+            disabled={isExporting || isGenerating || disabled}
           >
             PDF
           </button>
@@ -566,7 +820,7 @@ export function SettingsPanel({
           className="export-button"
           type="button"
           onClick={onExport}
-          disabled={isExporting || isGenerating}
+          disabled={isExporting || isGenerating || disabled}
         >
           {isExporting ? `Экспортирую ${exportLabel}...` : `Скачать ${exportLabel}`}
         </button>
@@ -622,4 +876,33 @@ function getTemplatePreviewHeadline(template: { name: string; preview?: string }
 function getTemplatePreviewCaption(template: { description: string; preview?: string }) {
   const source = template.preview?.trim() || template.description;
   return source.length > 70 ? `${source.slice(0, 70)}…` : source;
+}
+
+function toggleFontStyleToken(value: string | undefined, token: "bold" | "italic") {
+  const current = new Set((value || "normal").split(" ").filter(Boolean));
+  if (current.has("normal")) {
+    current.delete("normal");
+  }
+
+  if (current.has(token)) {
+    current.delete(token);
+  } else {
+    current.add(token);
+  }
+
+  if (!current.size) {
+    return "normal";
+  }
+
+  return Array.from(current).join(" ");
+}
+
+function toggleTextDecorationToken(value: string | undefined, token: "underline" | "line-through") {
+  const current = new Set((value || "").split(" ").filter(Boolean));
+  if (current.has(token)) {
+    current.delete(token);
+  } else {
+    current.add(token);
+  }
+  return Array.from(current).join(" ");
 }

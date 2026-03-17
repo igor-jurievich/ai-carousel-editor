@@ -5,6 +5,7 @@ import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type Konva from "konva";
+import { AppIcon } from "@/components/icons";
 import { CanvasEditor } from "@/components/CanvasEditor";
 import { MobileTools, type MobileToolTab } from "@/components/MobileTools";
 import { SettingsPanel } from "@/components/SettingsPanel";
@@ -55,6 +56,13 @@ const TEXT_SAFE_AREA = {
 };
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
+const HISTORY_LIMIT = 40;
+
+type HistorySnapshot = {
+  slides: Slide[];
+  activeSlideId: string | null;
+  slideFormat: SlideFormat;
+};
 
 export function Editor() {
   const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("technology", "1:1"));
@@ -77,6 +85,10 @@ export function Editor() {
   const [mobileBottomOffset, setMobileBottomOffset] = useState(120);
   const [pendingImageSlideId, setPendingImageSlideId] = useState<string | null>(null);
   const [pendingBackgroundSlideId, setPendingBackgroundSlideId] = useState<string | null>(null);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [showSlideBadge, setShowSlideBadge] = useState(true);
+  const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([]);
+  const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([]);
   const desktopCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const mobileCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const mobileToolbarRef = useRef<HTMLElement | null>(null);
@@ -85,6 +97,7 @@ export function Editor() {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const backgroundImageInputRef = useRef<HTMLInputElement | null>(null);
   const generateRequestRef = useRef(0);
+  const lastHistoryAtRef = useRef(0);
 
   useEffect(() => {
     if (!slides.length) {
@@ -221,28 +234,120 @@ export function Editor() {
   );
   const generationLocked = isGenerating || isExportRendering;
   const exportModeLabel = getExportModeLabel(exportMode);
+  const canUndo = historyPast.length > 0;
+  const canRedo = historyFuture.length > 0;
+
+  const makeHistorySnapshot = () => ({
+    slides: cloneSlides(slides),
+    activeSlideId,
+    slideFormat
+  });
+
+  const pushHistorySnapshot = (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastHistoryAtRef.current < 320) {
+      return;
+    }
+    lastHistoryAtRef.current = now;
+    const snapshot = makeHistorySnapshot();
+    setHistoryPast((current) => [...current.slice(-(HISTORY_LIMIT - 1)), snapshot]);
+    setHistoryFuture([]);
+  };
 
   useEffect(() => {
     setActiveTemplateCategory(getTemplate(activeTemplateId).category);
   }, [activeTemplateId]);
 
-  const updateSlide = (slideId: string, updater: (slide: Slide) => Slide) => {
+  const handleUndo = () => {
+    if (!historyPast.length || generationLocked) {
+      return;
+    }
+
+    const previous = historyPast[historyPast.length - 1];
+    const current = makeHistorySnapshot();
+    setHistoryPast((items) => items.slice(0, -1));
+    setHistoryFuture((items) => [...items, current]);
+    setSlides(cloneSlides(previous.slides));
+    setActiveSlideId(previous.activeSlideId);
+    setSlideFormat(previous.slideFormat);
+    setSelectedElementId(null);
+    setEditingTextElementId(null);
+    setStatus("Действие отменено.");
+  };
+
+  const handleRedo = () => {
+    if (!historyFuture.length || generationLocked) {
+      return;
+    }
+
+    const next = historyFuture[historyFuture.length - 1];
+    const current = makeHistorySnapshot();
+    setHistoryFuture((items) => items.slice(0, -1));
+    setHistoryPast((items) => [...items.slice(-(HISTORY_LIMIT - 1)), current]);
+    setSlides(cloneSlides(next.slides));
+    setActiveSlideId(next.activeSlideId);
+    setSlideFormat(next.slideFormat);
+    setSelectedElementId(null);
+    setEditingTextElementId(null);
+    setStatus("Действие повторено.");
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isTypingTarget =
+        event.target instanceof HTMLElement &&
+        (event.target.tagName === "INPUT" ||
+          event.target.tagName === "TEXTAREA" ||
+          event.target.isContentEditable);
+
+      if (!(event.metaKey || event.ctrlKey) || isTypingTarget || generationLocked) {
+        return;
+      }
+
+      if (event.key.toLowerCase() !== "z") {
+        return;
+      }
+
+      event.preventDefault();
+      if (event.shiftKey) {
+        handleRedo();
+      } else {
+        handleUndo();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [generationLocked, historyPast, historyFuture, slides, activeSlideId, slideFormat]);
+
+  const updateSlide = (
+    slideId: string,
+    updater: (slide: Slide) => Slide,
+    options?: { recordHistory?: boolean }
+  ) => {
+    if (options?.recordHistory !== false) {
+      pushHistorySnapshot();
+    }
     setSlides((current) =>
       current.map((slide) => (slide.id === slideId ? updater(slide) : slide))
     );
   };
 
-  const updateActiveSlide = (updater: (slide: Slide) => Slide) => {
+  const updateActiveSlide = (
+    updater: (slide: Slide) => Slide,
+    options?: { recordHistory?: boolean }
+  ) => {
     if (!activeSlide) {
       return;
     }
 
-    updateSlide(activeSlide.id, updater);
+    updateSlide(activeSlide.id, updater, options);
   };
 
   const updateElement = (
     elementId: string,
-    updater: (element: CanvasElement) => CanvasElement
+    updater: (element: CanvasElement) => CanvasElement,
+    options?: { recordHistory?: boolean }
   ) => {
     updateActiveSlide((slide) => {
       const previous = slide.elements.find((element) => element.id === elementId);
@@ -269,9 +374,25 @@ export function Editor() {
           slides.length,
           slideFormat
         );
+        const rebuiltWithPinnedPosition = rebuiltSlide.elements.map((element) => {
+          if (
+            element.type !== "text" ||
+            next.type !== "text" ||
+            element.metaKey !== next.metaKey
+          ) {
+            return element;
+          }
+
+          return {
+            ...element,
+            x: next.x,
+            y: next.y,
+            width: next.width
+          };
+        });
 
         if (next.metaKey) {
-          const replacement = rebuiltSlide.elements.find(
+          const replacement = rebuiltWithPinnedPosition.find(
             (element) => element.type === next.type && element.metaKey === next.metaKey
           );
 
@@ -284,14 +405,17 @@ export function Editor() {
           }
         }
 
-        return rebuiltSlide;
+        return {
+          ...rebuiltSlide,
+          elements: rebuiltWithPinnedPosition
+        };
       }
 
       return {
         ...slide,
         elements: nextElements
       };
-    });
+    }, options);
   };
 
   const handleGenerate = async () => {
@@ -371,6 +495,7 @@ export function Editor() {
         slideFormat,
         requestedSlidesCount
       );
+      pushHistorySnapshot(true);
       setSlides(nextSlides);
       setActiveSlideId(nextSlides[0]?.id ?? null);
       setSelectedElementId(null);
@@ -392,6 +517,11 @@ export function Editor() {
   };
 
   const handleBackgroundChange = (color: string) => {
+    if (generationLocked) {
+      setStatus(GENERATE_LOCK_STATUS);
+      return;
+    }
+
     updateActiveSlide((slide) => ({
       ...slide,
       background: color
@@ -399,6 +529,10 @@ export function Editor() {
   };
 
   const handleUpdateElementPosition = (elementId: string, x: number, y: number) => {
+    if (generationLocked) {
+      return;
+    }
+
     updateElement(elementId, (element) => ({
       ...element,
       x,
@@ -407,6 +541,10 @@ export function Editor() {
   };
 
   const handleTransformElement = (elementId: string, updates: Record<string, number>) => {
+    if (generationLocked) {
+      return;
+    }
+
     updateElement(elementId, (element) => ({
       ...element,
       ...updates
@@ -414,13 +552,13 @@ export function Editor() {
   };
 
   const handleInsertSlideAt = (index: number) => {
-    if (isExportRendering) {
-      setStatus(EXPORT_LOCK_STATUS);
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
       return;
     }
 
     const nextSlide = createBlankSlide(index, activeTemplateId, slideFormat, slides.length + 1);
-
+    pushHistorySnapshot(true);
     setSlides((current) => {
       const next = [...current];
       next.splice(index, 0, nextSlide);
@@ -433,8 +571,8 @@ export function Editor() {
   };
 
   const handleDeleteSlide = (slideId = activeSlideId ?? "") => {
-    if (isExportRendering) {
-      setStatus(EXPORT_LOCK_STATUS);
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
       return;
     }
 
@@ -448,6 +586,7 @@ export function Editor() {
     const currentIndex = slides.findIndex((slide) => slide.id === slideId);
     const fallbackSlide = slides[currentIndex + 1] ?? slides[currentIndex - 1] ?? null;
 
+    pushHistorySnapshot(true);
     setSlides((current) =>
       syncSlideOrderMeta(current.filter((slide) => slide.id !== slideId))
     );
@@ -459,6 +598,10 @@ export function Editor() {
   };
 
   const handleDeleteElement = () => {
+    if (generationLocked) {
+      return;
+    }
+
     if (!activeSlide || !selectedElementId) {
       return;
     }
@@ -473,6 +616,10 @@ export function Editor() {
   };
 
   const handleCenterSelectedElement = () => {
+    if (generationLocked) {
+      return;
+    }
+
     if (!selectedElement) {
       return;
     }
@@ -509,8 +656,8 @@ export function Editor() {
   };
 
   const handleAddText = (slideId = activeSlideId ?? "") => {
-    if (isExportRendering) {
-      setStatus(EXPORT_LOCK_STATUS);
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
       return;
     }
 
@@ -534,8 +681,8 @@ export function Editor() {
   };
 
   const handleAddImage = (slideId = activeSlideId ?? "") => {
-    if (isExportRendering) {
-      setStatus(EXPORT_LOCK_STATUS);
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
       return;
     }
 
@@ -544,8 +691,8 @@ export function Editor() {
   };
 
   const handleAddBackgroundImage = (slideId = activeSlideId ?? "") => {
-    if (isExportRendering) {
-      setStatus(EXPORT_LOCK_STATUS);
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
       return;
     }
 
@@ -634,11 +781,12 @@ export function Editor() {
   };
 
   const handleApplyTemplate = (templateId: CarouselTemplateId) => {
-    if (isExportRendering) {
-      setStatus(EXPORT_LOCK_STATUS);
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
       return;
     }
 
+    pushHistorySnapshot(true);
     if (templateScope === "all") {
       setSlides((current) => applyTemplateToSlides(current, templateId, slideFormat));
       setStatus("Шаблон применён ко всей карусели.");
@@ -658,13 +806,8 @@ export function Editor() {
   };
 
   const handleFormatChange = (format: SlideFormat) => {
-    if (isExportRendering) {
-      setStatus(EXPORT_LOCK_STATUS);
-      return;
-    }
-
-    if (isGenerating) {
-      setStatus(GENERATE_LOCK_STATUS);
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
       return;
     }
 
@@ -672,6 +815,7 @@ export function Editor() {
       return;
     }
 
+    pushHistorySnapshot(true);
     setSlides((current) => relayoutSlidesForFormat(current, slideFormat, format));
     setSlideFormat(format);
     setSelectedElementId(null);
@@ -682,6 +826,10 @@ export function Editor() {
   const handleUpdateFooter = (
     updates: Partial<Pick<Slide, "profileHandle" | "profileSubtitle" | "footerVariant">>
   ) => {
+    if (generationLocked) {
+      return;
+    }
+
     if (!activeSlide || activeSlideIndex === -1) {
       return;
     }
@@ -694,6 +842,10 @@ export function Editor() {
   };
 
   const handleStartTextEditing = (slideId: string, elementId: string) => {
+    if (generationLocked) {
+      return;
+    }
+
     const targetSlide = slides.find((slide) => slide.id === slideId);
     const textElement = targetSlide?.elements.find(
       (element): element is TextElement => element.id === elementId && element.type === "text"
@@ -710,6 +862,10 @@ export function Editor() {
   };
 
   const handleCommitTextEditing = () => {
+    if (generationLocked) {
+      return;
+    }
+
     if (!editingTextElementId) {
       return;
     }
@@ -733,8 +889,8 @@ export function Editor() {
   };
 
   const handleMoveSlide = (slideId: string, direction: "up" | "down") => {
-    if (isExportRendering) {
-      setStatus(EXPORT_LOCK_STATUS);
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
       return;
     }
 
@@ -751,16 +907,25 @@ export function Editor() {
     }
 
     const targetSlide = slides[targetIndex];
+    pushHistorySnapshot(true);
     setSlides((current) => reorderSlides(current, slideId, targetSlide.id));
     setStatus("Порядок слайдов обновлён.");
   };
 
   const handleSelectSlide = (slideId: string) => {
+    if (generationLocked) {
+      return;
+    }
+
     setActiveSlideId(slideId);
     setSelectedElementId(null);
   };
 
   const handleSelectElement = (slideId: string, elementId: string | null) => {
+    if (generationLocked) {
+      return;
+    }
+
     setActiveSlideId(slideId);
     setSelectedElementId(elementId);
 
@@ -776,6 +941,7 @@ export function Editor() {
     }
 
     const starterSlides = createStarterSlides("technology", slideFormat);
+    pushHistorySnapshot(true);
     setSlides(starterSlides);
     setTopic("");
     setSlidesCount(DEFAULT_SLIDES_COUNT);
@@ -794,6 +960,10 @@ export function Editor() {
     x: number,
     y: number
   ) => {
+    if (generationLocked) {
+      return;
+    }
+
     setActiveSlideId(slideId);
     updateSlide(slideId, (slide) => ({
       ...slide,
@@ -808,6 +978,10 @@ export function Editor() {
     elementId: string,
     updates: Record<string, number>
   ) => {
+    if (generationLocked) {
+      return;
+    }
+
     setActiveSlideId(slideId);
     updateSlide(slideId, (slide) => ({
       ...slide,
@@ -984,20 +1158,38 @@ export function Editor() {
               <button
                 className="rail-button"
                 type="button"
+                title="Отменить (Ctrl/Cmd + Z)"
+                onClick={handleUndo}
+                disabled={!canUndo || generationLocked}
+              >
+                <AppIcon name="history-back" size={18} />
+              </button>
+              <button
+                className="rail-button"
+                type="button"
+                title="Повторить (Ctrl/Cmd + Shift + Z)"
+                onClick={handleRedo}
+                disabled={!canRedo || generationLocked}
+              >
+                <AppIcon name="history-forward" size={18} />
+              </button>
+              <button
+                className="rail-button"
+                type="button"
+                title={isPreviewMode ? "Вернуться в режим редактирования" : "Режим предпросмотра"}
+                onClick={() => setIsPreviewMode((value) => !value)}
+                disabled={generationLocked}
+              >
+                <AppIcon name={isPreviewMode ? "eye-off" : "eye"} size={18} />
+              </button>
+              <button
+                className="rail-button"
+                type="button"
                 title="Новая сессия"
                 onClick={handleResetSession}
                 disabled={generationLocked}
               >
-                ↺
-              </button>
-              <button
-                className="rail-button rail-button-muted"
-                type="button"
-                title="Сбросить статус"
-                onClick={() => setStatus(DEFAULT_STATUS)}
-                disabled={generationLocked}
-              >
-                ⟳
+                <AppIcon name="reset" size={18} />
               </button>
             </aside>
 
@@ -1028,6 +1220,9 @@ export function Editor() {
                 onDeleteSelectedElement={handleDeleteElement}
                 onMoveSlide={handleMoveSlide}
                 onDeleteSlide={handleDeleteSlide}
+                disabled={generationLocked}
+                previewMode={isPreviewMode}
+                showSlideBadge={showSlideBadge}
               />
             </section>
 
@@ -1078,6 +1273,10 @@ export function Editor() {
                   }
                   onUpdateElement={updateElement}
                   onCenterSelectedElement={handleCenterSelectedElement}
+                  disabled={generationLocked}
+                  previewMode={isPreviewMode}
+                  showSlideBadge={showSlideBadge}
+                  onToggleSlideBadge={() => setShowSlideBadge((value) => !value)}
                 />
               ) : null}
             </aside>
@@ -1092,20 +1291,38 @@ export function Editor() {
               <button
                 className="mobile-icon-button"
                 type="button"
-                title="Новая сессия"
-                onClick={handleResetSession}
+                title="Отменить"
+                onClick={handleUndo}
+                disabled={!canUndo || generationLocked}
+              >
+                <AppIcon name="history-back" size={16} />
+              </button>
+              <button
+                className="mobile-icon-button"
+                type="button"
+                title="Повторить"
+                onClick={handleRedo}
+                disabled={!canRedo || generationLocked}
+              >
+                <AppIcon name="history-forward" size={16} />
+              </button>
+              <button
+                className="mobile-icon-button"
+                type="button"
+                title={isPreviewMode ? "Выключить превью" : "Включить превью"}
+                onClick={() => setIsPreviewMode((value) => !value)}
                 disabled={generationLocked}
               >
-                ↺
+                <AppIcon name={isPreviewMode ? "eye-off" : "eye"} size={16} />
               </button>
               <button
                 className="mobile-icon-button mobile-icon-button-muted"
                 type="button"
-                title="Сбросить статус"
-                onClick={() => setStatus(DEFAULT_STATUS)}
+                title="Новая сессия"
+                onClick={handleResetSession}
                 disabled={generationLocked}
               >
-                ⟳
+                <AppIcon name="reset" size={16} />
               </button>
             </div>
 
@@ -1216,6 +1433,9 @@ export function Editor() {
               onDeleteSelectedElement={handleDeleteElement}
               onMoveSlide={handleMoveSlide}
               onDeleteSlide={handleDeleteSlide}
+              disabled={generationLocked}
+              previewMode={isPreviewMode}
+              showSlideBadge={showSlideBadge}
             />
           </section>
 
@@ -1253,6 +1473,10 @@ export function Editor() {
               onCenterSelectedElement={handleCenterSelectedElement}
               toolbarRef={mobileToolbarRef}
               toolSheetRef={mobileToolSheetRef}
+              disabled={generationLocked}
+              previewMode={isPreviewMode}
+              showSlideBadge={showSlideBadge}
+              onToggleSlideBadge={() => setShowSlideBadge((value) => !value)}
             />
           ) : null}
         </div>
@@ -1283,6 +1507,7 @@ export function Editor() {
               height={slideDimensions.height}
               canvasWidth={slideDimensions.width}
               canvasHeight={slideDimensions.height}
+              showSlideBadge={showSlideBadge}
               stageRef={(node) => {
                 exportStageRefs.current[slide.id] = node;
               }}
@@ -1298,6 +1523,13 @@ async function waitForNextFrame() {
   return await new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
   });
+}
+
+function cloneSlides(slides: Slide[]) {
+  return slides.map((slide) => ({
+    ...slide,
+    elements: slide.elements.map((element) => ({ ...element }))
+  }));
 }
 
 function areStageImagesReady(stage: Konva.Stage) {

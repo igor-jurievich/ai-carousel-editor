@@ -3,6 +3,7 @@
 import { SLIDE_FORMAT_DIMENSIONS } from "@/lib/carousel";
 import type { CanvasElement, Slide, SlideFormat, TextElement } from "@/types/editor";
 import { SlideStage } from "@/components/SlideStage";
+import { AppIcon, type AppIconName } from "@/components/icons";
 
 type CanvasEditorProps = {
   slides: Slide[];
@@ -35,6 +36,9 @@ type CanvasEditorProps = {
   onDeleteSelectedElement: () => void;
   onMoveSlide: (slideId: string, direction: "up" | "down") => void;
   onDeleteSlide: (slideId: string) => void;
+  disabled?: boolean;
+  previewMode?: boolean;
+  showSlideBadge?: boolean;
 };
 
 export function CanvasEditor({
@@ -63,7 +67,10 @@ export function CanvasEditor({
   onAddImageToSlide,
   onDeleteSelectedElement,
   onMoveSlide,
-  onDeleteSlide
+  onDeleteSlide,
+  disabled = false,
+  previewMode = false,
+  showSlideBadge = true
 }: CanvasEditorProps) {
   const scale = displayWidth / canvasWidth;
   const formatLabel = SLIDE_FORMAT_DIMENSIONS[activeFormat].label;
@@ -82,9 +89,11 @@ export function CanvasEditor({
         <div className="mobile-canvas-root">
           <div className="mobile-canvas-frame">
             <div className="slide-stack-shell active mobile-slide-shell mobile-preview-shell">
-              <div className="active-slide-pill">
-                Слайд {activeSlideIndex + 1} • {formatLabel}
-              </div>
+              {showSlideBadge ? (
+                <div className="active-slide-pill">
+                  Слайд {activeSlideIndex + 1} • {formatLabel}
+                </div>
+              ) : null}
 
               <div className="canvas-stage canvas-stage-editor mobile-stage-editor">
                 <div className="canvas-stage-center mobile-stage-surface">
@@ -95,7 +104,7 @@ export function CanvasEditor({
                     canvasWidth={canvasWidth}
                     canvasHeight={canvasHeight}
                     selectedElementId={selectedElementId}
-                    interactive
+                    interactive={!disabled && !previewMode}
                     onSelectElement={(elementId) => onSelectElement(activeSlide.id, elementId)}
                     onUpdateElementPosition={(elementId, x, y) =>
                       onUpdateElementPosition(activeSlide.id, elementId, x, y)
@@ -104,6 +113,7 @@ export function CanvasEditor({
                       onTransformElement(activeSlide.id, elementId, updates)
                     }
                     onStartTextEditing={(elementId) => onStartTextEditing(activeSlide.id, elementId)}
+                    showSlideBadge={showSlideBadge}
                   />
                 </div>
 
@@ -140,79 +150,90 @@ export function CanvasEditor({
                   />
                 ) : null}
 
-                {selectedElement && selectedElementStyle ? (
+                {!previewMode && selectedElement && selectedElementStyle ? (
                   <button
                     type="button"
                     className="floating-element-action"
                     title="Удалить выбранный элемент"
                     style={selectedElementStyle}
+                    disabled={disabled}
                     onClick={(event) => {
                       event.stopPropagation();
                       onDeleteSelectedElement();
                     }}
                   >
-                    ⌫
+                    <AppIcon name="trash" size={16} />
                   </button>
                 ) : null}
               </div>
             </div>
 
-            <button
-              type="button"
-              className="mobile-side-nav mobile-side-nav-left"
-              onClick={() => {
-                if (canGoPrev) {
-                  onSelectSlide(slides[activeSlideIndex - 1].id);
-                }
-              }}
-              aria-label="Предыдущий слайд"
-              disabled={!canGoPrev}
-            >
-              ‹
-            </button>
+            {previewMode ? null : (
+              <>
+                <button
+                  type="button"
+                  className="mobile-side-nav mobile-side-nav-left"
+                  onClick={() => {
+                    if (canGoPrev) {
+                      onSelectSlide(slides[activeSlideIndex - 1].id);
+                    }
+                  }}
+                  aria-label="Предыдущий слайд"
+                  disabled={!canGoPrev || disabled}
+                >
+                  <AppIcon name="chevron-left" size={18} />
+                </button>
 
-            <button
-              type="button"
-              className="mobile-side-nav mobile-side-nav-right"
-              onClick={() => {
-                if (canGoNext) {
-                  onSelectSlide(slides[activeSlideIndex + 1].id);
-                }
-              }}
-              aria-label="Следующий слайд"
-              disabled={!canGoNext}
-            >
-              ›
-            </button>
+                <button
+                  type="button"
+                  className="mobile-side-nav mobile-side-nav-right"
+                  onClick={() => {
+                    if (canGoNext) {
+                      onSelectSlide(slides[activeSlideIndex + 1].id);
+                    }
+                  }}
+                  aria-label="Следующий слайд"
+                  disabled={!canGoNext || disabled}
+                >
+                  <AppIcon name="chevron-right" size={18} />
+                </button>
+              </>
+            )}
           </div>
 
-          <div className="mobile-slide-tools">
-            <MobileQuickButton
-              icon="+"
-              label="Слайд"
-              title="Добавить слайд после текущего"
-              onClick={() => onInsertSlideAt(activeSlideIndex + 1)}
-            />
-            <MobileQuickButton
-              icon="▣"
-              label="Фото"
-              title="Загрузить фото на этот слайд"
-              onClick={() => onAddImageToSlide(activeSlide.id)}
-            />
-            <MobileQuickButton
-              icon="T"
-              label="Текст"
-              title="Добавить текст на этот слайд"
-              onClick={() => onAddTextToSlide(activeSlide.id)}
-            />
-            <MobileQuickButton
-              icon="⌫"
-              label="Удалить"
-              title="Удалить этот слайд"
-              onClick={() => onDeleteSlide(activeSlide.id)}
-              disabled={slides.length <= 1}
-            />
-          </div>
+          {previewMode ? null : (
+            <div className="mobile-slide-tools">
+              <MobileQuickButton
+                icon="plus"
+                label="Слайд"
+                title="Добавить слайд после текущего"
+                onClick={() => onInsertSlideAt(activeSlideIndex + 1)}
+                disabled={disabled}
+              />
+              <MobileQuickButton
+                icon="image"
+                label="Фото"
+                title="Загрузить фото на этот слайд"
+                onClick={() => onAddImageToSlide(activeSlide.id)}
+                disabled={disabled}
+              />
+              <MobileQuickButton
+                icon="text"
+                label="Текст"
+                title="Добавить текст на этот слайд"
+                onClick={() => onAddTextToSlide(activeSlide.id)}
+                disabled={disabled}
+              />
+              <MobileQuickButton
+                icon="trash"
+                label="Удалить"
+                title="Удалить этот слайд"
+                onClick={() => onDeleteSlide(activeSlide.id)}
+                disabled={slides.length <= 1 || disabled}
+                destructive
+              />
+            </div>
+          )}
         </div>
       </section>
     );
@@ -255,7 +276,7 @@ export function CanvasEditor({
                       }
                     }}
                   >
-                    {isActive ? (
+                    {isActive && !previewMode && showSlideBadge ? (
                       <div className="active-slide-pill">
                         Активный слайд • {formatLabel}
                       </div>
@@ -282,7 +303,7 @@ export function CanvasEditor({
                           canvasWidth={canvasWidth}
                           canvasHeight={canvasHeight}
                           selectedElementId={isActive ? selectedElementId : null}
-                          interactive={isActive}
+                          interactive={isActive && !disabled && !previewMode}
                           onSelectElement={(elementId) => onSelectElement(slide.id, elementId)}
                           onUpdateElementPosition={(elementId, x, y) =>
                             onUpdateElementPosition(slide.id, elementId, x, y)
@@ -293,6 +314,7 @@ export function CanvasEditor({
                           onStartTextEditing={(elementId) =>
                             onStartTextEditing(slide.id, elementId)
                           }
+                          showSlideBadge={showSlideBadge}
                         />
                       </div>
 
@@ -329,33 +351,69 @@ export function CanvasEditor({
                         />
                       ) : null}
 
-                      {isActive && selectedElement && selectedElementStyle ? (
+                      {isActive && !previewMode && selectedElement && selectedElementStyle ? (
                         <button
                           type="button"
                           className="floating-element-action"
                           title="Удалить выбранный элемент"
                           style={selectedElementStyle}
+                          disabled={disabled}
                           onClick={(event) => {
                             event.stopPropagation();
                             onDeleteSelectedElement();
                           }}
                         >
-                          ⌫
+                          <AppIcon name="trash" size={16} />
                         </button>
                       ) : null}
                     </div>
 
-                    <div className="slide-tools-rail">
-                      <ToolButton label="✎" title="Выбрать и редактировать слайд" onClick={() => onSelectSlide(slide.id)} />
-                      <ToolButton label="▣" title="Загрузить фото на этот слайд" onClick={() => onAddImageToSlide(slide.id)} />
-                      <ToolButton label="T" title="Добавить текст на этот слайд" onClick={() => onAddTextToSlide(slide.id)} />
-                      <ToolButton label="˄" title="Переместить слайд вверх" onClick={() => onMoveSlide(slide.id, "up")} />
-                      <ToolButton label="˅" title="Переместить слайд вниз" onClick={() => onMoveSlide(slide.id, "down")} />
-                      <ToolButton label="⌫" title="Удалить этот слайд" onClick={() => onDeleteSlide(slide.id)} />
-                    </div>
+                    {previewMode ? null : (
+                      <div className="slide-tools-rail">
+                        <ToolButton
+                          icon="select"
+                          title="Выбрать и редактировать слайд"
+                          onClick={() => onSelectSlide(slide.id)}
+                          disabled={disabled}
+                        />
+                        <ToolButton
+                          icon="image"
+                          title="Загрузить фото на этот слайд"
+                          onClick={() => onAddImageToSlide(slide.id)}
+                          disabled={disabled}
+                        />
+                        <ToolButton
+                          icon="text"
+                          title="Добавить текст на этот слайд"
+                          onClick={() => onAddTextToSlide(slide.id)}
+                          disabled={disabled}
+                        />
+                        <ToolButton
+                          icon="move-up"
+                          title="Переместить слайд вверх"
+                          onClick={() => onMoveSlide(slide.id, "up")}
+                          disabled={disabled}
+                        />
+                        <ToolButton
+                          icon="move-down"
+                          title="Переместить слайд вниз"
+                          onClick={() => onMoveSlide(slide.id, "down")}
+                          disabled={disabled}
+                        />
+                        <ToolButton
+                          icon="trash"
+                          title="Удалить этот слайд"
+                          onClick={() => onDeleteSlide(slide.id)}
+                          destructive
+                          disabled={disabled || slides.length <= 1}
+                        />
+                      </div>
+                    )}
                   </div>
 
-                  <InsertButton onClick={() => onInsertSlideAt(index + 1)} />
+                  {previewMode ? null : (
+                    <InsertButton onClick={() => onInsertSlideAt(index + 1)} disabled={disabled} />
+                  )}
                 </div>
               );
             })}
@@ -391,29 +449,33 @@ function getFloatingActionStyle(
   };
 }
 
-function InsertButton({ onClick }: { onClick: () => void }) {
+function InsertButton({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
   return (
-    <button type="button" className="insert-slide-button" onClick={onClick}>
-      +
+    <button type="button" className="insert-slide-button" onClick={onClick} disabled={disabled}>
+      <AppIcon name="plus" size={22} />
     </button>
   );
 }
 
 function ToolButton({
-  label,
+  icon,
   title,
   onClick,
+  destructive = false,
   disabled = false
 }: {
-  label: string;
+  icon: AppIconName;
   title: string;
   onClick: () => void;
+  destructive?: boolean;
   disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      className={`slide-tool-button ${disabled ? "is-disabled" : ""}`}
+      className={`slide-tool-button ${disabled ? "is-disabled" : ""} ${
+        destructive ? "is-destructive" : ""
+      }`}
       title={title}
       data-tooltip={title}
       disabled={disabled}
@@ -425,7 +487,7 @@ function ToolButton({
         onClick();
       }}
     >
-      {label}
+      <AppIcon name={icon} size={18} />
     </button>
   );
 }
@@ -435,18 +497,20 @@ function MobileQuickButton({
   label,
   title,
   onClick,
+  destructive = false,
   disabled = false
 }: {
-  icon: string;
+  icon: AppIconName;
   label: string;
   title: string;
   onClick: () => void;
+  destructive?: boolean;
   disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      className="mobile-slide-tool"
+      className={`mobile-slide-tool ${destructive ? "is-destructive" : ""}`}
       title={title}
       disabled={disabled}
       onClick={(event) => {
@@ -457,7 +521,9 @@ function MobileQuickButton({
         onClick();
       }}
     >
-      <span className="mobile-slide-tool-icon">{icon}</span>
+      <span className="mobile-slide-tool-icon">
+        <AppIcon name={icon} size={18} />
+      </span>
       <span className="mobile-slide-tool-label">{label}</span>
     </button>
   );

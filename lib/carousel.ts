@@ -46,16 +46,31 @@ export const TEMPLATE_CATEGORY_LABELS: Record<TemplateCategoryId, string> = {
 };
 
 export const FONT_OPTIONS = [
-  "Manrope",
   "Inter",
-  "Space Grotesk",
-  "DM Sans",
-  "Segoe UI",
-  "Helvetica",
-  "Trebuchet MS",
-  "Georgia",
-  "Times New Roman"
+  "Manrope",
+  "Fira Code",
+  "Roboto Condensed",
+  "Russo One",
+  "Oswald",
+  "Advent Pro",
+  "El Messiri"
 ];
+
+export const PRIMARY_TEMPLATE_IDS = [
+  "minimal",
+  "netflix",
+  "atlas"
+] as const satisfies readonly CarouselTemplateId[];
+
+export const BACKGROUND_STYLE_PRESETS = [
+  { id: "mono", label: "Монохром", templateId: "minimal" },
+  { id: "grid", label: "Сетка", templateId: "technology" },
+  { id: "gradient", label: "Градиент", templateId: "aurora" },
+  { id: "notes", label: "Заметки", templateId: "notes" },
+  { id: "dots", label: "Точки", templateId: "charge" },
+  { id: "bolts", label: "Молнии", templateId: "cyberpunk" },
+  { id: "lines", label: "Линии", templateId: "founder-dark" }
+] as const;
 
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   {
@@ -99,7 +114,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     bodyWidth: 812,
     bodyHeight: 258,
     chipStyle: "outline",
-    decoration: "grid",
+    decoration: "lines",
     preview: "Чистая data-композиция со спокойной неоновой акцентностью."
   },
   {
@@ -187,7 +202,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     bodyWidth: 804,
     bodyHeight: 248,
     chipStyle: "outline",
-    decoration: "grid",
+    decoration: "lines",
     preview: "Премиальная business-структура для позиционирования и social proof."
   },
   {
@@ -363,7 +378,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     bodyWidth: 760,
     bodyHeight: 246,
     chipStyle: "solid",
-    decoration: "grid",
+    decoration: "bolts",
     preview: "Digital-стиль с яркой, но читаемой типографикой."
   },
   {
@@ -484,6 +499,14 @@ export function getTemplatesByCategory(category: TemplateCategoryId) {
   return CAROUSEL_TEMPLATES.filter((template) => template.category === category);
 }
 
+export function getPrimaryTemplates() {
+  const items = PRIMARY_TEMPLATE_IDS.map((id) =>
+    CAROUSEL_TEMPLATES.find((template) => template.id === id)
+  ).filter((template): template is CarouselTemplate => Boolean(template));
+
+  return items.length ? items : CAROUSEL_TEMPLATES.slice(0, 3);
+}
+
 export function createTextElement(
   overrides: Partial<TextElement> & Pick<TextElement, "text" | "role">
 ): TextElement {
@@ -501,14 +524,15 @@ export function createTextElement(
     width: overrides.width ?? (isTitle ? 864 : 820),
     height: overrides.height ?? (isTitle ? 240 : 360),
     fontSize: overrides.fontSize ?? (isTitle ? 92 : 42),
-    fontFamily: overrides.fontFamily ?? (isTitle ? "Arial" : "Helvetica"),
+    fontFamily: overrides.fontFamily ?? (isTitle ? "Manrope" : "Inter"),
     fontStyle: overrides.fontStyle ?? (isTitle ? "bold" : "normal"),
     fill: overrides.fill ?? "#141414",
     align: overrides.align ?? "left",
     lineHeight: overrides.lineHeight ?? (isTitle ? 1.02 : 1.18),
     rotation: overrides.rotation ?? 0,
     opacity: overrides.opacity ?? 1,
-    letterSpacing: overrides.letterSpacing ?? 0
+    letterSpacing: overrides.letterSpacing ?? 0,
+    textDecoration: overrides.textDecoration
   };
 }
 
@@ -749,6 +773,94 @@ function createDecoration(template: CarouselTemplate, format: SlideFormat): Canv
         fill: "rgba(255,255,255,0.1)",
         cornerRadius: 999,
         opacity: 0.62
+      })
+    ];
+  }
+
+  if (template.decoration === "lines") {
+    return [
+      createShapeElement({
+        metaKey: "decor-lines-bg",
+        x: 0,
+        y: 0,
+        width: SLIDE_SIZE,
+        height,
+        fill: template.background,
+        cornerRadius: 0
+      }),
+      createShapeElement({
+        metaKey: "decor-lines-surface",
+        x: 54,
+        y: 54,
+        width: 972,
+        height: Math.max(340, height - 108),
+        fill: template.surface,
+        cornerRadius: 36,
+        opacity: 0.96
+      }),
+      ...Array.from({ length: 8 }, (_, index) =>
+        createShapeElement({
+          metaKey: `decor-line-${index}`,
+          x: -120 + index * 165,
+          y: 88 + index * 24,
+          width: 320,
+          height: 2,
+          fill: "rgba(0,0,0,0.11)",
+          cornerRadius: 999,
+          rotation: -20
+        })
+      )
+    ];
+  }
+
+  if (template.decoration === "bolts") {
+    return [
+      createShapeElement({
+        metaKey: "decor-bolts-bg",
+        x: 0,
+        y: 0,
+        width: SLIDE_SIZE,
+        height,
+        fill: template.background,
+        cornerRadius: 0
+      }),
+      createShapeElement({
+        metaKey: "decor-bolts-surface",
+        x: 54,
+        y: 54,
+        width: 972,
+        height: Math.max(340, height - 108),
+        fill: template.surface,
+        cornerRadius: 34,
+        opacity: 0.95
+      }),
+      ...Array.from({ length: 4 }, (_, index) => {
+        const x = 120 + index * 220;
+        const y = 110 + (index % 2 === 0 ? 0 : 180);
+        return createShapeElement({
+          metaKey: `decor-bolt-a-${index}`,
+          x,
+          y,
+          width: 120,
+          height: 10,
+          fill: "rgba(255,255,255,0.22)",
+          cornerRadius: 999,
+          rotation: 62
+        });
+      }),
+      ...Array.from({ length: 4 }, (_, index) => {
+        const x = 168 + index * 220;
+        const y = 160 + (index % 2 === 0 ? 0 : 180);
+        return createShapeElement({
+          metaKey: `decor-bolt-b-${index}`,
+          x,
+          y,
+          width: 100,
+          height: 10,
+          fill: "rgba(255,255,255,0.18)",
+          cornerRadius: 999,
+          rotation: -62
+        });
       })
     ];
   }

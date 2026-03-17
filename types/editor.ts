@@ -25,6 +25,7 @@ export type TextElement = {
   rotation: number;
   opacity: number;
   letterSpacing?: number;
+  textDecoration?: string;
 };
 
 export type ShapeElement = {
@@ -110,6 +111,6 @@ export type CarouselTemplate = {
   bodyWidth?: number;
   bodyHeight?: number;
   chipStyle: "solid" | "outline";
-  decoration: "band" | "grid" | "glow" | "paper" | "dots";
+  decoration: "band" | "grid" | "glow" | "paper" | "dots" | "lines" | "bolts";
   preview?: string;
 };
