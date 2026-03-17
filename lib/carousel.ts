@@ -40,18 +40,20 @@ export const SLIDE_FORMAT_DIMENSIONS: Record<
 };
 
 export const TEMPLATE_CATEGORY_LABELS: Record<TemplateCategoryId, string> = {
-  dark: "Темные",
+  dark: "Тёмные",
   light: "Светлые",
-  color: "Цветные"
+  color: "Акцентные"
 };
 
 export const FONT_OPTIONS = [
-  "Arial",
+  "Manrope",
+  "Inter",
+  "Space Grotesk",
+  "DM Sans",
+  "Segoe UI",
   "Helvetica",
   "Trebuchet MS",
-  "Verdana",
   "Georgia",
-  "Impact",
   "Times New Roman"
 ];
 
@@ -59,200 +61,398 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   {
     id: "netflix",
     category: "dark",
-    name: "Нетфликс",
-    description: "Темный фон, агрессивный акцент и крупный рекламный заголовок.",
-    accent: "#ff5a1f",
-    accentAlt: "#ff874e",
-    background: "#121212",
-    surface: "#1d1d1d",
-    titleColor: "#f8f3ec",
-    bodyColor: "#d9cdc0",
-    titleFont: "Arial",
-    bodyFont: "Helvetica",
-    titleOffsetY: 520,
-    bodyOffsetY: 792,
-    titleWidth: 860,
-    bodyWidth: 850,
-    bodyHeight: 220,
+    name: "Premium Dark",
+    description: "Чистый dark-hero для экспертного контента с сильной иерархией.",
+    accent: "#ff6b3f",
+    accentAlt: "#ff9a73",
+    background: "#101114",
+    surface: "#191b22",
+    titleColor: "#f6f7fb",
+    bodyColor: "#c7ccd8",
+    titleFont: "Manrope",
+    bodyFont: "Inter",
+    titleOffsetY: 298,
+    bodyOffsetY: 612,
+    titleWidth: 858,
+    bodyWidth: 812,
+    bodyHeight: 262,
     chipStyle: "solid",
     decoration: "glow",
-    preview: "Темный hero-screen с сильным CTA."
+    preview: "Сильный крючок с аккуратным dark premium настроением."
   },
   {
     id: "matrix",
     category: "dark",
-    name: "Матрица",
-    description: "Темная сетка, неон и цифровой ритм.",
-    accent: "#4cff3f",
-    accentAlt: "#9eff88",
-    background: "#121212",
-    surface: "#1a1a1a",
-    titleColor: "#f6f7f2",
-    bodyColor: "#c8cec8",
-    titleFont: "Trebuchet MS",
-    bodyFont: "Helvetica",
-    titleOffsetY: 460,
-    bodyOffsetY: 740,
-    titleWidth: 900,
-    bodyWidth: 820,
-    bodyHeight: 220,
+    name: "Tech Grid",
+    description: "Тёмная сетка и холодные акценты для IT и продуктовых тем.",
+    accent: "#57d4ff",
+    accentAlt: "#8df3ff",
+    background: "#0f131a",
+    surface: "#171d27",
+    titleColor: "#f3f8ff",
+    bodyColor: "#b6c4d8",
+    titleFont: "Space Grotesk",
+    bodyFont: "Inter",
+    titleOffsetY: 304,
+    bodyOffsetY: 624,
+    titleWidth: 876,
+    bodyWidth: 812,
+    bodyHeight: 258,
     chipStyle: "outline",
     decoration: "grid",
-    preview: "Неоновая сетка и контрастные выделения."
+    preview: "Чистая data-композиция со спокойной неоновой акцентностью."
   },
   {
     id: "premium",
     category: "dark",
-    name: "Премиум",
-    description: "Глубокий фон и тёплый премиальный акцент.",
-    accent: "#c9a86a",
-    accentAlt: "#f1d39b",
-    background: "#151515",
-    surface: "#202020",
-    titleColor: "#f4efe7",
-    bodyColor: "#d6cbbf",
+    name: "Noir Editorial",
+    description: "Редакционный dark-стиль с акцентом на смысл и ритм.",
+    accent: "#d7b06f",
+    accentAlt: "#f1d9a7",
+    background: "#131212",
+    surface: "#1c1b1c",
+    titleColor: "#f2ede4",
+    bodyColor: "#cdc2b4",
     titleFont: "Georgia",
-    bodyFont: "Helvetica",
-    titleOffsetY: 515,
-    bodyOffsetY: 790,
-    titleWidth: 880,
-    bodyWidth: 840,
-    bodyHeight: 210,
+    bodyFont: "Inter",
+    titleOffsetY: 324,
+    bodyOffsetY: 646,
+    titleWidth: 860,
+    bodyWidth: 804,
+    bodyHeight: 254,
     chipStyle: "solid",
+    decoration: "band",
+    preview: "Контент как в дорогой editorial-обложке."
+  },
+  {
+    id: "midnight",
+    category: "dark",
+    name: "Midnight",
+    description: "Гладкий ночной градиент с мягкой подложкой под текст.",
+    accent: "#7e86ff",
+    accentAlt: "#b8beff",
+    background: "#0f1222",
+    surface: "#181d33",
+    titleColor: "#f5f6ff",
+    bodyColor: "#c5c9e4",
+    titleFont: "Manrope",
+    bodyFont: "Inter",
+    titleOffsetY: 286,
+    bodyOffsetY: 600,
+    titleWidth: 828,
+    bodyWidth: 782,
+    bodyHeight: 262,
+    chipStyle: "outline",
     decoration: "glow",
-    preview: "Спокойный dark luxury с мягким золотом."
+    preview: "Спокойная ночная подача для образовательных и экспертных постов."
+  },
+  {
+    id: "noir",
+    category: "dark",
+    name: "Obsidian",
+    description: "Минималистичный чёрный стиль с контрастным CTA.",
+    accent: "#ff7048",
+    accentAlt: "#ffaf95",
+    background: "#0d0d0f",
+    surface: "#17171b",
+    titleColor: "#f7f7f9",
+    bodyColor: "#c6c7cf",
+    titleFont: "Space Grotesk",
+    bodyFont: "Inter",
+    titleOffsetY: 302,
+    bodyOffsetY: 618,
+    titleWidth: 868,
+    bodyWidth: 818,
+    bodyHeight: 250,
+    chipStyle: "solid",
+    decoration: "paper",
+    preview: "Сильная контрастная карточка под боль, миф, провокационный тезис."
+  },
+  {
+    id: "founder-dark",
+    category: "dark",
+    name: "Founder",
+    description: "Бизнес dark-шаблон с чистым вертикальным ритмом.",
+    accent: "#31d3ad",
+    accentAlt: "#79e8ca",
+    background: "#0f1720",
+    surface: "#1a2732",
+    titleColor: "#f2f8fb",
+    bodyColor: "#b9cad4",
+    titleFont: "Manrope",
+    bodyFont: "DM Sans",
+    titleOffsetY: 318,
+    bodyOffsetY: 636,
+    titleWidth: 852,
+    bodyWidth: 804,
+    bodyHeight: 248,
+    chipStyle: "outline",
+    decoration: "grid",
+    preview: "Премиальная business-структура для позиционирования и social proof."
   },
   {
     id: "notes",
     category: "light",
-    name: "Заметки",
-    description: "Светлый бумажный экран в стиле заметок.",
-    accent: "#e7b92a",
-    accentAlt: "#f7d96d",
-    background: "#fcfbf7",
+    name: "Soft Neutral",
+    description: "Светлая нейтральная композиция в стиле clean notes.",
+    accent: "#ff8b5c",
+    accentAlt: "#ffd6c2",
+    background: "#f7f6f4",
     surface: "#ffffff",
-    titleColor: "#222222",
-    bodyColor: "#5d5850",
-    titleFont: "Arial",
-    bodyFont: "Helvetica",
-    titleOffsetY: 220,
-    bodyOffsetY: 446,
-    titleWidth: 870,
-    bodyWidth: 800,
-    bodyHeight: 250,
+    titleColor: "#1d2128",
+    bodyColor: "#535a66",
+    titleFont: "Manrope",
+    bodyFont: "Inter",
+    titleOffsetY: 232,
+    bodyOffsetY: 478,
+    titleWidth: 856,
+    bodyWidth: 804,
+    bodyHeight: 264,
     chipStyle: "outline",
     decoration: "paper",
-    preview: "Воздушный светлый экран с чистым ритмом."
+    preview: "Воздушная карточка с чистой типографикой и мягкой подложкой."
   },
   {
     id: "technology",
     category: "light",
-    name: "Технология",
-    description: "Сетка, белый фон и синий акцент.",
-    accent: "#315cff",
-    accentAlt: "#5f83ff",
-    background: "#ffffff",
+    name: "Clean Grid",
+    description: "Чистый сеточный светлый шаблон для продуктов и гайдов.",
+    accent: "#4268ff",
+    accentAlt: "#8ea3ff",
+    background: "#f8fafc",
     surface: "#ffffff",
-    titleColor: "#202020",
-    bodyColor: "#555555",
-    titleFont: "Arial",
-    bodyFont: "Helvetica",
-    titleOffsetY: 232,
-    bodyOffsetY: 470,
-    titleWidth: 912,
+    titleColor: "#171d29",
+    bodyColor: "#4f5a6b",
+    titleFont: "Space Grotesk",
+    bodyFont: "Inter",
+    titleOffsetY: 246,
+    bodyOffsetY: 492,
+    titleWidth: 900,
     bodyWidth: 820,
-    bodyHeight: 250,
+    bodyHeight: 256,
     chipStyle: "outline",
     decoration: "grid",
-    preview: "Журнальный tech-layout на светлом фоне."
+    preview: "Современный product-стиль с предсказуемой сеткой и иерархией."
   },
   {
     id: "charge",
     category: "light",
-    name: "Заряд",
-    description: "Чистый светлый шаблон с энергичным акцентом.",
-    accent: "#ffe600",
-    accentAlt: "#1f1f1f",
-    background: "#fbfbf8",
+    name: "Creator Light",
+    description: "Светлая creator-подача с энергичным акцентом.",
+    accent: "#ff662e",
+    accentAlt: "#ffb38d",
+    background: "#fdf8f4",
     surface: "#ffffff",
-    titleColor: "#2a2a2a",
-    bodyColor: "#555555",
-    titleFont: "Trebuchet MS",
-    bodyFont: "Helvetica",
-    titleOffsetY: 255,
-    bodyOffsetY: 495,
-    titleWidth: 880,
-    bodyWidth: 780,
-    bodyHeight: 220,
+    titleColor: "#1f232a",
+    bodyColor: "#525a67",
+    titleFont: "Manrope",
+    bodyFont: "DM Sans",
+    titleOffsetY: 254,
+    bodyOffsetY: 506,
+    titleWidth: 862,
+    bodyWidth: 790,
+    bodyHeight: 248,
     chipStyle: "solid",
+    decoration: "dots",
+    preview: "Лёгкая социальная карточка с акцентом под CTA."
+  },
+  {
+    id: "minimal",
+    category: "light",
+    name: "Minimal Light",
+    description: "Минималистичный светлый шаблон с большим количеством воздуха.",
+    accent: "#1f2937",
+    accentAlt: "#9ba3af",
+    background: "#f4f5f7",
+    surface: "#ffffff",
+    titleColor: "#181d27",
+    bodyColor: "#4f5968",
+    titleFont: "Manrope",
+    bodyFont: "Inter",
+    titleOffsetY: 262,
+    bodyOffsetY: 520,
+    titleWidth: 846,
+    bodyWidth: 788,
+    bodyHeight: 246,
+    chipStyle: "outline",
+    decoration: "band",
+    preview: "Минимум визуального шума, максимум читабельности."
+  },
+  {
+    id: "editorial",
+    category: "light",
+    name: "Editorial",
+    description: "Светлый editorial-стиль для экспертных колонок.",
+    accent: "#7f5cff",
+    accentAlt: "#c5b5ff",
+    background: "#f8f6ff",
+    surface: "#ffffff",
+    titleColor: "#1d1f2d",
+    bodyColor: "#535770",
+    titleFont: "Georgia",
+    bodyFont: "Inter",
+    titleOffsetY: 246,
+    bodyOffsetY: 500,
+    titleWidth: 884,
+    bodyWidth: 818,
+    bodyHeight: 252,
+    chipStyle: "outline",
     decoration: "paper",
-    preview: "Белый экран с динамичным акцентным блоком."
+    preview: "Журнальный подход с чистой структурой текста и мягким акцентом."
+  },
+  {
+    id: "business-light",
+    category: "light",
+    name: "Modern Business",
+    description: "Деловой шаблон с мягким контрастом и clean-ритмом.",
+    accent: "#0f9d8d",
+    accentAlt: "#8ed8cd",
+    background: "#f4faf8",
+    surface: "#ffffff",
+    titleColor: "#172329",
+    bodyColor: "#51626a",
+    titleFont: "Manrope",
+    bodyFont: "DM Sans",
+    titleOffsetY: 250,
+    bodyOffsetY: 506,
+    titleWidth: 884,
+    bodyWidth: 816,
+    bodyHeight: 252,
+    chipStyle: "solid",
+    decoration: "grid",
+    preview: "Бизнес-подача для кейсов, выгод и структурных списков."
   },
   {
     id: "jungle",
     category: "color",
-    name: "Джунгли",
-    description: "Глубокий зеленый фон и яркий оранжевый акцент.",
-    accent: "#ff6a1f",
-    accentAlt: "#ffd452",
-    background: "#0d4f18",
-    surface: "#125f1d",
-    titleColor: "#f4f7ef",
-    bodyColor: "#d7ebd7",
-    titleFont: "Trebuchet MS",
-    bodyFont: "Helvetica",
-    titleOffsetY: 420,
-    bodyOffsetY: 720,
-    titleWidth: 820,
-    bodyWidth: 760,
-    bodyHeight: 220,
+    name: "Bold Contrast",
+    description: "Смелая контрастная цветовая подача под creator и экспертов.",
+    accent: "#ffd447",
+    accentAlt: "#ff9e5a",
+    background: "#11413a",
+    surface: "#18584f",
+    titleColor: "#f1fff8",
+    bodyColor: "#caece1",
+    titleFont: "Space Grotesk",
+    bodyFont: "Inter",
+    titleOffsetY: 302,
+    bodyOffsetY: 620,
+    titleWidth: 816,
+    bodyWidth: 766,
+    bodyHeight: 252,
     chipStyle: "solid",
     decoration: "glow",
-    preview: "Контрастный яркий экран под экспертный контент."
+    preview: "Дерзкая цветовая карточка для цепляющих тезисов и хуков."
   },
   {
     id: "cyberpunk",
     category: "color",
-    name: "Киберпанк",
-    description: "Электрик-синий фон и сочный розовый акцент.",
-    accent: "#ff53d7",
-    accentAlt: "#2bf0ff",
-    background: "#183bff",
-    surface: "#2045ff",
+    name: "Neon Insight",
+    description: "Электрический контраст для product и growth-контента.",
+    accent: "#ff62c5",
+    accentAlt: "#65f0ff",
+    background: "#1737c9",
+    surface: "#2448db",
     titleColor: "#ffffff",
-    bodyColor: "#eff2ff",
-    titleFont: "Arial",
-    bodyFont: "Helvetica",
-    titleOffsetY: 430,
-    bodyOffsetY: 730,
+    bodyColor: "#e6efff",
+    titleFont: "Space Grotesk",
+    bodyFont: "Inter",
+    titleOffsetY: 308,
+    bodyOffsetY: 626,
     titleWidth: 820,
     bodyWidth: 760,
-    bodyHeight: 220,
+    bodyHeight: 246,
     chipStyle: "solid",
     decoration: "grid",
-    preview: "Громкий digital-вид с яркими цветами."
+    preview: "Digital-стиль с яркой, но читаемой типографикой."
   },
   {
     id: "mandarin",
     category: "color",
-    name: "Мандарин",
-    description: "Светлый сеточный шаблон с оранжевым выделением.",
+    name: "Mandarin",
+    description: "Тёплый акцентный шаблон для продающих и обучающих слайдов.",
     accent: "#ff6425",
-    accentAlt: "#ffd2b5",
-    background: "#f9f7f2",
+    accentAlt: "#ffd4be",
+    background: "#fff5ef",
     surface: "#ffffff",
-    titleColor: "#262626",
-    bodyColor: "#565656",
-    titleFont: "Arial",
-    bodyFont: "Helvetica",
-    titleOffsetY: 250,
-    bodyOffsetY: 500,
-    titleWidth: 900,
+    titleColor: "#2a2421",
+    bodyColor: "#605954",
+    titleFont: "Manrope",
+    bodyFont: "Inter",
+    titleOffsetY: 258,
+    bodyOffsetY: 514,
+    titleWidth: 896,
     bodyWidth: 820,
-    bodyHeight: 230,
+    bodyHeight: 248,
     chipStyle: "solid",
     decoration: "dots",
-    preview: "Минималистичный шаблон с ярким акцентом."
+    preview: "Тёплая палитра и аккуратная структура для everyday-контента."
+  },
+  {
+    id: "aurora",
+    category: "color",
+    name: "Aurora",
+    description: "Плавные градиенты и premium-акцент в цветной эстетике.",
+    accent: "#6f6bff",
+    accentAlt: "#b39cff",
+    background: "#f1eeff",
+    surface: "#f8f5ff",
+    titleColor: "#1e1933",
+    bodyColor: "#4f4a71",
+    titleFont: "Space Grotesk",
+    bodyFont: "Inter",
+    titleOffsetY: 266,
+    bodyOffsetY: 522,
+    titleWidth: 872,
+    bodyWidth: 804,
+    bodyHeight: 250,
+    chipStyle: "outline",
+    decoration: "glow",
+    preview: "Градиентная modern-карточка для creator и personal brand."
+  },
+  {
+    id: "coral",
+    category: "color",
+    name: "Coral",
+    description: "Яркий коралловый стиль с мягкой типографикой.",
+    accent: "#ff5e6e",
+    accentAlt: "#ffb0b7",
+    background: "#fff1f3",
+    surface: "#ffffff",
+    titleColor: "#2b1a1e",
+    bodyColor: "#65545a",
+    titleFont: "Manrope",
+    bodyFont: "DM Sans",
+    titleOffsetY: 264,
+    bodyOffsetY: 520,
+    titleWidth: 870,
+    bodyWidth: 804,
+    bodyHeight: 248,
+    chipStyle: "solid",
+    decoration: "paper",
+    preview: "Эмоциональная social-proof карточка с тёплым характером."
+  },
+  {
+    id: "atlas",
+    category: "color",
+    name: "Atlas",
+    description: "Структурный цветной бизнес-шаблон под кейсы и фреймворки.",
+    accent: "#00a3a8",
+    accentAlt: "#90dfe1",
+    background: "#ecfbfb",
+    surface: "#f6fffe",
+    titleColor: "#10262a",
+    bodyColor: "#47666c",
+    titleFont: "Space Grotesk",
+    bodyFont: "Inter",
+    titleOffsetY: 262,
+    bodyOffsetY: 520,
+    titleWidth: 890,
+    bodyWidth: 816,
+    bodyHeight: 252,
+    chipStyle: "outline",
+    decoration: "band",
+    preview: "Сильная деловая композиция с цветовым якорем."
   }
 ];
 
@@ -362,21 +562,21 @@ function createBackgroundImageElement(src: string, format: SlideFormat) {
 function getFormatLayout(format: SlideFormat) {
   if (format === "4:5") {
     return {
-      titleFactor: 1.04,
-      bodyFactor: 1.08,
-      titleYBoost: 60,
-      bodyYBoost: 115,
-      footerBottom: 116
+      titleFactor: 0.94,
+      bodyFactor: 0.96,
+      titleYBoost: 82,
+      bodyYBoost: 148,
+      footerBottom: 118
     };
   }
 
   if (format === "9:16") {
     return {
-      titleFactor: 0.96,
-      bodyFactor: 1.02,
-      titleYBoost: 96,
-      bodyYBoost: 180,
-      footerBottom: 122
+      titleFactor: 0.82,
+      bodyFactor: 0.88,
+      titleYBoost: 136,
+      bodyYBoost: 276,
+      footerBottom: 144
     };
   }
 
@@ -403,25 +603,35 @@ function createDecoration(template: CarouselTemplate, format: SlideFormat): Canv
         fill: template.background,
         cornerRadius: 0
       }),
+      createShapeElement({
+        metaKey: "decor-grid-surface",
+        x: 52,
+        y: 52,
+        width: 976,
+        height: Math.max(300, height - 104),
+        fill: template.surface,
+        cornerRadius: 34,
+        opacity: 0.94
+      }),
       ...Array.from({ length: 11 }, (_, index) =>
         createShapeElement({
           metaKey: `decor-grid-v-${index}`,
           x: 78 + index * 92,
-          y: 0,
-          width: 2,
+          y: 50,
+          width: 1,
           height,
-          fill: "rgba(0,0,0,0.05)",
+          fill: "rgba(0,0,0,0.045)",
           cornerRadius: 0
         })
       ),
       ...Array.from({ length: Math.ceil(height / 92) }, (_, index) =>
         createShapeElement({
           metaKey: `decor-grid-h-${index}`,
-          x: 0,
-          y: index * 92,
+          x: 52,
+          y: 52 + index * 92,
           width: SLIDE_SIZE,
-          height: 2,
-          fill: "rgba(0,0,0,0.04)",
+          height: 1,
+          fill: "rgba(0,0,0,0.036)",
           cornerRadius: 0
         })
       )
@@ -441,13 +651,23 @@ function createDecoration(template: CarouselTemplate, format: SlideFormat): Canv
       }),
       createShapeElement({
         metaKey: "decor-card",
-        x: 68,
-        y: 72,
-        width: 944,
-        height: Math.max(280, Math.min(height * 0.32, 420)),
-        fill: "#fffaf3",
-        cornerRadius: 26,
-        opacity: 0.82
+        x: 54,
+        y: 52,
+        width: 972,
+        height: Math.max(380, height - 104),
+        fill: template.surface,
+        cornerRadius: 34,
+        opacity: 0.96
+      }),
+      createShapeElement({
+        metaKey: "decor-paper-top",
+        x: 78,
+        y: 80,
+        width: 420,
+        height: 74,
+        fill: "rgba(255,255,255,0.78)",
+        cornerRadius: 18,
+        opacity: 0.72
       })
     ];
   }
@@ -463,15 +683,25 @@ function createDecoration(template: CarouselTemplate, format: SlideFormat): Canv
         fill: template.background,
         cornerRadius: 0
       }),
-      ...Array.from({ length: 110 }, (_, index) =>
+      createShapeElement({
+        metaKey: "decor-dots-surface",
+        x: 56,
+        y: 56,
+        width: 968,
+        height: Math.max(360, height - 112),
+        fill: template.surface,
+        cornerRadius: 34,
+        opacity: 0.96
+      }),
+      ...Array.from({ length: 88 }, (_, index) =>
         createShapeElement({
           metaKey: `decor-dot-${index}`,
-          x: 40 + (index % 10) * 100,
-          y: 44 + Math.floor(index / 10) * 95,
-          width: 10,
-          height: 10,
+          x: 92 + (index % 8) * 114,
+          y: 96 + Math.floor(index / 8) * 106,
+          width: 7,
+          height: 7,
           shape: "circle",
-          fill: "rgba(0,0,0,0.05)",
+          fill: "rgba(0,0,0,0.075)",
           cornerRadius: 999
         })
       )
@@ -491,12 +721,34 @@ function createDecoration(template: CarouselTemplate, format: SlideFormat): Canv
       }),
       createShapeElement({
         metaKey: "decor-surface",
-        x: 54,
-        y: 54,
-        width: 972,
-        height: Math.min(height - 108, 972),
+        x: 52,
+        y: 52,
+        width: 976,
+        height: Math.max(360, height - 104),
         fill: template.surface,
-        cornerRadius: 38
+        cornerRadius: 36
+      }),
+      createShapeElement({
+        metaKey: "decor-glow-left",
+        x: -180,
+        y: Math.round(height * 0.28),
+        width: 460,
+        height: 460,
+        shape: "circle",
+        fill: "rgba(255,255,255,0.13)",
+        cornerRadius: 999,
+        opacity: 0.78
+      }),
+      createShapeElement({
+        metaKey: "decor-glow-right",
+        x: 760,
+        y: Math.round(height * 0.08),
+        width: 420,
+        height: 420,
+        shape: "circle",
+        fill: "rgba(255,255,255,0.1)",
+        cornerRadius: 999,
+        opacity: 0.62
       })
     ];
   }
@@ -507,51 +759,63 @@ function createDecoration(template: CarouselTemplate, format: SlideFormat): Canv
       x: 0,
       y: 0,
       width: SLIDE_SIZE,
-      height: Math.min(height * 0.48, 540),
+      height: Math.min(height * 0.4, 490),
       fill: template.surface,
       cornerRadius: 0
     }),
     createShapeElement({
       metaKey: "decor-band-bottom",
       x: 0,
-      y: Math.min(height * 0.48, 540),
+      y: Math.min(height * 0.4, 490),
       width: SLIDE_SIZE,
-      height: height - Math.min(height * 0.48, 540),
-      fill: "#ffffff",
+      height: height - Math.min(height * 0.4, 490),
+      fill: template.background,
       cornerRadius: 0
+    }),
+    createShapeElement({
+      metaKey: "decor-band-sheet",
+      x: 56,
+      y: 62,
+      width: 968,
+      height: Math.max(360, height - 124),
+      fill: "rgba(255,255,255,0.92)",
+      cornerRadius: 34
     })
   ];
 }
 
-function createChip(template: CarouselTemplate, index: number) {
+function createChip(template: CarouselTemplate, index: number, format: SlideFormat) {
+  const y = format === "9:16" ? 86 : 70;
+  const x = 74;
   return createShapeElement({
     metaKey: "slide-chip",
-    x: 74,
-    y: 74,
-    width: 212,
-    height: 68,
+    x,
+    y,
+    width: 168,
+    height: 44,
     fill: template.chipStyle === "solid" ? template.accent : "#ffffff",
-    cornerRadius: 20,
+    cornerRadius: 16,
     opacity: 1,
-    stroke: template.chipStyle === "outline" ? template.accent : undefined,
-    strokeWidth: template.chipStyle === "outline" ? 3 : 0
+    stroke: template.chipStyle === "outline" ? template.accent : "rgba(0,0,0,0.1)",
+    strokeWidth: template.chipStyle === "outline" ? 2 : 1
   });
 }
 
-function createChipText(template: CarouselTemplate, index: number) {
+function createChipText(template: CarouselTemplate, index: number, format: SlideFormat) {
+  const y = format === "9:16" ? 99 : 84;
   return createTextElement({
     metaKey: "slide-chip-text",
     role: "caption",
     text: `SLIDE ${index + 1}`,
-    x: 110,
-    y: 94,
-    width: 160,
-    height: 32,
-    fontSize: 23,
+    x: 95,
+    y,
+    width: 130,
+    height: 24,
+    fontSize: 16,
     fill: template.chipStyle === "solid" ? "#ffffff" : template.accent,
-    fontFamily: "Helvetica",
+    fontFamily: "Inter",
     fontStyle: "bold",
-    letterSpacing: 1.2
+    letterSpacing: 1.4
   });
 }
 
@@ -699,35 +963,36 @@ function createManagedTitle(
   const layout = getFormatLayout(format);
   const { height: canvasHeight } = SLIDE_FORMAT_DIMENSIONS[format];
   const width = template.titleWidth ?? 860;
+  const x = clampValue(Math.round((SLIDE_SIZE - width) / 2), 68, 170);
   const titleY = clampValue(
     template.titleOffsetY + layout.titleYBoost,
     78,
     Math.round(canvasHeight * 0.62)
   );
-  const minBodyZone = format === "9:16" ? 300 : format === "4:5" ? 250 : 210;
-  const footerReserve = layout.footerBottom + 68;
+  const minBodyZone = format === "9:16" ? 330 : format === "4:5" ? 252 : 214;
+  const footerReserve = layout.footerBottom + 84;
   const maxHeightByCanvas = canvasHeight - titleY - minBodyZone - footerReserve;
-  const baseSize = Math.round((format === "9:16" ? 74 : 84) * layout.titleFactor);
+  const baseSize = Math.round((format === "9:16" ? 62 : 70) * layout.titleFactor);
   const maxHeight = clampValue(
-    Math.max(132, maxHeightByCanvas),
-    132,
-    Math.round(canvasHeight * (format === "9:16" ? 0.36 : 0.4))
+    Math.max(118, maxHeightByCanvas),
+    118,
+    Math.round(canvasHeight * (format === "9:16" ? 0.31 : 0.34))
   );
   const fitted = fitTextBlock({
     text,
     width,
     initialFontSize: baseSize,
-    minFontSize: format === "9:16" ? 20 : 22,
+    minFontSize: format === "9:16" ? 18 : 20,
     maxHeight,
-    lineHeight: 1.02,
-    minLineHeight: 0.94
+    lineHeight: 1.03,
+    minLineHeight: 0.92
   });
 
   return createTextElement({
     metaKey: "managed-title",
     role: "title",
     text,
-    x: template.id === "technology" ? 86 : template.id === "notes" ? 96 : 78,
+    x,
     y: titleY,
     width,
     height: fitted.height,
@@ -748,15 +1013,16 @@ function createManagedBody(
   const layout = getFormatLayout(format);
   const { height: canvasHeight } = SLIDE_FORMAT_DIMENSIONS[format];
   const width = template.bodyWidth ?? 820;
+  const x = clampValue(Math.round((SLIDE_SIZE - width) / 2), 72, 192);
   const preferredBodyY = template.bodyOffsetY + layout.bodyYBoost;
-  const footerReserve = layout.footerBottom + 62;
-  const minBodyHeight = format === "9:16" ? 230 : format === "4:5" ? 200 : 170;
+  const footerReserve = layout.footerBottom + 74;
+  const minBodyHeight = format === "9:16" ? 242 : format === "4:5" ? 196 : 166;
   const bodyY = clampValue(
     Math.max(preferredBodyY, startY),
     0,
     Math.max(0, canvasHeight - footerReserve - minBodyHeight)
   );
-  const baseSize = Math.round((format === "9:16" ? 34 : 38) * layout.bodyFactor);
+  const baseSize = Math.round((format === "9:16" ? 29 : 34) * layout.bodyFactor);
   const availableHeight = canvasHeight - bodyY - footerReserve;
   const maxHeight = Math.max(minBodyHeight, availableHeight);
   const fitted = fitTextBlock({
@@ -765,8 +1031,8 @@ function createManagedBody(
     initialFontSize: baseSize,
     minFontSize: format === "9:16" ? 12 : 13,
     maxHeight,
-    lineHeight: 1.16,
-    minLineHeight: 0.98
+    lineHeight: 1.2,
+    minLineHeight: 1
   });
 
   const fallbackFitted =
@@ -788,8 +1054,8 @@ function createManagedBody(
       initialFontSize: Math.max(10, fallbackFitted.fontSize),
       minFontSize: 10,
       maxHeight,
-      lineHeight: Math.max(0.92, fallbackFitted.lineHeight),
-      minLineHeight: 0.9
+      lineHeight: Math.max(0.96, fallbackFitted.lineHeight),
+      minLineHeight: 0.92
     },
     fallbackFitted
   );
@@ -799,7 +1065,7 @@ function createManagedBody(
     role: "body",
     wasAutoTruncated: overflowGuard.text !== text,
     text: overflowGuard.text,
-    x: template.id === "technology" ? 86 : template.id === "notes" ? 96 : 82,
+    x,
     y: bodyY,
     width,
     height: overflowGuard.fitted.height,
@@ -823,10 +1089,14 @@ function createFooterElements(
   const subtitle = slide.profileSubtitle || DEFAULT_PROFILE_SUBTITLE;
   const footerVariant = slide.footerVariant ?? DEFAULT_FOOTER_VARIANT;
   const accent = template.accentAlt ?? template.accent;
-  const footerColor = template.id.startsWith("netflix") || template.category === "dark"
-    ? "#ebe1d5"
-    : "#3c3c3c";
-  const footerMuted = template.category === "dark" ? "#c0b5a9" : "#7f786e";
+  const footerColor = template.category === "dark" ? "#e9edf4" : "#252a33";
+  const footerMuted = template.category === "dark" ? "#b5bdc9" : "#666f7c";
+  const footerX = 80;
+  const isTall = format === "9:16";
+  const handleSize = isTall ? 22 : 19;
+  const subtitleSize = isTall ? 17 : 15;
+  const topSize = isTall ? 19 : 17;
+  const arrowSize = isTall ? 34 : 30;
   const elements: CanvasElement[] = [];
 
   if (footerVariant === "v1") {
@@ -835,26 +1105,26 @@ function createFooterElements(
         metaKey: "profile-handle",
         role: "caption",
         text: handle,
-        x: 78,
+        x: footerX,
         y: height - footerBottom,
-        width: 320,
+        width: 360,
         height: 30,
-        fontSize: 25,
+        fontSize: handleSize,
         fill: footerColor,
-        fontFamily: "Helvetica",
+        fontFamily: "Inter",
         fontStyle: "bold"
       }),
       createTextElement({
         metaKey: "profile-subtitle",
         role: "caption",
         text: subtitle,
-        x: 78,
-        y: height - (footerBottom - 30),
-        width: 280,
-        height: 28,
-        fontSize: 24,
+        x: footerX,
+        y: height - (footerBottom - 24),
+        width: 330,
+        height: 24,
+        fontSize: subtitleSize,
         fill: footerMuted,
-        fontFamily: "Helvetica"
+        fontFamily: "Inter"
       })
     );
   }
@@ -865,39 +1135,39 @@ function createFooterElements(
         metaKey: "profile-handle",
         role: "caption",
         text: handle,
-        x: 78,
+        x: footerX,
         y: 72,
         width: 320,
-        height: 28,
-        fontSize: 22,
+        height: 24,
+        fontSize: topSize,
         fill: footerColor,
-        fontFamily: "Helvetica",
+        fontFamily: "Inter",
         fontStyle: "bold"
       }),
       createTextElement({
         metaKey: "footer-counter",
         role: "caption",
         text: `[${index + 1}/${totalSlides}]`,
-        x: 928,
+        x: 904,
         y: 72,
-        width: 80,
-        height: 28,
-        fontSize: 22,
+        width: 96,
+        height: 24,
+        fontSize: topSize,
         fill: footerMuted,
-        fontFamily: "Helvetica",
+        fontFamily: "Inter",
         align: "right"
       }),
       createTextElement({
         metaKey: "profile-subtitle",
         role: "caption",
         text: subtitle,
-        x: 78,
+        x: footerX,
         y: height - footerBottom,
-        width: 280,
-        height: 28,
-        fontSize: 23,
+        width: 330,
+        height: 24,
+        fontSize: subtitleSize,
         fill: footerMuted,
-        fontFamily: "Helvetica"
+        fontFamily: "Inter"
       })
     );
   }
@@ -906,10 +1176,10 @@ function createFooterElements(
     elements.push(
       createShapeElement({
         metaKey: "profile-dot",
-        x: 70,
+        x: footerX,
         y: height - (footerBottom + 2),
-        width: 36,
-        height: 36,
+        width: 24,
+        height: 24,
         shape: "circle",
         fill: accent,
         cornerRadius: 999
@@ -918,26 +1188,26 @@ function createFooterElements(
         metaKey: "profile-handle",
         role: "caption",
         text: handle,
-        x: 122,
-        y: height - (footerBottom + 4),
-        width: 260,
-        height: 28,
-        fontSize: 24,
+        x: footerX + 36,
+        y: height - (footerBottom + 1),
+        width: 320,
+        height: 24,
+        fontSize: handleSize,
         fill: footerColor,
-        fontFamily: "Helvetica",
+        fontFamily: "Inter",
         fontStyle: "bold"
       }),
       createTextElement({
         metaKey: "profile-subtitle",
         role: "caption",
         text: subtitle,
-        x: 122,
-        y: height - (footerBottom - 24),
-        width: 280,
-        height: 26,
-        fontSize: 23,
+        x: footerX + 36,
+        y: height - (footerBottom - 22),
+        width: 330,
+        height: 22,
+        fontSize: subtitleSize,
         fill: footerMuted,
-        fontFamily: "Helvetica"
+        fontFamily: "Inter"
       })
     );
   }
@@ -948,13 +1218,13 @@ function createFooterElements(
         metaKey: "profile-handle",
         role: "caption",
         text: handle,
-        x: 270,
+        x: 214,
         y: 72,
-        width: 540,
-        height: 28,
-        fontSize: 22,
+        width: 652,
+        height: 24,
+        fontSize: topSize,
         fill: footerColor,
-        fontFamily: "Helvetica",
+        fontFamily: "Inter",
         fontStyle: "bold",
         align: "center"
       })
@@ -966,13 +1236,13 @@ function createFooterElements(
       metaKey: "cta-arrow",
       role: "caption",
       text: "\u2192",
-      x: 938,
+      x: 924,
       y: height - (footerBottom + 10),
-      width: 48,
-      height: 48,
-      fontSize: 40,
+      width: 54,
+      height: 44,
+      fontSize: arrowSize,
       fill: template.category === "dark" ? accent : "#171717",
-      fontFamily: "Arial",
+      fontFamily: "Inter",
       fontStyle: "bold",
       align: "center"
     })
@@ -1050,7 +1320,12 @@ function buildManagedElements(
   const bodyStart = managedTitle.y + managedTitle.height + 28;
   const managedBody = createManagedBody(template, bodyText, format, bodyStart);
 
-  managed.push(createChip(template, index), createChipText(template, index), managedTitle, managedBody);
+  managed.push(
+    createChip(template, index, format),
+    createChipText(template, index, format),
+    managedTitle,
+    managedBody
+  );
   managed.push(...createFooterElements(slide, template, index, totalSlides, format));
 
   return managed;

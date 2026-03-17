@@ -52,13 +52,13 @@ type MobileToolsProps = {
 };
 
 const TOOLBAR_ITEMS: Array<{ id: MobileToolTab; icon: string; label: string }> = [
-  { id: "templates", icon: "▦", label: "Шаблоны" },
+  { id: "templates", icon: "◻", label: "Шаблоны" },
   { id: "color", icon: "◉", label: "Цвет" },
-  { id: "background", icon: "🖼", label: "Фон" },
-  { id: "style", icon: "✦", label: "Стиль" },
+  { id: "background", icon: "▧", label: "Фон" },
+  { id: "style", icon: "◇", label: "Стиль" },
   { id: "text", icon: "T", label: "Текст" },
   { id: "font", icon: "Aa", label: "Шрифт" },
-  { id: "size", icon: "A↑", label: "Размер" }
+  { id: "size", icon: "A↕", label: "Размер" }
 ];
 
 export function MobileTools({
@@ -131,7 +131,7 @@ export function MobileTools({
               className={`mobile-bottom-tool ${isActive ? "active" : ""}`}
               onClick={() => onTabChange(isActive ? null : item.id)}
             >
-              <span>{item.icon}</span>
+              <span className="mobile-bottom-tool-icon">{item.icon}</span>
               <small>{item.label}</small>
             </button>
           );
@@ -149,6 +149,8 @@ export function MobileTools({
           role="dialog"
           aria-label="Инструменты редактора"
         >
+          <div className="mobile-tool-sheet-handle" />
+
           <div className="mobile-tool-sheet-header">
             <h3>{getTabTitle(activeTab)}</h3>
             <button
@@ -219,12 +221,33 @@ export function MobileTools({
                               : template.background
                         }}
                       >
+                        <span className="mobile-template-preview-sheen" />
                         <span
                           className="mobile-template-preview-chip"
                           style={{ backgroundColor: template.accent }}
                         />
+                        <span
+                          className="mobile-template-preview-title"
+                          style={{ color: template.titleColor }}
+                        >
+                          {getTemplatePreviewHeadline(template)}
+                        </span>
+                        <span className="mobile-template-preview-lines">
+                          <span style={{ backgroundColor: template.bodyColor }} />
+                          <span style={{ backgroundColor: template.bodyColor }} />
+                          <span style={{ backgroundColor: template.bodyColor }} />
+                        </span>
+                        <span
+                          className="mobile-template-preview-footer"
+                          style={{ color: template.bodyColor }}
+                        >
+                          @creator <strong>→</strong>
+                        </span>
                       </span>
                       <span className="mobile-template-name">{template.name}</span>
+                      <span className="mobile-template-caption">
+                        {getTemplatePreviewCaption(template)}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -495,4 +518,14 @@ function getTabTitle(tab: MobileToolTab) {
     return "Шрифты";
   }
   return "Размер текста";
+}
+
+function getTemplatePreviewHeadline(template: { name: string; preview?: string }) {
+  const source = template.preview?.trim() || template.name;
+  return source.length > 28 ? `${source.slice(0, 28)}…` : source;
+}
+
+function getTemplatePreviewCaption(template: { description: string; preview?: string }) {
+  const source = template.preview?.trim() || template.description;
+  return source.length > 52 ? `${source.slice(0, 52)}…` : source;
 }

@@ -258,17 +258,29 @@ export function SettingsPanel({
                           : template.background
                     }}
                   >
+                    <span className="template-preview-sheen" />
                     <span
                       className="template-preview-chip"
                       style={{ backgroundColor: template.accent }}
                     />
-                    <span className="template-preview-title" style={{ color: template.titleColor }}>
-                      {template.name}
+                    <span
+                      className="template-preview-title"
+                      style={{ color: template.titleColor }}
+                    >
+                      {getTemplatePreviewHeadline(template)}
+                    </span>
+                    <span className="template-preview-lines">
+                      <span style={{ backgroundColor: template.bodyColor }} />
+                      <span style={{ backgroundColor: template.bodyColor }} />
+                      <span style={{ backgroundColor: template.bodyColor }} />
+                    </span>
+                    <span className="template-preview-footer" style={{ color: template.bodyColor }}>
+                      @creator <strong>→</strong>
                     </span>
                   </span>
                   <span className="template-card-meta">
                     <strong>{template.name}</strong>
-                    <span>{template.description}</span>
+                    <span>{getTemplatePreviewCaption(template)}</span>
                   </span>
                 </button>
               ))}
@@ -601,3 +613,13 @@ const EXPORT_PRESETS: Array<{
     format: "9:16"
   }
 ];
+
+function getTemplatePreviewHeadline(template: { name: string; preview?: string }) {
+  const source = template.preview?.trim() || template.name;
+  return source.length > 32 ? `${source.slice(0, 32)}…` : source;
+}
+
+function getTemplatePreviewCaption(template: { description: string; preview?: string }) {
+  const source = template.preview?.trim() || template.description;
+  return source.length > 70 ? `${source.slice(0, 70)}…` : source;
+}

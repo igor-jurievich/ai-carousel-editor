@@ -1109,38 +1109,41 @@ export function Editor() {
               </button>
             </div>
 
-            <select
-              className="mobile-compact-select"
-              value={slideFormat}
-              onChange={(event) => handleFormatChange(event.target.value as SlideFormat)}
-              aria-label="Формат"
-              disabled={generationLocked}
-            >
-              <option value="1:1">1:1</option>
-              <option value="4:5">4:5</option>
-              <option value="9:16">9:16</option>
-            </select>
+            <div className="mobile-top-selects">
+              <select
+                className="mobile-compact-select"
+                value={slideFormat}
+                onChange={(event) => handleFormatChange(event.target.value as SlideFormat)}
+                aria-label="Формат"
+                disabled={generationLocked}
+              >
+                <option value="1:1">1:1</option>
+                <option value="4:5">4:5</option>
+                <option value="9:16">9:16</option>
+              </select>
 
-            <select
-              className="mobile-export-mode-select"
-              value={exportMode}
-              onChange={(event) => setExportMode(event.target.value as ExportMode)}
-              aria-label="Режим экспорта"
-              disabled={generationLocked}
-            >
-              <option value="zip">ZIP</option>
-              <option value="png">PNG</option>
-              <option value="jpg">JPG</option>
-              <option value="pdf">PDF</option>
-            </select>
+              <select
+                className="mobile-export-mode-select"
+                value={exportMode}
+                onChange={(event) => setExportMode(event.target.value as ExportMode)}
+                aria-label="Режим экспорта"
+                disabled={generationLocked}
+              >
+                <option value="zip">ZIP</option>
+                <option value="png">PNG</option>
+                <option value="jpg">JPG</option>
+                <option value="pdf">PDF</option>
+              </select>
+            </div>
 
             <button
               className="mobile-export-button"
               type="button"
               onClick={handleExport}
               disabled={isExportRendering || isGenerating}
+              title={`Экспорт в ${exportModeLabel}`}
             >
-              {isExportRendering ? `Экспорт ${exportModeLabel}...` : `Экспорт ${exportModeLabel}`}
+              {isExportRendering ? "Экспорт..." : "Экспорт"}
             </button>
           </header>
 

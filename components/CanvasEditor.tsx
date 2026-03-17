@@ -81,13 +81,13 @@ export function CanvasEditor({
       <section className="panel canvas-panel canvas-panel-mobile">
         <div className="mobile-canvas-root">
           <div className="mobile-canvas-frame">
-            <div className="slide-stack-shell active mobile-slide-shell">
+            <div className="slide-stack-shell active mobile-slide-shell mobile-preview-shell">
               <div className="active-slide-pill">
                 Слайд {activeSlideIndex + 1} • {formatLabel}
               </div>
 
               <div className="canvas-stage canvas-stage-editor mobile-stage-editor">
-                <div className="canvas-stage-center">
+                <div className="canvas-stage-center mobile-stage-surface">
                   <SlideStage
                     slide={activeSlide}
                     width={displayWidth}
@@ -187,23 +187,27 @@ export function CanvasEditor({
           </div>
 
           <div className="mobile-slide-tools">
-            <ToolButton
-              label="+"
+            <MobileQuickButton
+              icon="+"
+              label="Слайд"
               title="Добавить слайд после текущего"
               onClick={() => onInsertSlideAt(activeSlideIndex + 1)}
             />
-            <ToolButton
-              label="▣"
+            <MobileQuickButton
+              icon="▣"
+              label="Фото"
               title="Загрузить фото на этот слайд"
               onClick={() => onAddImageToSlide(activeSlide.id)}
             />
-            <ToolButton
-              label="T"
+            <MobileQuickButton
+              icon="T"
+              label="Текст"
               title="Добавить текст на этот слайд"
               onClick={() => onAddTextToSlide(activeSlide.id)}
             />
-            <ToolButton
-              label="⌫"
+            <MobileQuickButton
+              icon="⌫"
+              label="Удалить"
               title="Удалить этот слайд"
               onClick={() => onDeleteSlide(activeSlide.id)}
               disabled={slides.length <= 1}
@@ -422,6 +426,39 @@ function ToolButton({
       }}
     >
       {label}
+    </button>
+  );
+}
+
+function MobileQuickButton({
+  icon,
+  label,
+  title,
+  onClick,
+  disabled = false
+}: {
+  icon: string;
+  label: string;
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className="mobile-slide-tool"
+      title={title}
+      disabled={disabled}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (disabled) {
+          return;
+        }
+        onClick();
+      }}
+    >
+      <span className="mobile-slide-tool-icon">{icon}</span>
+      <span className="mobile-slide-tool-label">{label}</span>
     </button>
   );
 }
