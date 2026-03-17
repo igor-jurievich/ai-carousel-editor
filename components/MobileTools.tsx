@@ -46,6 +46,7 @@ type MobileToolsProps = {
   onProfileSubtitleChange: (value: string) => void;
   onFooterVariantChange: (value: FooterVariantId) => void;
   onUpdateElement: (elementId: string, updater: (element: CanvasElement) => CanvasElement) => void;
+  onCenterSelectedElement: () => void;
   toolbarRef?: MutableRefObject<HTMLElement | null>;
   toolSheetRef?: MutableRefObject<HTMLElement | null>;
 };
@@ -82,6 +83,7 @@ export function MobileTools({
   onProfileSubtitleChange,
   onFooterVariantChange,
   onUpdateElement,
+  onCenterSelectedElement,
   toolbarRef,
   toolSheetRef
 }: MobileToolsProps) {
@@ -161,6 +163,11 @@ export function MobileTools({
 
           <div className="mobile-tool-sheet-body">
             <div className="settings-selected-pill">{selectedElementLabel}</div>
+            {selectedElement ? (
+              <button type="button" className="ghost-chip ghost-chip-small" onClick={onCenterSelectedElement}>
+                Center element
+              </button>
+            ) : null}
             {activeTab === "templates" ? (
               <div className="settings-block">
                 <span className="settings-label">Категория</span>

@@ -159,24 +159,39 @@ export function CanvasEditor({
 
             <button
               type="button"
-              className="mobile-side-insert mobile-side-insert-left"
-              onClick={() => onInsertSlideAt(activeSlideIndex <= 0 ? 0 : activeSlideIndex)}
-              aria-label="Добавить слайд перед текущим"
+              className="mobile-side-nav mobile-side-nav-left"
+              onClick={() => {
+                if (canGoPrev) {
+                  onSelectSlide(slides[activeSlideIndex - 1].id);
+                }
+              }}
+              aria-label="Предыдущий слайд"
+              disabled={!canGoPrev}
             >
-              +
+              ‹
             </button>
 
             <button
               type="button"
-              className="mobile-side-insert mobile-side-insert-right"
-              onClick={() => onInsertSlideAt(activeSlideIndex + 1)}
-              aria-label="Добавить слайд после текущего"
+              className="mobile-side-nav mobile-side-nav-right"
+              onClick={() => {
+                if (canGoNext) {
+                  onSelectSlide(slides[activeSlideIndex + 1].id);
+                }
+              }}
+              aria-label="Следующий слайд"
+              disabled={!canGoNext}
             >
-              +
+              ›
             </button>
           </div>
 
           <div className="mobile-slide-tools">
+            <ToolButton
+              label="+"
+              title="Добавить слайд после текущего"
+              onClick={() => onInsertSlideAt(activeSlideIndex + 1)}
+            />
             <ToolButton
               label="▣"
               title="Загрузить фото на этот слайд"
@@ -188,33 +203,11 @@ export function CanvasEditor({
               onClick={() => onAddTextToSlide(activeSlide.id)}
             />
             <ToolButton
-              label="‹"
-              title="Предыдущий слайд"
-              onClick={() => {
-                if (canGoPrev) {
-                  onSelectSlide(slides[activeSlideIndex - 1].id);
-                }
-              }}
-              disabled={!canGoPrev}
-            />
-            <ToolButton
-              label="›"
-              title="Следующий слайд"
-              onClick={() => {
-                if (canGoNext) {
-                  onSelectSlide(slides[activeSlideIndex + 1].id);
-                }
-              }}
-              disabled={!canGoNext}
-            />
-            <ToolButton
               label="⌫"
               title="Удалить этот слайд"
               onClick={() => onDeleteSlide(activeSlide.id)}
+              disabled={slides.length <= 1}
             />
-          </div>
-          <div className="mobile-edit-hint">
-            Двойной тап по тексту открывает inline-редактор. Enter сохраняет, Esc отменяет.
           </div>
         </div>
       </section>

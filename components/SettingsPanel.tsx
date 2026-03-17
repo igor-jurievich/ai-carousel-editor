@@ -16,7 +16,8 @@ import type {
   TemplateCategoryId
 } from "@/types/editor";
 
-type ExportMode = "zip" | "png" | "pdf";
+type ExportMode = "zip" | "png" | "jpg" | "pdf";
+type ExportPresetId = "instagram" | "instagram-stories" | "tiktok";
 
 type SettingsPanelProps = {
   slides: Slide[];
@@ -52,6 +53,7 @@ type SettingsPanelProps = {
   onProfileSubtitleChange: (value: string) => void;
   onFooterVariantChange: (value: FooterVariantId) => void;
   onUpdateElement: (elementId: string, updater: (element: CanvasElement) => CanvasElement) => void;
+  onCenterSelectedElement: () => void;
 };
 
 export function SettingsPanel({
@@ -87,7 +89,8 @@ export function SettingsPanel({
   onProfileHandleChange,
   onProfileSubtitleChange,
   onFooterVariantChange,
-  onUpdateElement
+  onUpdateElement,
+  onCenterSelectedElement
 }: SettingsPanelProps) {
   const visibleTemplates = getTemplatesByCategory(activeTemplateCategory);
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -359,6 +362,10 @@ export function SettingsPanel({
 
         {selectedElement ? (
           <div className="field-grid">
+            <button type="button" className="ghost-chip" onClick={onCenterSelectedElement}>
+              Center element
+            </button>
+
             {selectedElement.type === "text" ? (
               <>
                 <label className="field-label">
@@ -486,9 +493,28 @@ export function SettingsPanel({
       <section className="settings-card">
         <h3>Экспорт</h3>
         <div className="settings-hint">
-          ZIP и PNG все выгружаются архивом, PDF собирается в один многостраничный файл.
+          ZIP, PNG и JPG выгружаются архивом, PDF собирается в один многостраничный файл.
           {isGenerating ? " Экспорт станет доступен после завершения генерации." : ""}
         </div>
+
+        <div className="settings-block">
+          <span className="settings-label">Пресеты</span>
+          <div className="segment-control">
+            {EXPORT_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="segment-item"
+                onClick={() => onFormatChange(preset.format)}
+                disabled={isExporting || isGenerating}
+                title={preset.hint}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="segment-control">
           <button
             type="button"
@@ -504,7 +530,15 @@ export function SettingsPanel({
             onClick={() => onExportModeChange("png")}
             disabled={isExporting || isGenerating}
           >
-            PNG все
+            PNG
+          </button>
+          <button
+            type="button"
+            className={`segment-item ${exportMode === "jpg" ? "active" : ""}`}
+            onClick={() => onExportModeChange("jpg")}
+            disabled={isExporting || isGenerating}
+          >
+            JPG
           </button>
           <button
             type="button"
@@ -533,8 +567,37 @@ function getExportLabel(mode: ExportMode) {
   if (mode === "png") {
     return "PNG (архив)";
   }
+  if (mode === "jpg") {
+    return "JPG (архив)";
+  }
   if (mode === "pdf") {
     return "PDF";
   }
   return "ZIP";
 }
+
+const EXPORT_PRESETS: Array<{
+  id: ExportPresetId;
+  label: string;
+  hint: string;
+  format: SlideFormat;
+}> = [
+  {
+    id: "instagram",
+    label: "Instagram",
+    hint: "Квадратный пост 1:1",
+    format: "1:1"
+  },
+  {
+    id: "instagram-stories",
+    label: "Stories",
+    hint: "Вертикальные сторис 9:16",
+    format: "9:16"
+  },
+  {
+    id: "tiktok",
+    label: "TikTok",
+    hint: "Вертикальный формат 9:16",
+    format: "9:16"
+  }
+];

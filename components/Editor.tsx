@@ -48,8 +48,13 @@ const MAX_TOPIC_CHARS = 4000;
 const MIN_TOPIC_CHARS = 3;
 const EXPORT_LOCK_STATUS = "Дождитесь завершения экспорта и повторите действие.";
 const GENERATE_LOCK_STATUS = "Дождитесь завершения генерации и повторите действие.";
+const TEXT_SAFE_AREA = {
+  insetX: 84,
+  insetTop: 84,
+  insetBottom: 96
+};
 
-type ExportMode = "zip" | "png" | "pdf";
+type ExportMode = "zip" | "png" | "jpg" | "pdf";
 
 export function Editor() {
   const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("technology", "1:1"));
@@ -467,6 +472,42 @@ export function Editor() {
     setStatus("Элемент удалён.");
   };
 
+  const handleCenterSelectedElement = () => {
+    if (!selectedElement) {
+      return;
+    }
+
+    updateElement(selectedElement.id, (element) => {
+      const centeredX = (slideDimensions.width - element.width) / 2;
+      const centeredY = (slideDimensions.height - element.height) / 2;
+
+      if (element.type === "text") {
+        const maxX = Math.max(
+          TEXT_SAFE_AREA.insetX,
+          slideDimensions.width - TEXT_SAFE_AREA.insetX - element.width
+        );
+        const maxY = Math.max(
+          TEXT_SAFE_AREA.insetTop,
+          slideDimensions.height - TEXT_SAFE_AREA.insetBottom - element.height
+        );
+
+        return {
+          ...element,
+          x: Math.round(Math.max(TEXT_SAFE_AREA.insetX, Math.min(maxX, centeredX))),
+          y: Math.round(Math.max(TEXT_SAFE_AREA.insetTop, Math.min(maxY, centeredY)))
+        };
+      }
+
+      return {
+        ...element,
+        x: Math.round(Math.max(0, Math.min(slideDimensions.width - element.width, centeredX))),
+        y: Math.round(Math.max(0, Math.min(slideDimensions.height - element.height, centeredY)))
+      };
+    });
+
+    setStatus("Элемент выровнен по центру.");
+  };
+
   const handleAddText = (slideId = activeSlideId ?? "") => {
     if (isExportRendering) {
       setStatus(EXPORT_LOCK_STATUS);
@@ -824,13 +865,18 @@ export function Editor() {
     return false;
   };
 
-  const exportSlidesAsZip = async (filenameSuffix = "slides") => {
+  const exportSlidesAsZip = async (
+    filenameSuffix = "slides",
+    imageType: "png" | "jpg" = "png"
+  ) => {
     const zip = new JSZip();
 
     for (let index = 0; index < slides.length; index += 1) {
-      const dataUrl = getSlideDataUrl(slides[index].id);
-      const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-      zip.file(`slide${index + 1}.png`, base64, { base64: true });
+      const rawDataUrl = getSlideDataUrl(slides[index].id);
+      const exportDataUrl =
+        imageType === "jpg" ? await convertDataUrlToJpeg(rawDataUrl) : rawDataUrl;
+      const base64 = exportDataUrl.replace(/^data:image\/(?:png|jpeg);base64,/, "");
+      zip.file(`slide${index + 1}.${imageType}`, base64, { base64: true });
     }
 
     const blob = await zip.generateAsync({ type: "blob" });
@@ -859,17 +905,24 @@ export function Editor() {
         setStatus("Часть изображений ещё загружается, запускаю экспорт с текущим состоянием.");
       }
 
-      if (exportMode === "png") {
+      if (exportMode === "png" || exportMode === "jpg") {
+        const imageType = exportMode === "jpg" ? "jpg" : "png";
+
         if (slides.length === 1) {
-          const dataUrl = getSlideDataUrl(slides[0].id);
-          const blob = await dataUrlToBlob(dataUrl);
-          saveAs(blob, `${slugify(projectTitleFromTopic(topic))}-slide1.png`);
-          setStatus("PNG скачан.");
+          const rawDataUrl = getSlideDataUrl(slides[0].id);
+          const exportDataUrl =
+            imageType === "jpg" ? await convertDataUrlToJpeg(rawDataUrl) : rawDataUrl;
+          const blob = await dataUrlToBlob(exportDataUrl);
+          saveAs(blob, `${slugify(projectTitleFromTopic(topic))}-slide1.${imageType}`);
+          setStatus(`${imageType.toUpperCase()} скачан.`);
           return;
         }
 
-        await exportSlidesAsZip("slides-png");
-        setStatus("PNG всех слайдов скачаны одним архивом.");
+        await exportSlidesAsZip(
+          imageType === "jpg" ? "slides-jpg" : "slides-png",
+          imageType
+        );
+        setStatus(`${imageType.toUpperCase()} всех слайдов скачаны одним архивом.`);
         return;
       }
 
@@ -895,7 +948,7 @@ export function Editor() {
         return;
       }
 
-      await exportSlidesAsZip("slides");
+      await exportSlidesAsZip("slides", "png");
       setStatus("Архив со слайдами скачан.");
     } catch (error) {
       setStatus(resolveUserFacingError(error, "Ошибка экспорта. Попробуйте снова."));
@@ -1024,6 +1077,7 @@ export function Editor() {
                     handleUpdateFooter({ footerVariant: value as FooterVariantId })
                   }
                   onUpdateElement={updateElement}
+                  onCenterSelectedElement={handleCenterSelectedElement}
                 />
               ) : null}
             </aside>
@@ -1065,6 +1119,19 @@ export function Editor() {
               <option value="1:1">1:1</option>
               <option value="4:5">4:5</option>
               <option value="9:16">9:16</option>
+            </select>
+
+            <select
+              className="mobile-export-mode-select"
+              value={exportMode}
+              onChange={(event) => setExportMode(event.target.value as ExportMode)}
+              aria-label="Режим экспорта"
+              disabled={generationLocked}
+            >
+              <option value="zip">ZIP</option>
+              <option value="png">PNG</option>
+              <option value="jpg">JPG</option>
+              <option value="pdf">PDF</option>
             </select>
 
             <button
@@ -1180,6 +1247,7 @@ export function Editor() {
               onProfileSubtitleChange={(value) => handleUpdateFooter({ profileSubtitle: value })}
               onFooterVariantChange={(value) => handleUpdateFooter({ footerVariant: value })}
               onUpdateElement={updateElement}
+              onCenterSelectedElement={handleCenterSelectedElement}
               toolbarRef={mobileToolbarRef}
               toolSheetRef={mobileToolSheetRef}
             />
@@ -1267,6 +1335,9 @@ function getExportModeLabel(mode: ExportMode) {
   if (mode === "png") {
     return "PNG";
   }
+  if (mode === "jpg") {
+    return "JPG";
+  }
   if (mode === "pdf") {
     return "PDF";
   }
@@ -1330,6 +1401,24 @@ async function fileToOptimizedDataUrl(file: File) {
 async function dataUrlToBlob(dataUrl: string) {
   const response = await fetch(dataUrl);
   return await response.blob();
+}
+
+async function convertDataUrlToJpeg(dataUrl: string, quality = 0.92) {
+  const image = await loadHtmlImage(dataUrl);
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return dataUrl;
+  }
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const jpeg = canvas.toDataURL("image/jpeg", quality);
+  return jpeg.startsWith("data:image/jpeg") ? jpeg : dataUrl;
 }
 
 function slugify(value: string) {

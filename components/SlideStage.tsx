@@ -32,6 +32,61 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
 }
 
+const TEXT_SAFE_AREA = {
+  insetX: 84,
+  insetTop: 84,
+  insetBottom: 96
+};
+
+type DragBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+};
+
+function resolveDragBounds(
+  element: CanvasElement,
+  canvasWidth: number,
+  canvasHeight: number,
+  width = element.width,
+  height = element.height
+): DragBounds {
+  if (element.type !== "text") {
+    return {
+      minX: 0,
+      maxX: Math.max(0, canvasWidth - width),
+      minY: 0,
+      maxY: Math.max(0, canvasHeight - height)
+    };
+  }
+
+  const maxTextWidth = Math.max(60, canvasWidth - TEXT_SAFE_AREA.insetX * 2);
+  const maxTextHeight = Math.max(
+    28,
+    canvasHeight - TEXT_SAFE_AREA.insetTop - TEXT_SAFE_AREA.insetBottom
+  );
+  const safeWidth = Math.min(width, maxTextWidth);
+  const safeHeight = Math.min(height, maxTextHeight);
+
+  return {
+    minX: TEXT_SAFE_AREA.insetX,
+    maxX: Math.max(TEXT_SAFE_AREA.insetX, canvasWidth - TEXT_SAFE_AREA.insetX - safeWidth),
+    minY: TEXT_SAFE_AREA.insetTop,
+    maxY: Math.max(
+      TEXT_SAFE_AREA.insetTop,
+      canvasHeight - TEXT_SAFE_AREA.insetBottom - safeHeight
+    )
+  };
+}
+
+function clampPosition(position: { x: number; y: number }, bounds: DragBounds) {
+  return {
+    x: clamp(position.x, bounds.minX, bounds.maxX),
+    y: clamp(position.y, bounds.minY, bounds.maxY)
+  };
+}
+
 function SlideImageNode({
   element,
   interactive = false,
@@ -39,7 +94,8 @@ function SlideImageNode({
   onSelect,
   onDragEnd,
   onTransformEnd,
-  nodeRef
+  nodeRef,
+  dragBoundFunc
 }: {
   element: ImageElement;
   interactive?: boolean;
@@ -48,6 +104,7 @@ function SlideImageNode({
   onDragEnd?: (x: number, y: number) => void;
   onTransformEnd?: (node: Konva.Image) => void;
   nodeRef: (node: Konva.Image | null) => void;
+  dragBoundFunc?: (position: { x: number; y: number }) => { x: number; y: number };
 }) {
   const [image] = useImage(element.src, "anonymous");
   const isBackground = element.metaKey === "background-image";
@@ -64,7 +121,9 @@ function SlideImageNode({
       rotation={element.rotation}
       cornerRadius={element.cornerRadius}
       listening={!isBackground}
-      draggable={interactive && !isBackground}
+      draggable={interactive && selected && !isBackground}
+      dragDistance={10}
+      dragBoundFunc={isBackground ? undefined : dragBoundFunc}
       onClick={isBackground ? undefined : onSelect}
       onTap={isBackground ? undefined : onSelect}
       onDragEnd={
@@ -86,7 +145,8 @@ function SlideShapeNode({
   onSelect,
   onDragEnd,
   onTransformEnd,
-  nodeRef
+  nodeRef,
+  dragBoundFunc
 }: {
   element: ShapeElement;
   interactive?: boolean;
@@ -95,6 +155,7 @@ function SlideShapeNode({
   onDragEnd?: (x: number, y: number) => void;
   onTransformEnd?: (node: Konva.Rect) => void;
   nodeRef: (node: Konva.Rect | null) => void;
+  dragBoundFunc?: (position: { x: number; y: number }) => { x: number; y: number };
 }) {
   return (
     <Rect
@@ -112,7 +173,9 @@ function SlideShapeNode({
       shadowBlur={selected ? 14 : 0}
       shadowColor={selected ? "rgba(114, 214, 203, 0.28)" : undefined}
       listening={interactive}
-      draggable={interactive}
+      draggable={interactive && selected}
+      dragDistance={10}
+      dragBoundFunc={dragBoundFunc}
       onClick={interactive ? onSelect : undefined}
       onTap={interactive ? onSelect : undefined}
       onDragEnd={interactive ? (event) => onDragEnd?.(event.target.x(), event.target.y()) : undefined}
@@ -129,7 +192,8 @@ function SlideTextNode({
   onDoubleClick,
   onDragEnd,
   onTransformEnd,
-  nodeRef
+  nodeRef,
+  dragBoundFunc
 }: {
   element: TextElement;
   interactive?: boolean;
@@ -139,6 +203,7 @@ function SlideTextNode({
   onDragEnd?: (x: number, y: number) => void;
   onTransformEnd?: (node: Konva.Text) => void;
   nodeRef: (node: Konva.Text | null) => void;
+  dragBoundFunc?: (position: { x: number; y: number }) => { x: number; y: number };
 }) {
   return (
     <Text
@@ -157,7 +222,9 @@ function SlideTextNode({
       opacity={element.opacity}
       rotation={element.rotation}
       letterSpacing={element.letterSpacing}
-      draggable={interactive}
+      draggable={interactive && selected}
+      dragDistance={10}
+      dragBoundFunc={dragBoundFunc}
       onClick={onSelect}
       onTap={onSelect}
       onDblClick={onDoubleClick}
@@ -204,13 +271,29 @@ export function SlideStage({
   const handleTransformEnd = (element: CanvasElement, node: Konva.Node) => {
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
-    const nextWidth = clamp(element.width * scaleX, 30, canvasWidth);
-    const nextHeight = clamp(element.height * scaleY, 24, canvasHeight);
-    const nextX = clamp(node.x(), 0, canvasWidth - nextWidth);
-    const nextY = clamp(node.y(), 0, canvasHeight - nextHeight);
+    const maxWidth =
+      element.type === "text"
+        ? Math.max(60, canvasWidth - TEXT_SAFE_AREA.insetX * 2)
+        : canvasWidth;
+    const maxHeight =
+      element.type === "text"
+        ? Math.max(28, canvasHeight - TEXT_SAFE_AREA.insetTop - TEXT_SAFE_AREA.insetBottom)
+        : canvasHeight;
+    const nextWidth = clamp(
+      element.width * scaleX,
+      element.type === "text" ? 60 : 30,
+      maxWidth
+    );
+    const nextHeight = clamp(
+      element.height * scaleY,
+      element.type === "text" ? 28 : 24,
+      maxHeight
+    );
+    const bounds = resolveDragBounds(element, canvasWidth, canvasHeight, nextWidth, nextHeight);
+    const clampedPosition = clampPosition({ x: node.x(), y: node.y() }, bounds);
     const updates: Record<string, number> = {
-      x: nextX,
-      y: nextY,
+      x: clampedPosition.x,
+      y: clampedPosition.y,
       width: nextWidth,
       height: nextHeight,
       rotation: node.rotation()
@@ -230,6 +313,13 @@ export function SlideStage({
       ref={stageRef}
       width={width}
       height={height}
+      draggable={false}
+      style={{ touchAction: "none" }}
+      onWheel={(event) => {
+        if (event.evt.ctrlKey) {
+          event.evt.preventDefault();
+        }
+      }}
       onMouseDown={(event) => {
         if (event.target === event.target.getStage()) {
           onSelectElement?.(null);
@@ -238,6 +328,12 @@ export function SlideStage({
       onTouchStart={(event) => {
         if (event.target === event.target.getStage()) {
           onSelectElement?.(null);
+        }
+      }}
+      onTouchMove={(event) => {
+        const touchEvent = event.evt as TouchEvent;
+        if (touchEvent.touches.length > 1) {
+          touchEvent.preventDefault();
         }
       }}
     >
@@ -253,12 +349,17 @@ export function SlideStage({
 
         {slide.elements.map((element) => {
           const selected = selectedElementId === element.id;
+          const dragBounds = resolveDragBounds(element, canvasWidth, canvasHeight);
 
           const handleDragEnd = (x: number, y: number) => {
-            const safeX = clamp(x, 0, canvasWidth - element.width);
-            const safeY = clamp(y, 0, canvasHeight - element.height);
+            const nextPosition = clampPosition({ x, y }, dragBounds);
+            const safeX = nextPosition.x;
+            const safeY = nextPosition.y;
             onUpdateElementPosition?.(element.id, safeX, safeY);
           };
+
+          const dragBoundFunc = (position: { x: number; y: number }) =>
+            clampPosition(position, dragBounds);
 
           const nodeRef = (node: Konva.Node | null) => {
             nodeRefs.current[element.id] = node;
@@ -272,6 +373,7 @@ export function SlideStage({
                 selected={selected}
                 interactive={interactive}
                 nodeRef={nodeRef as (node: Konva.Text | null) => void}
+                dragBoundFunc={dragBoundFunc}
                 onSelect={() => onSelectElement?.(element.id)}
                 onDoubleClick={() => onStartTextEditing?.(element.id)}
                 onDragEnd={handleDragEnd}
@@ -288,6 +390,7 @@ export function SlideStage({
                 selected={false}
                 interactive={false}
                 nodeRef={nodeRef as (node: Konva.Rect | null) => void}
+                dragBoundFunc={dragBoundFunc}
               />
             );
           }
@@ -299,6 +402,7 @@ export function SlideStage({
               selected={selected}
               interactive={interactive}
               nodeRef={nodeRef as (node: Konva.Image | null) => void}
+              dragBoundFunc={dragBoundFunc}
               onSelect={() => onSelectElement?.(element.id)}
               onDragEnd={handleDragEnd}
               onTransformEnd={(node) => handleTransformEnd(element, node)}
