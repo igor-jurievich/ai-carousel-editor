@@ -1,8 +1,10 @@
 # AI Carousel Editor
 
+## Project overview
+
 AI Carousel Editor — веб-редактор для генерации и редактирования каруселей для соцсетей.
 
-## MVP возможности
+## Features
 
 - генерация каруселей через OpenAI
 - редактор слайдов на canvas
@@ -12,14 +14,14 @@ AI Carousel Editor — веб-редактор для генерации и ре
 - экспорт `ZIP` / `PNG` / `PDF`
 - mobile и desktop интерфейс
 
-## Технологии
+## Tech stack
 
 - Next.js
 - React
 - Konva canvas
 - OpenAI API
 
-## Локальный запуск
+## Local development
 
 ```bash
 npm install
@@ -28,14 +30,14 @@ npm run dev
 
 После запуска откройте `http://localhost:3000/editor`.
 
-## Production запуск
+## Production build
 
 ```bash
 npm run build
 npm run start
 ```
 
-## Переменные окружения
+## Environment variables
 
 Создайте `.env.local` на основе `.env.example`:
 
@@ -53,7 +55,7 @@ GENERATE_RATE_LIMIT_WINDOW_MS=
 - `GENERATE_RATE_LIMIT_MAX` — максимальное число запросов к `/api/generate` за окно.
 - `GENERATE_RATE_LIMIT_WINDOW_MS` — длина окна rate limit в миллисекундах.
 
-## Статус проекта
+## Project status
 
 - MVP version
 - предназначен для первых тестовых пользователей
