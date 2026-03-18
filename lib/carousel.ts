@@ -2144,48 +2144,227 @@ export function createStarterSlides(
   templateId: CarouselTemplateId = "technology",
   format: SlideFormat = "1:1"
 ): Slide[] {
-  return createSlidesFromOutline(
-    [
-      {
-        title: "Как пользоваться Помощником эксперта",
-        text: "Это стартовый onboarding внутри «Помощника эксперта». Здесь показано, как вставить идею, сгенерировать глубокую карусель, выбрать шаблон, настроить свой профиль и быстро довести карточки до публикации."
-      },
-      {
-        title: "1. Вставьте тему или сырой набросок",
-        text: "В верхнее поле можно вставить не только короткую тему, но и целую подборку идей, возражений, мифов, тезисов и фраз. Генератор использует это как исходный материал и превращает в полноценную структуру карусели."
-      },
-      {
-        title: "2. Генерация делает готовый смысл, а не пустой каркас",
-        text: "После нажатия на кнопку AI не просто разбивает тему по слайдам, а пишет заголовки, раскрывает посыл, добавляет доказательства, ошибки, шаги, формулировки и финальный CTA. Получается текст, который уже можно публиковать и усиливать."
-      },
-      {
-        title: "3. Один клик выбирает элемент",
-        text: "Клик по тексту или картинке делает элемент активным. После этого можно двигать его, менять размер, править текст справа и удалять кнопкой рядом с выделением, как в обычных редакторах."
-      },
-      {
-        title: "4. Добавляйте фото на слайд и в фон",
-        text: "Возле каждого слайда есть быстрая кнопка загрузки изображения в сам макет. А в правой панели можно отдельно поставить фоновое фото, если хотите сделать более эмоциональную или премиальную подачу."
-      },
-      {
-        title: "5. Форматы и шаблоны адаптируются",
-        text: "Переключайте 1:1, 4:5 и 9:16. Редактор перестраивает композицию под формат, а справа можно выбрать шаблон только для текущего слайда или для всей карусели сразу."
-      },
-      {
-        title: "6. Быстрые действия находятся справа от карточки",
-        text: "У каждого слайда есть своё компактное меню: выбрать карточку, загрузить фото, добавить текст, поднять выше, опустить ниже или удалить сам слайд. Плюсик между слайдами вставляет новую карточку ровно в нужное место."
-      },
-      {
-        title: "7. История не тянется между открытиями",
-        text: "Каждое новое открытие редактора начинается как новая сессия. Старые черновики автоматически не подтягиваются, поэтому на входе вы всегда видите чистую инструкцию и можете начать заново без мусора."
-      },
-      {
-        title: "8. Эти слайды можно спокойно удалить",
-        text: "Onboarding нужен только для первого знакомства. Удалите эти карточки по одной, замените их своими или просто вставьте новую структуру через генератор и начните собирать реальную карусель."
-      }
-    ],
+  type StarterOutlineItem = CarouselOutlineSlide & {
+    titleFont?: string;
+    bodyFont?: string;
+    includeDemoImage?: boolean;
+  };
+
+  const starterHandle = "@ai-carousel-editor";
+  const starterSubtitle = "AI carousel workflow";
+  const onboardingImage = getStarterOnboardingImage();
+  const onboarding: StarterOutlineItem[] = [
+    {
+      templateId: "minimal",
+      titleFont: "Manrope",
+      bodyFont: "Inter",
+      title: "AI Carousel Editor",
+      text: "Создавайте карусели, которые выглядят как готовый контент. Генерация, редактирование, шаблоны и экспорт — в одном рабочем пространстве."
+    },
+    {
+      templateId: "business-light",
+      titleFont: "Oswald",
+      bodyFont: "Inter",
+      title: "1. Введите тему или набросок",
+      text: "Добавьте короткую идею или сырой текст. Генератор использует ввод как бриф и собирает серию слайдов с понятной структурой."
+    },
+    {
+      templateId: "technology",
+      titleFont: "Space Grotesk",
+      bodyFont: "Inter",
+      title: "2. Нажмите «Сгенерировать»",
+      text: "AI формирует цельную карусель: хук, раскрытие, практику и финал. Вы получаете основу, которую обычно достаточно только дополировать."
+    },
+    {
+      templateId: "atlas",
+      titleFont: "Advent Pro",
+      bodyFont: "DM Sans",
+      title: "3. Выберите визуальный стиль",
+      text: "Переключайте светлые, тёмные и акцентные шаблоны. Можно применить стиль к одному слайду или к серии целиком."
+    },
+    {
+      templateId: "editorial",
+      titleFont: "El Messiri",
+      bodyFont: "Inter",
+      title: "4. Отредактируйте текст",
+      text: "Тап или клик выбирает блок. Двойной тап открывает редактирование: правьте заголовок и текст прямо на canvas, не теряя ритм композиции."
+    },
+    {
+      templateId: "premium",
+      titleFont: "Russo One",
+      bodyFont: "Roboto Condensed",
+      title: "5. Настройте типографику",
+      text: "Меняйте шрифты, размер и контраст подачи. Разные типографические сценарии помогают быстро подстроить карусель под нишу и тон бренда."
+    },
+    {
+      templateId: "aurora",
+      titleFont: "Space Grotesk",
+      bodyFont: "Inter",
+      title: "6. Работайте с фоном и стилями",
+      text: "Фон, акценты, frame color и декоративные пресеты помогают собирать clean, business или creator-подачу без ручной пересборки макета."
+    },
+    {
+      templateId: "founder-dark",
+      titleFont: "Manrope",
+      bodyFont: "Inter",
+      includeDemoImage: true,
+      title: "7. Добавляйте изображения аккуратно",
+      text: "Фото можно использовать как визуальный якорь. Для image-режима слайд делится на зоны, поэтому текст остаётся читаемым и чистым."
+    },
+    {
+      templateId: "matrix",
+      titleFont: "Fira Code",
+      bodyFont: "Inter",
+      title: "8. Переключайте форматы",
+      text: "1:1, 4:5 и 9:16. Система адаптирует композицию под площадку, чтобы итог выглядел нативно для ленты, портрета и stories."
+    },
+    {
+      templateId: "mandarin",
+      titleFont: "Oswald",
+      bodyFont: "Inter",
+      title: "9. Доведите до финала за минуты",
+      text: "Слайды можно быстро переставлять, уточнять тексты, подбирать фон и изображения. Получается рабочая карусель без долгой ручной верстки."
+    },
+    {
+      templateId: "netflix",
+      titleFont: "Manrope",
+      bodyFont: "Inter",
+      title: "10. Экспортируйте и публикуйте",
+      text: "Когда серия готова, скачайте ZIP, PNG, JPG или PDF. Оставьте эту демо-карусель как референс или удалите её и соберите свою первую публикацию."
+    }
+  ];
+
+  const starterSlides = createSlidesFromOutline(
+    onboarding.map(({ titleFont: _titleFont, bodyFont: _bodyFont, includeDemoImage: _includeDemoImage, ...item }) => item),
     templateId,
-    format
+    format,
+    onboarding.length
   );
+
+  const withDemoImage = starterSlides.map((slide, index) => {
+    if (!onboarding[index]?.includeDemoImage) {
+      return slide;
+    }
+
+    const withImage = setSlideBackgroundImage(
+      slide,
+      onboardingImage,
+      index,
+      starterSlides.length,
+      format,
+      "top"
+    );
+
+    return setSlideBackgroundImageStyle(
+      withImage,
+      {
+        fitMode: "cover",
+        zoom: 1.06,
+        darken: 0.06
+      },
+      index,
+      starterSlides.length,
+      format
+    );
+  });
+
+  return withDemoImage.map((slide, index) =>
+    applyStarterSlidePolish(
+      slide,
+      onboarding[index]?.titleFont,
+      onboarding[index]?.bodyFont,
+      starterHandle,
+      starterSubtitle
+    )
+  );
+}
+
+function applyStarterSlidePolish(
+  slide: Slide,
+  titleFont: string | undefined,
+  bodyFont: string | undefined,
+  handle: string,
+  subtitle: string
+) {
+  return {
+    ...slide,
+    profileHandle: handle,
+    profileSubtitle: subtitle,
+    elements: slide.elements.map((element) => {
+      if (element.type !== "text") {
+        return element;
+      }
+
+      if (element.metaKey === "managed-title" && titleFont) {
+        return {
+          ...element,
+          fontFamily: titleFont
+        };
+      }
+
+      if (element.metaKey === "managed-body" && bodyFont) {
+        return {
+          ...element,
+          fontFamily: bodyFont
+        };
+      }
+
+      if (element.metaKey === "profile-handle") {
+        return {
+          ...element,
+          text: handle
+        };
+      }
+
+      if (element.metaKey === "profile-subtitle") {
+        return {
+          ...element,
+          text: subtitle
+        };
+      }
+
+      return element;
+    })
+  };
+}
+
+let starterOnboardingImageCache: string | null = null;
+
+function getStarterOnboardingImage() {
+  if (starterOnboardingImageCache) {
+    return starterOnboardingImageCache;
+  }
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900">
+      <defs>
+        <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="#0f2f38"/>
+          <stop offset="55%" stop-color="#1f5e62"/>
+          <stop offset="100%" stop-color="#7fd7ce"/>
+        </linearGradient>
+        <radialGradient id="glow" cx="68%" cy="22%" r="60%">
+          <stop offset="0%" stop-color="#dcfff8" stop-opacity="0.78"/>
+          <stop offset="100%" stop-color="#dcfff8" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="1400" height="900" fill="url(#bg)"/>
+      <rect width="1400" height="900" fill="url(#glow)"/>
+      <g opacity="0.18" fill="#ffffff">
+        <circle cx="230" cy="170" r="112"/>
+        <circle cx="1180" cy="98" r="84"/>
+        <circle cx="1260" cy="760" r="154"/>
+      </g>
+      <g fill="#ffffff" fill-opacity="0.9">
+        <rect x="132" y="650" width="590" height="16" rx="8"/>
+        <rect x="132" y="684" width="490" height="14" rx="7"/>
+      </g>
+      <text x="132" y="578" fill="#ffffff" font-size="92" font-family="Inter, Arial, sans-serif" font-weight="700">Visual Workflow</text>
+    </svg>
+  `.trim();
+
+  starterOnboardingImageCache = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  return starterOnboardingImageCache;
 }
 
 export function createBlankSlide(

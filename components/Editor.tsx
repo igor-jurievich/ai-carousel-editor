@@ -46,7 +46,8 @@ import type {
   TextElement
 } from "@/types/editor";
 
-const DEFAULT_STATUS = "Новая сессия: между открытиями история не сохраняется.";
+const DEFAULT_STATUS =
+  "Откройте onboarding-серию ниже или введите тему и нажмите «Сгенерировать».";
 const MOBILE_BREAKPOINT = 768;
 const MAX_TOPIC_CHARS = 4000;
 const MIN_TOPIC_CHARS = 3;
@@ -80,7 +81,7 @@ type HistorySnapshot = {
 };
 
 export function Editor() {
-  const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("technology", "1:1"));
+  const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("minimal", "1:1"));
   const [topic, setTopic] = useState("");
   const [slidesCount, setSlidesCount] = useState(DEFAULT_SLIDES_COUNT);
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
@@ -1347,7 +1348,7 @@ export function Editor() {
       return;
     }
 
-    const starterSlides = createStarterSlides("technology", slideFormat);
+    const starterSlides = createStarterSlides("minimal", slideFormat);
     pushHistorySnapshot(true);
     setSlides(starterSlides);
     setTopic("");
@@ -1801,12 +1802,12 @@ export function Editor() {
           </header>
 
           <details className="mobile-generate-panel">
-            <summary>Генерация карусели</summary>
+            <summary>Создать новую карусель</summary>
             <div className="mobile-generate-body">
               <textarea
                 value={topic}
                 onChange={(event) => setTopic(event.target.value)}
-                placeholder="Введите тему карусели или вставьте готовую идею"
+                placeholder="Например: «Как эксперту получать заявки через Instagram-карусели»"
                 rows={3}
                 maxLength={MAX_TOPIC_CHARS}
                 title={`Максимум ${MAX_TOPIC_CHARS} символов`}

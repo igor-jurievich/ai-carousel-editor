@@ -32,15 +32,15 @@ export function Toolbar({
   return (
     <header className="prompt-shell">
       <div className="prompt-brand">
-        <span className="prompt-eyebrow">Created by: укажите имя профиля</span>
-        <h1>Помощник эксперта</h1>
+        <span className="prompt-eyebrow">AI Carousel Editor</span>
+        <h1>Соберите карусель за пару минут</h1>
       </div>
 
       <div className="prompt-composer">
         <textarea
           value={topic}
           onChange={(event) => onTopicChange(event.target.value)}
-          placeholder="Введите тему карусели или вставьте готовую идею"
+          placeholder="Например: «Как эксперту получать заявки через Instagram-карусели»"
           rows={3}
           maxLength={topicMaxLength}
           title={`Максимум ${topicMaxLength} символов`}
@@ -69,7 +69,7 @@ export function Toolbar({
           />
           <span>
             Картинки из интернета
-            <small>Автоподбор 1-3 фото по теме</small>
+            <small>Подберём до 3 релевантных фото</small>
           </span>
         </label>
         <button className="btn" type="button" onClick={onGenerate} disabled={isGenerating || disabled}>
