@@ -354,6 +354,13 @@ function SlideImageNode({
   const drawWidth = backgroundPlacement?.width ?? element.width;
   const drawHeight = backgroundPlacement?.height ?? element.height;
   const darken = clamp(element.darken ?? 0, 0, 1);
+  const outlineStroke =
+    selected
+      ? "#72d6cb"
+      : element.strokeWidth && element.strokeWidth > 0
+        ? element.stroke
+        : undefined;
+  const outlineWidth = selected ? 4 : element.strokeWidth ?? 0;
 
   return (
     <>
@@ -385,8 +392,8 @@ function SlideImageNode({
         onTransformEnd={
           isBackground ? undefined : (event) => onTransformEnd?.(event.target as Konva.Image)
         }
-        stroke={selected ? "#72d6cb" : undefined}
-        strokeWidth={selected ? 4 : 0}
+        stroke={outlineStroke}
+        strokeWidth={outlineWidth}
         shadowBlur={selected ? 18 : 0}
         shadowColor={selected ? "rgba(114, 214, 203, 0.35)" : undefined}
       />
@@ -492,13 +499,40 @@ function SlideTextNode({
       letterSpacing={element.letterSpacing}
       textDecoration={element.textDecoration}
       draggable={interactive && selected}
-      dragDistance={10}
+      dragDistance={4}
       dragBoundFunc={dragBoundFunc}
       onClick={onSelect}
       onTap={onSelect}
       onDblClick={onDoubleClick}
       onDblTap={onDoubleClick}
-      onDragEnd={(event) => onDragEnd?.(event.target.x(), event.target.y())}
+      onMouseEnter={(event) => {
+        if (!interactive) {
+          return;
+        }
+        const container = event.target.getStage()?.container();
+        if (container) {
+          container.style.cursor = selected ? "grab" : "pointer";
+        }
+      }}
+      onMouseLeave={(event) => {
+        const container = event.target.getStage()?.container();
+        if (container) {
+          container.style.cursor = "default";
+        }
+      }}
+      onDragStart={(event) => {
+        const container = event.target.getStage()?.container();
+        if (container) {
+          container.style.cursor = "grabbing";
+        }
+      }}
+      onDragEnd={(event) => {
+        const container = event.target.getStage()?.container();
+        if (container) {
+          container.style.cursor = selected ? "grab" : "default";
+        }
+        onDragEnd?.(event.target.x(), event.target.y());
+      }}
       onTransformEnd={(event) => onTransformEnd?.(event.target as Konva.Text)}
       strokeEnabled={false}
       shadowEnabled={false}
@@ -523,6 +557,7 @@ export function SlideStage({
   showSlideBadge = true
 }: SlideStageProps) {
   const scale = useMemo(() => width / canvasWidth, [canvasWidth, width]);
+  const stageNodeRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const nodeRefs = useRef<Record<string, Konva.Node | null>>({});
   const safeArea = useMemo(
@@ -550,6 +585,15 @@ export function SlideStage({
     transformerRef.current.nodes(selectedNode ? [selectedNode] : []);
     transformerRef.current.getLayer()?.batchDraw();
   }, [interactive, selectedElementId, slide.elements]);
+
+  useEffect(() => {
+    stageNodeRef.current?.batchDraw();
+  }, [slide.elements, showSlideBadge]);
+
+  const handleStageRef = (node: Konva.Stage | null) => {
+    stageNodeRef.current = node;
+    stageRef?.(node);
+  };
 
   useEffect(() => {
     updateSnapGuides(EMPTY_GUIDES);
@@ -621,7 +665,7 @@ export function SlideStage({
 
   return (
     <Stage
-      ref={stageRef}
+      ref={handleStageRef}
       width={width}
       height={height}
       draggable={false}

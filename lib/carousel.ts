@@ -130,13 +130,13 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     bodyColor: "#cdc2b4",
     titleFont: "Georgia",
     bodyFont: "Inter",
-    titleOffsetY: 324,
-    bodyOffsetY: 646,
-    titleWidth: 860,
-    bodyWidth: 804,
-    bodyHeight: 254,
-    chipStyle: "solid",
-    decoration: "band",
+    titleOffsetY: 312,
+    bodyOffsetY: 626,
+    titleWidth: 840,
+    bodyWidth: 782,
+    bodyHeight: 242,
+    chipStyle: "outline",
+    decoration: "none",
     preview: "Контент как в дорогой editorial-обложке."
   },
   {
@@ -284,13 +284,13 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     bodyColor: "#4f5968",
     titleFont: "Manrope",
     bodyFont: "Inter",
-    titleOffsetY: 262,
-    bodyOffsetY: 520,
-    titleWidth: 846,
-    bodyWidth: 788,
-    bodyHeight: 246,
+    titleOffsetY: 248,
+    bodyOffsetY: 496,
+    titleWidth: 860,
+    bodyWidth: 810,
+    bodyHeight: 238,
     chipStyle: "outline",
-    decoration: "band",
+    decoration: "none",
     preview: "Минимум визуального шума, максимум читабельности."
   },
   {
@@ -485,10 +485,10 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     titleOffsetY: 262,
     bodyOffsetY: 520,
     titleWidth: 890,
-    bodyWidth: 816,
+    bodyWidth: 804,
     bodyHeight: 252,
     chipStyle: "outline",
-    decoration: "band",
+    decoration: "grid",
     preview: "Сильная деловая композиция с цветовым якорем."
   }
 ];
@@ -619,7 +619,9 @@ export function createImageElement(src: string, overrides: Partial<ImageElement>
     offsetY: overrides.offsetY ?? 0,
     naturalWidth: overrides.naturalWidth,
     naturalHeight: overrides.naturalHeight,
-    darken: overrides.darken ?? 0
+    darken: overrides.darken ?? 0,
+    stroke: overrides.stroke ?? "#ffffff",
+    strokeWidth: overrides.strokeWidth ?? 0
   };
 }
 
@@ -2203,6 +2205,13 @@ export function createStarterSlides(
       bodyFont: "Inter",
       title: "6. Экспортируйте в нужном формате",
       text: "Когда всё готово — скачайте ZIP, PNG, JPG или PDF. Эта инструкция — демо, удалите её и создайте свою серию."
+    },
+    {
+      templateId: "mandarin",
+      titleFont: "Russo One",
+      bodyFont: "Inter",
+      title: "7. Создайте свою первую карусель",
+      text: "Очистите демо-серию, введите тему и нажмите «Сгенерировать». Через пару минут у вас будет готовая карусель под публикацию."
     }
   ];
 

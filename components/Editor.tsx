@@ -942,6 +942,11 @@ export function Editor() {
       return;
     }
 
+    if (!selectedElement || Math.abs(selectedElement.rotation) < 0.01) {
+      setStatus("Поворот уже равен 0°.");
+      return;
+    }
+
     updateElement(selectedElementId, (element) => ({
       ...element,
       rotation: 0

@@ -176,6 +176,24 @@ export function SettingsPanel({
       element.type === "image" ? updater(element) : element
     );
   };
+  const applyManagedAlign = (target: "title" | "body", align: "left" | "center" | "right") => {
+    const managed = slide.elements.find(
+      (element): element is Extract<CanvasElement, { type: "text" }> =>
+        element.type === "text" && element.metaKey === (target === "title" ? "managed-title" : "managed-body")
+    );
+    if (!managed) {
+      return;
+    }
+
+    onUpdateElement(managed.id, (element) =>
+      element.type === "text"
+        ? {
+            ...element,
+            align
+          }
+        : element
+    );
+  };
   const exportLabel = getExportLabel(exportMode);
   const selectedElementLabel = selectedElement
     ? selectedElement.type === "text"
@@ -198,6 +216,22 @@ export function SettingsPanel({
         (element): element is Extract<CanvasElement, { type: "text" }> =>
           element.type === "text" && (element.metaKey === "managed-body" || element.role === "body")
       )?.fontFamily ?? "Inter",
+    [slide.elements]
+  );
+  const managedTitle = useMemo(
+    () =>
+      slide.elements.find(
+        (element): element is Extract<CanvasElement, { type: "text" }> =>
+          element.type === "text" && element.metaKey === "managed-title"
+      ) ?? null,
+    [slide.elements]
+  );
+  const managedBody = useMemo(
+    () =>
+      slide.elements.find(
+        (element): element is Extract<CanvasElement, { type: "text" }> =>
+          element.type === "text" && element.metaKey === "managed-body"
+      ) ?? null,
     [slide.elements]
   );
 
@@ -704,6 +738,62 @@ export function SettingsPanel({
             Применить ко всем слайдам
           </button>
           <span className="settings-hint">Шрифты применяются мгновенно ко всей серии.</span>
+          <div className="field-grid">
+            <span className="settings-label">Выравнивание заголовка</span>
+            <div className="icon-segment">
+              <button
+                type="button"
+                className={`icon-segment-item ${managedTitle?.align === "left" ? "active" : ""}`}
+                onClick={() => applyManagedAlign("title", "left")}
+                disabled={disabled || !managedTitle}
+              >
+                <AppIcon name="align-left" size={14} />
+              </button>
+              <button
+                type="button"
+                className={`icon-segment-item ${managedTitle?.align === "center" ? "active" : ""}`}
+                onClick={() => applyManagedAlign("title", "center")}
+                disabled={disabled || !managedTitle}
+              >
+                <AppIcon name="align-center" size={14} />
+              </button>
+              <button
+                type="button"
+                className={`icon-segment-item ${managedTitle?.align === "right" ? "active" : ""}`}
+                onClick={() => applyManagedAlign("title", "right")}
+                disabled={disabled || !managedTitle}
+              >
+                <AppIcon name="align-right" size={14} />
+              </button>
+            </div>
+            <span className="settings-label">Выравнивание описания</span>
+            <div className="icon-segment">
+              <button
+                type="button"
+                className={`icon-segment-item ${managedBody?.align === "left" ? "active" : ""}`}
+                onClick={() => applyManagedAlign("body", "left")}
+                disabled={disabled || !managedBody}
+              >
+                <AppIcon name="align-left" size={14} />
+              </button>
+              <button
+                type="button"
+                className={`icon-segment-item ${managedBody?.align === "center" ? "active" : ""}`}
+                onClick={() => applyManagedAlign("body", "center")}
+                disabled={disabled || !managedBody}
+              >
+                <AppIcon name="align-center" size={14} />
+              </button>
+              <button
+                type="button"
+                className={`icon-segment-item ${managedBody?.align === "right" ? "active" : ""}`}
+                onClick={() => applyManagedAlign("body", "right")}
+                disabled={disabled || !managedBody}
+              >
+                <AppIcon name="align-right" size={14} />
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="settings-block">
@@ -765,13 +855,21 @@ export function SettingsPanel({
               type="button"
               className="ghost-chip ghost-chip-muted"
               onClick={onResetElementRotation}
-              disabled={disabled}
+              disabled={disabled || Math.abs(selectedElement.rotation) < 0.01}
             >
               Reset rotation (0°)
             </button>
 
             {selectedElement.type === "text" ? (
               <>
+                <div className="settings-hint">
+                  Чтобы двигать текст: выделите блок и перетащите его на canvas в пределах safe-zone.
+                </div>
+                {isGenerating || isExporting ? (
+                  <div className="settings-warning">
+                    Перемещение временно заблокировано, пока идёт генерация или экспорт.
+                  </div>
+                ) : null}
                 <label className="field-label">
                   Текст
                   <textarea
@@ -989,6 +1087,70 @@ export function SettingsPanel({
 
             {selectedElement.type === "image" ? (
               <>
+                <div className="field-label">
+                  Пресеты изображения
+                  <div className="segment-control">
+                    <button
+                      type="button"
+                      className="segment-item"
+                      onClick={() =>
+                        updateImageElement((element) => ({
+                          ...element,
+                          fitMode: "contain",
+                          cornerRadius: 22
+                        }))
+                      }
+                      disabled={disabled}
+                    >
+                      Карточка
+                    </button>
+                    <button
+                      type="button"
+                      className="segment-item"
+                      onClick={() =>
+                        updateImageElement((element) => ({
+                          ...element,
+                          ...applyImageFitMode(element, "cover"),
+                          fitMode: "cover",
+                          cornerRadius: 0
+                        }))
+                      }
+                      disabled={disabled}
+                    >
+                      Обложка
+                    </button>
+                    <button
+                      type="button"
+                      className="segment-item"
+                      onClick={() =>
+                        updateImageElement((element) => ({
+                          ...element,
+                          fitMode: "cover",
+                          cornerRadius: Math.max(18, Math.min(element.width, element.height) / 2)
+                        }))
+                      }
+                      disabled={disabled}
+                    >
+                      Круг
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className={`ghost-chip ${(selectedElement.strokeWidth ?? 0) > 0 ? "" : "ghost-chip-muted"}`}
+                  onClick={() =>
+                    updateImageElement((element) => ({
+                      ...element,
+                      strokeWidth: (element.strokeWidth ?? 0) > 0 ? 0 : 8,
+                      stroke: element.stroke || "#ffffff"
+                    }))
+                  }
+                  disabled={disabled}
+                >
+                  {(selectedElement.strokeWidth ?? 0) > 0 ? "Убрать рамку" : "Добавить рамку"}
+                </button>
+
                 <label className="field-label">
                   Ссылка на изображение
                   <textarea
@@ -1068,6 +1230,44 @@ export function SettingsPanel({
                     />
                   </label>
                 </div>
+
+                {(selectedElement.strokeWidth ?? 0) > 0 ? (
+                  <div className="field-row">
+                    <label className="field-label">
+                      Цвет рамки
+                      <input
+                        className="field"
+                        type="color"
+                        value={selectedElement.stroke ?? "#ffffff"}
+                        onChange={(event) =>
+                          updateImageElement((element) => ({
+                            ...element,
+                            stroke: event.target.value
+                          }))
+                        }
+                        disabled={disabled}
+                      />
+                    </label>
+                    <label className="field-label">
+                      Толщина рамки
+                      <input
+                        className="field"
+                        type="number"
+                        min={1}
+                        max={28}
+                        step={1}
+                        value={selectedElement.strokeWidth ?? 8}
+                        onChange={(event) =>
+                          updateImageElement((element) => ({
+                            ...element,
+                            strokeWidth: Number(event.target.value) || 0
+                          }))
+                        }
+                        disabled={disabled}
+                      />
+                    </label>
+                  </div>
+                ) : null}
 
                 <div className="field-row">
                   <label className="field-label">

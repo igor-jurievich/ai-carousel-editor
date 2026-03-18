@@ -147,6 +147,16 @@ export function MobileTools({
       (element): element is Extract<CanvasElement, { type: "text" }> =>
         element.type === "text" && (element.metaKey === "managed-body" || element.role === "body")
     )?.fontFamily ?? "Inter";
+  const managedTitle =
+    slide.elements.find(
+      (element): element is Extract<CanvasElement, { type: "text" }> =>
+        element.type === "text" && element.metaKey === "managed-title"
+    ) ?? null;
+  const managedBody =
+    slide.elements.find(
+      (element): element is Extract<CanvasElement, { type: "text" }> =>
+        element.type === "text" && element.metaKey === "managed-body"
+    ) ?? null;
   const swipeRef = useRef<{ startY: number; startX: number; drag: number } | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
   const selectedElementLabel = selectedElement
@@ -286,7 +296,7 @@ export function MobileTools({
                 type="button"
                 className="ghost-chip ghost-chip-small"
                 onClick={onResetElementRotation}
-                disabled={disabled}
+                disabled={disabled || Math.abs(selectedElement.rotation) < 0.01}
               >
                 Reset rotation (0°)
               </button>
@@ -753,6 +763,11 @@ export function MobileTools({
               <div className="settings-block">
                 {selectedTextElement ? (
                   <>
+                    {disabled ? (
+                      <div className="settings-warning">
+                        Перемещение и редактирование временно заблокированы во время генерации/экспорта.
+                      </div>
+                    ) : null}
                     <div className="field-label">
                       Форматирование
                       <div className="icon-segment">
@@ -980,6 +995,126 @@ export function MobileTools({
                   Применить ко всем слайдам
                 </button>
                 <span className="settings-hint">Шрифты применяются мгновенно ко всей серии.</span>
+                <span className="settings-label">Выравнивание заголовка</span>
+                <div className="icon-segment">
+                  <button
+                    type="button"
+                    className={`icon-segment-item ${managedTitle?.align === "left" ? "active" : ""}`}
+                    onClick={() =>
+                      managedTitle
+                        ? onUpdateElement(managedTitle.id, (element) =>
+                            element.type === "text"
+                              ? {
+                                  ...element,
+                                  align: "left"
+                                }
+                              : element
+                          )
+                        : undefined
+                    }
+                    disabled={disabled || !managedTitle}
+                  >
+                    <AppIcon name="align-left" size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`icon-segment-item ${managedTitle?.align === "center" ? "active" : ""}`}
+                    onClick={() =>
+                      managedTitle
+                        ? onUpdateElement(managedTitle.id, (element) =>
+                            element.type === "text"
+                              ? {
+                                  ...element,
+                                  align: "center"
+                                }
+                              : element
+                          )
+                        : undefined
+                    }
+                    disabled={disabled || !managedTitle}
+                  >
+                    <AppIcon name="align-center" size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`icon-segment-item ${managedTitle?.align === "right" ? "active" : ""}`}
+                    onClick={() =>
+                      managedTitle
+                        ? onUpdateElement(managedTitle.id, (element) =>
+                            element.type === "text"
+                              ? {
+                                  ...element,
+                                  align: "right"
+                                }
+                              : element
+                          )
+                        : undefined
+                    }
+                    disabled={disabled || !managedTitle}
+                  >
+                    <AppIcon name="align-right" size={14} />
+                  </button>
+                </div>
+                <span className="settings-label">Выравнивание описания</span>
+                <div className="icon-segment">
+                  <button
+                    type="button"
+                    className={`icon-segment-item ${managedBody?.align === "left" ? "active" : ""}`}
+                    onClick={() =>
+                      managedBody
+                        ? onUpdateElement(managedBody.id, (element) =>
+                            element.type === "text"
+                              ? {
+                                  ...element,
+                                  align: "left"
+                                }
+                              : element
+                          )
+                        : undefined
+                    }
+                    disabled={disabled || !managedBody}
+                  >
+                    <AppIcon name="align-left" size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`icon-segment-item ${managedBody?.align === "center" ? "active" : ""}`}
+                    onClick={() =>
+                      managedBody
+                        ? onUpdateElement(managedBody.id, (element) =>
+                            element.type === "text"
+                              ? {
+                                  ...element,
+                                  align: "center"
+                                }
+                              : element
+                          )
+                        : undefined
+                    }
+                    disabled={disabled || !managedBody}
+                  >
+                    <AppIcon name="align-center" size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`icon-segment-item ${managedBody?.align === "right" ? "active" : ""}`}
+                    onClick={() =>
+                      managedBody
+                        ? onUpdateElement(managedBody.id, (element) =>
+                            element.type === "text"
+                              ? {
+                                  ...element,
+                                  align: "right"
+                                }
+                              : element
+                          )
+                        : undefined
+                    }
+                    disabled={disabled || !managedBody}
+                  >
+                    <AppIcon name="align-right" size={14} />
+                  </button>
+                </div>
 
                 {selectedTextElement ? (
                   <>
@@ -1059,6 +1194,85 @@ export function MobileTools({
                   <>
                     <span className="settings-label">Изображение</span>
                     <div className="segment-control">
+                      <button
+                        type="button"
+                        className="segment-item"
+                        onClick={() =>
+                          onUpdateElement(selectedImageElement.id, (element) =>
+                            element.type === "image"
+                              ? {
+                                  ...element,
+                                  fitMode: "contain",
+                                  cornerRadius: 22
+                                }
+                              : element
+                          )
+                        }
+                        disabled={disabled}
+                      >
+                        Карточка
+                      </button>
+                      <button
+                        type="button"
+                        className="segment-item"
+                        onClick={() =>
+                          onUpdateElement(selectedImageElement.id, (element) =>
+                            element.type === "image"
+                              ? {
+                                  ...applyImageFitMode(element, "cover"),
+                                  fitMode: "cover",
+                                  cornerRadius: 0
+                                }
+                              : element
+                          )
+                        }
+                        disabled={disabled}
+                      >
+                        Обложка
+                      </button>
+                      <button
+                        type="button"
+                        className="segment-item"
+                        onClick={() =>
+                          onUpdateElement(selectedImageElement.id, (element) =>
+                            element.type === "image"
+                              ? {
+                                  ...element,
+                                  fitMode: "cover",
+                                  cornerRadius: Math.max(
+                                    18,
+                                    Math.min(element.width, element.height) / 2
+                                  )
+                                }
+                              : element
+                          )
+                        }
+                        disabled={disabled}
+                      >
+                        Круг
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={`ghost-chip ${(selectedImageElement.strokeWidth ?? 0) > 0 ? "" : "ghost-chip-muted"}`}
+                      onClick={() =>
+                        onUpdateElement(selectedImageElement.id, (element) =>
+                          element.type === "image"
+                            ? {
+                                ...element,
+                                strokeWidth: (element.strokeWidth ?? 0) > 0 ? 0 : 8,
+                                stroke: element.stroke || "#ffffff"
+                              }
+                            : element
+                        )
+                      }
+                      disabled={disabled}
+                    >
+                      {(selectedImageElement.strokeWidth ?? 0) > 0 ? "Убрать рамку" : "Добавить рамку"}
+                    </button>
+
+                    <div className="segment-control">
                       {(["cover", "contain", "original"] as const).map((mode) => (
                         <button
                           key={mode}
@@ -1128,6 +1342,52 @@ export function MobileTools({
                         />
                       </label>
                     </div>
+
+                    {(selectedImageElement.strokeWidth ?? 0) > 0 ? (
+                      <div className="field-row">
+                        <label className="field-label">
+                          Цвет рамки
+                          <input
+                            className="field"
+                            type="color"
+                            value={selectedImageElement.stroke ?? "#ffffff"}
+                            onChange={(event) =>
+                              onUpdateElement(selectedImageElement.id, (element) =>
+                                element.type === "image"
+                                  ? {
+                                      ...element,
+                                      stroke: event.target.value
+                                    }
+                                  : element
+                              )
+                            }
+                            disabled={disabled}
+                          />
+                        </label>
+                        <label className="field-label">
+                          Толщина
+                          <input
+                            className="field"
+                            type="number"
+                            min={1}
+                            max={28}
+                            step={1}
+                            value={selectedImageElement.strokeWidth ?? 8}
+                            onChange={(event) =>
+                              onUpdateElement(selectedImageElement.id, (element) =>
+                                element.type === "image"
+                                  ? {
+                                      ...element,
+                                      strokeWidth: Number(event.target.value) || 0
+                                    }
+                                  : element
+                              )
+                            }
+                            disabled={disabled}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
                     <div className="field-row">
                       <label className="field-label">
                         Offset X

@@ -94,6 +94,8 @@ export type ImageElement = {
   naturalWidth?: number;
   naturalHeight?: number;
   darken?: number;
+  stroke?: string;
+  strokeWidth?: number;
 };
 
 export type CanvasElement = TextElement | ShapeElement | ImageElement;
