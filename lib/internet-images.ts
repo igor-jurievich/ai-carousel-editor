@@ -1,8 +1,9 @@
 import type { CarouselOutlineSlide } from "@/types/editor";
 
 const OPENVERSE_API_URL = "https://api.openverse.engineering/v1/images";
+const WIKIMEDIA_API_URL = "https://commons.wikimedia.org/w/api.php";
 const IMAGE_SEARCH_TIMEOUT_MS = 5500;
-const MAX_QUERY_COUNT = 8;
+const MIN_RELEVANCE_SCORE = 0.34;
 const STOP_WORDS = new Set([
   "для",
   "как",
@@ -24,63 +25,147 @@ const STOP_WORDS = new Set([
   "this"
 ]);
 
+type ImageSuggestion = {
+  slideIndex: number;
+  imageUrl: string;
+  source?: string;
+  relevanceScore?: number;
+};
+
+type OpenverseResult = {
+  url: string;
+  title: string;
+  tags: string[];
+  source?: string;
+};
+
+type SearchCandidate = OpenverseResult & {
+  relevanceScore?: number;
+};
+
 export async function findInternetImagesForCarousel(
   topic: string,
   slides: CarouselOutlineSlide[],
   maxImages = 3
 ) {
   const safeMaxImages = Math.max(1, Math.min(3, Math.round(maxImages)));
-  const queries = buildSearchQueries(topic, slides).slice(0, MAX_QUERY_COUNT);
-
-  if (!queries.length) {
+  if (!slides.length) {
     return [];
   }
 
-  const collectedUrls: string[] = [];
-  const used = new Set<string>();
+  const slideIndexes = pickTargetIndexes(slides.length, safeMaxImages);
+  const usedUrls = new Set<string>();
+  const usedSlideIndexes = new Set<number>();
+  const suggestions: ImageSuggestion[] = [];
+  const topicTokens = tokenize(topic);
 
-  for (const query of queries) {
-    if (collectedUrls.length >= safeMaxImages) {
+  for (const slideIndex of slideIndexes) {
+    if (suggestions.length >= safeMaxImages) {
       break;
     }
 
+    const slide = slides[slideIndex];
+    if (!slide) {
+      continue;
+    }
+
+    const query = buildSlideQuery(topic, slide);
+    const queryTokens = tokenize(query);
+    if (!queryTokens.length) {
+      continue;
+    }
+
     const results = await searchOpenverse(query);
-    for (const item of results) {
-      if (!item || used.has(item)) {
+    const ranked = rankCandidates(results, queryTokens, topicTokens).filter(
+      (item) => !usedUrls.has(item.url) && item.relevanceScore >= MIN_RELEVANCE_SCORE
+    );
+
+    let top: SearchCandidate | null =
+      ranked[0] ??
+      results.find((item) => !usedUrls.has(item.url) && !isLowQualityUrl(item.url)) ??
+      null;
+    if (!top) {
+      const wikimediaResults = await searchWikimedia(query);
+      top =
+        rankCandidates(wikimediaResults, queryTokens, topicTokens).find(
+          (item) => !usedUrls.has(item.url) && item.relevanceScore >= MIN_RELEVANCE_SCORE - 0.08
+        ) ??
+        wikimediaResults.find((item) => !usedUrls.has(item.url) && !isLowQualityUrl(item.url)) ??
+        null;
+    }
+    if (!top) {
+      continue;
+    }
+
+    usedUrls.add(top.url);
+    usedSlideIndexes.add(slideIndex);
+    suggestions.push({
+      slideIndex,
+      imageUrl: `/api/image-proxy?src=${encodeURIComponent(top.url)}`,
+      source: top.source,
+      relevanceScore:
+        typeof top.relevanceScore === "number"
+          ? Number(top.relevanceScore.toFixed(3))
+          : Number((MIN_RELEVANCE_SCORE - 0.06).toFixed(3))
+    });
+  }
+
+  if (suggestions.length < safeMaxImages) {
+    const topicQuery = normalizeQuery(topic);
+    if (!topicQuery) {
+      return suggestions;
+    }
+
+    const availableIndexes = slideIndexes.filter((index) => !usedSlideIndexes.has(index));
+    if (!availableIndexes.length) {
+      return suggestions;
+    }
+
+    const topicResults = await searchOpenverse(topicQuery);
+    const rankedByTopic = rankCandidates(topicResults, topicTokens, topicTokens).filter(
+      (item) => !usedUrls.has(item.url) && item.relevanceScore >= MIN_RELEVANCE_SCORE + 0.08
+    );
+    const wikimediaTopicResults =
+      rankedByTopic.length > 0 ? [] : await searchWikimedia(topicQuery);
+    const fallbackByTopic =
+      rankedByTopic.length > 0
+        ? rankedByTopic
+        : topicResults
+            .filter((item) => !usedUrls.has(item.url) && !isLowQualityUrl(item.url))
+            .map((item) => ({
+              ...item,
+              relevanceScore: MIN_RELEVANCE_SCORE - 0.06
+            }))
+            .concat(
+              rankCandidates(wikimediaTopicResults, topicTokens, topicTokens)
+                .filter((item) => !usedUrls.has(item.url))
+                .map((item) => ({
+                  ...item,
+                  relevanceScore: Math.max(MIN_RELEVANCE_SCORE - 0.06, item.relevanceScore)
+                }))
+            );
+
+    for (const candidate of fallbackByTopic) {
+      if (!availableIndexes.length || suggestions.length >= safeMaxImages) {
+        break;
+      }
+
+      const targetIndex = availableIndexes.shift();
+      if (targetIndex == null) {
         continue;
       }
 
-      used.add(item);
-      collectedUrls.push(item);
-
-      if (collectedUrls.length >= safeMaxImages) {
-        break;
-      }
+      usedUrls.add(candidate.url);
+      suggestions.push({
+        slideIndex: targetIndex,
+        imageUrl: `/api/image-proxy?src=${encodeURIComponent(candidate.url)}`,
+        source: candidate.source,
+        relevanceScore: Number(candidate.relevanceScore.toFixed(3))
+      });
     }
   }
 
-  if (collectedUrls.length < safeMaxImages) {
-    for (const query of queries) {
-      if (collectedUrls.length >= safeMaxImages) {
-        break;
-      }
-
-      const fallbackUrl = buildFallbackImageUrl(query);
-      if (!fallbackUrl || used.has(fallbackUrl)) {
-        continue;
-      }
-
-      used.add(fallbackUrl);
-      collectedUrls.push(fallbackUrl);
-    }
-  }
-
-  const targetIndexes = pickTargetIndexes(slides.length, collectedUrls.length);
-
-  return collectedUrls.map((url, index) => ({
-    slideIndex: targetIndexes[index] ?? 0,
-    imageUrl: `/api/image-proxy?src=${encodeURIComponent(url)}`
-  }));
+  return suggestions.sort((left, right) => left.slideIndex - right.slideIndex);
 }
 
 async function searchOpenverse(query: string) {
@@ -101,12 +186,99 @@ async function searchOpenverse(query: string) {
     }
 
     const data = (await response.json()) as {
-      results?: Array<{ url?: string; thumbnail?: string; title?: string }>;
+      results?: Array<{
+        url?: string;
+        thumbnail?: string;
+        title?: string;
+        provider?: string;
+        source?: string;
+        tags?: Array<string | { name?: string }>;
+      }>;
     };
 
     return (data.results ?? [])
-      .map((item) => normalizeRemoteImageUrl(item.url ?? item.thumbnail ?? ""))
-      .filter((url): url is string => Boolean(url));
+      .map((item) => {
+        const url = normalizeRemoteImageUrl(item.url ?? item.thumbnail ?? "");
+        if (!url) {
+          return null;
+        }
+
+        const title = (item.title ?? "").trim();
+        const tags = normalizeTags(item.tags);
+        const source = [item.provider?.trim(), item.source?.trim()].find(Boolean);
+
+        return {
+          url,
+          title,
+          tags,
+          source
+        } as OpenverseResult;
+      })
+      .filter((item): item is OpenverseResult => Boolean(item));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function searchWikimedia(query: string): Promise<OpenverseResult[]> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), IMAGE_SEARCH_TIMEOUT_MS);
+
+  try {
+    const endpoint = new URL(WIKIMEDIA_API_URL);
+    endpoint.searchParams.set("action", "query");
+    endpoint.searchParams.set("format", "json");
+    endpoint.searchParams.set("generator", "search");
+    endpoint.searchParams.set("gsrnamespace", "6");
+    endpoint.searchParams.set("gsrlimit", "8");
+    endpoint.searchParams.set("gsrsearch", query);
+    endpoint.searchParams.set("prop", "imageinfo");
+    endpoint.searchParams.set("iiprop", "url");
+    endpoint.searchParams.set("iiurlwidth", "1600");
+    endpoint.searchParams.set("origin", "*");
+
+    const response = await fetch(endpoint.toString(), {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "ai-carousel-editor/1.0"
+      }
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = (await response.json()) as {
+      query?: {
+        pages?: Record<
+          string,
+          {
+            title?: string;
+            imageinfo?: Array<{ thumburl?: string; url?: string }>;
+          }
+        >;
+      };
+    };
+
+    const pages = data.query?.pages ? Object.values(data.query.pages) : [];
+    return pages
+      .map((page) => {
+        const imageInfo = page.imageinfo?.[0];
+        const url = normalizeRemoteImageUrl(imageInfo?.thumburl ?? imageInfo?.url ?? "");
+        if (!url) {
+          return null;
+        }
+
+        return {
+          url,
+          title: (page.title ?? "").replace(/^File:/i, "").trim(),
+          tags: [],
+          source: "wikimedia"
+        } as OpenverseResult;
+      })
+      .filter((item): item is OpenverseResult => Boolean(item));
   } catch {
     return [];
   } finally {
@@ -131,36 +303,121 @@ function normalizeRemoteImageUrl(url: string) {
   }
 }
 
-function buildSearchQueries(topic: string, slides: CarouselOutlineSlide[]) {
-  const queries: string[] = [];
-  const seen = new Set<string>();
+function normalizeQuery(value: string) {
+  const words = tokenize(value);
 
-  const pushQuery = (value: string) => {
-    const normalized = normalizeQuery(value);
-    if (!normalized || seen.has(normalized)) {
-      return;
-    }
-    seen.add(normalized);
-    queries.push(normalized);
-  };
-
-  pushQuery(topic);
-  for (const slide of slides) {
-    pushQuery(slide.title);
-  }
-
-  return queries;
+  return words.slice(0, 6).join(" ").trim();
 }
 
-function normalizeQuery(value: string) {
-  const words = value
+function tokenize(value: string) {
+  return value
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s-]/gu, " ")
     .split(/\s+/)
     .map((word) => word.trim())
     .filter((word) => word.length > 2 && !STOP_WORDS.has(word));
+}
 
-  return words.slice(0, 6).join(" ").trim();
+function normalizeTags(rawTags: Array<string | { name?: string }> | undefined) {
+  if (!rawTags?.length) {
+    return [];
+  }
+
+  const tags: string[] = [];
+  for (const entry of rawTags) {
+    if (typeof entry === "string") {
+      const value = entry.trim();
+      if (value) {
+        tags.push(value);
+      }
+      continue;
+    }
+
+    const value = entry.name?.trim();
+    if (value) {
+      tags.push(value);
+    }
+  }
+
+  return tags;
+}
+
+function buildSlideQuery(topic: string, slide: CarouselOutlineSlide) {
+  const title = normalizeQuery(slide.title);
+  const body = normalizeQuery(slide.text).split(" ").slice(0, 4).join(" ");
+  const base = [title, body].filter(Boolean).join(" ").trim();
+
+  if (base) {
+    return `${base} ${normalizeQuery(topic)}`.trim();
+  }
+
+  return normalizeQuery(topic);
+}
+
+function rankCandidates(results: OpenverseResult[], queryTokens: string[], topicTokens: string[]) {
+  return results
+    .map((result) => {
+      const relevanceScore = scoreCandidate(result, queryTokens, topicTokens);
+      return {
+        ...result,
+        relevanceScore
+      };
+    })
+    .filter((item) => item.relevanceScore > 0)
+    .sort((left, right) => right.relevanceScore - left.relevanceScore);
+}
+
+function scoreCandidate(
+  candidate: OpenverseResult,
+  queryTokens: string[],
+  topicTokens: string[]
+) {
+  if (!queryTokens.length) {
+    return 0;
+  }
+
+  if (isLowQualityUrl(candidate.url)) {
+    return 0;
+  }
+
+  const candidateTokens = new Set(tokenize(`${candidate.title} ${candidate.tags.join(" ")}`));
+  if (!candidateTokens.size) {
+    return 0;
+  }
+
+  const queryOverlap = getOverlapScore(queryTokens, candidateTokens);
+  if (queryOverlap <= 0) {
+    return 0;
+  }
+
+  const topicOverlap = topicTokens.length ? getOverlapScore(topicTokens, candidateTokens) : 0;
+  const richness = Math.min(1, candidateTokens.size / 12) * 0.08;
+  return queryOverlap * 0.72 + topicOverlap * 0.2 + richness;
+}
+
+function getOverlapScore(tokens: string[], candidateTokens: Set<string>) {
+  if (!tokens.length) {
+    return 0;
+  }
+
+  let hits = 0;
+  for (const token of tokens) {
+    if (candidateTokens.has(token)) {
+      hits += 1;
+    }
+  }
+
+  return hits / tokens.length;
+}
+
+function isLowQualityUrl(url: string) {
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("placeholder") ||
+    lower.includes("watermark") ||
+    lower.includes("logo") ||
+    lower.includes("icon")
+  );
 }
 
 function pickTargetIndexes(totalSlides: number, imagesCount: number) {
@@ -189,13 +446,4 @@ function pickTargetIndexes(totalSlides: number, imagesCount: number) {
   }
 
   return Array.from(picked).slice(0, imagesCount);
-}
-
-function buildFallbackImageUrl(query: string) {
-  const normalized = normalizeQuery(query).replace(/\s+/g, ",");
-  if (!normalized) {
-    return null;
-  }
-
-  return `https://loremflickr.com/1600/1066/${encodeURIComponent(normalized)}`;
 }

@@ -41,6 +41,8 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -52,6 +54,7 @@ body {
     linear-gradient(180deg, var(--bg-page-soft) 0%, var(--bg-page) 100%);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
 }
 
 a {
@@ -1381,7 +1384,7 @@ button:disabled {
     border: 1px solid rgba(199, 205, 217, 0.95);
     background: #ffffff;
     padding: 10px 11px;
-    font-size: 13px;
+    font-size: 16px;
     line-height: 1.45;
     resize: vertical;
     min-height: 74px;
@@ -1462,8 +1465,8 @@ button:disabled {
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    min-height: 56svh;
-    padding-bottom: calc(var(--mobile-bottom-offset, 78px) + 6px);
+    min-height: 50svh;
+    padding-bottom: calc(var(--mobile-bottom-offset, 78px) + 4px);
   }
 
   .canvas-panel-mobile {
@@ -1487,7 +1490,7 @@ button:disabled {
     position: relative;
     width: fit-content;
     max-width: 100%;
-    padding-inline: 24px;
+    padding-inline: 30px;
   }
 
   .mobile-preview-shell {
@@ -1556,11 +1559,11 @@ button:disabled {
   }
 
   .mobile-side-nav-left {
-    left: -2px;
+    left: 4px;
   }
 
   .mobile-side-nav-right {
-    right: -2px;
+    right: 4px;
   }
 
   .mobile-slide-tools {
@@ -1682,7 +1685,7 @@ button:disabled {
     z-index: 68;
     display: flex;
     flex-direction: column;
-    max-height: clamp(220px, 32svh, 332px);
+    max-height: clamp(210px, 30svh, 314px);
     border-radius: 26px 26px 18px 18px;
     border: 1px solid rgba(183, 212, 207, 0.94);
     background: rgba(248, 253, 252, 0.97);
@@ -1890,5 +1893,13 @@ button:disabled {
     border-color: rgba(44, 174, 161, 0.85);
     background: rgba(86, 207, 194, 0.16);
     color: #1e645d;
+  }
+
+  .mobile-editor-shell input[type="text"],
+  .mobile-editor-shell input[type="search"],
+  .mobile-editor-shell input[type="number"],
+  .mobile-editor-shell textarea,
+  .mobile-editor-shell select {
+    font-size: 16px;
   }
 }

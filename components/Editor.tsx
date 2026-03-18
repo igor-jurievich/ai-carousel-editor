@@ -69,6 +69,11 @@ const DECOR_BACKGROUND_META_KEYS = new Set([
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
 const HISTORY_LIMIT = 40;
+const MOBILE_PREVIEW_MAX_WIDTH: Record<SlideFormat, number> = {
+  "1:1": 324,
+  "4:5": 338,
+  "9:16": 312
+};
 
 type HistorySnapshot = {
   slides: Slide[];
@@ -161,12 +166,22 @@ export function Editor() {
     const canvasAspectRatio = canvasWidth / canvasHeight;
 
     const updateSize = () => {
+      const activeElement = document.activeElement;
+      const isTextEntryFocused = isTextEntryElement(activeElement);
       const viewport = window.visualViewport;
-      const viewportWidth = viewport?.width ?? window.innerWidth;
-      const viewportHeight = viewport?.height ?? window.innerHeight;
+      const viewportWidth = isTextEntryFocused
+        ? window.innerWidth
+        : viewport?.width ?? window.innerWidth;
+      const viewportHeight = isTextEntryFocused
+        ? window.innerHeight
+        : viewport?.height ?? window.innerHeight;
       const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
 
       if (isMobile) {
+        if (isTextEntryFocused) {
+          return;
+        }
+
         const host = mobileCanvasHostRef.current;
         const hostWidth = host?.clientWidth ?? viewportWidth;
         const hostRect = host?.getBoundingClientRect();
@@ -177,9 +192,16 @@ export function Editor() {
           ? Math.min(...overlays.map((rect) => rect.top))
           : viewportHeight;
         const availableHeight = Math.max(220, overlayTop - (hostRect?.top ?? 0));
-        const widthLimit = Math.max(220, hostWidth);
-        const heightLimit = availableHeight * canvasAspectRatio;
-        const nextSize = Math.max(220, Math.min(Math.min(640, hostWidth), widthLimit, heightLimit));
+        const widthLimit = Math.max(
+          220,
+          Math.min(
+            hostWidth * 0.88,
+            viewportWidth - 72,
+            MOBILE_PREVIEW_MAX_WIDTH[slideFormat]
+          )
+        );
+        const heightLimit = Math.max(220, availableHeight - 24) * canvasAspectRatio;
+        const nextSize = Math.max(220, Math.min(widthLimit, heightLimit));
         const toolbarRect = mobileToolbarRef.current?.getBoundingClientRect();
         const nextBottomOffset = toolbarRect
           ? Math.max(72, Math.round(viewportHeight - toolbarRect.top))
@@ -221,15 +243,58 @@ export function Editor() {
 
     window.addEventListener("resize", updateSize);
     window.visualViewport?.addEventListener("resize", updateSize);
-    window.visualViewport?.addEventListener("scroll", updateSize);
 
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", updateSize);
       window.visualViewport?.removeEventListener("resize", updateSize);
-      window.visualViewport?.removeEventListener("scroll", updateSize);
     };
   }, [mobileToolTab, slideFormat]);
+
+  useEffect(() => {
+    const isMobileViewport = () => window.innerWidth <= MOBILE_BREAKPOINT;
+    const isInsideMobileShell = (target: EventTarget | null) =>
+      target instanceof Element && Boolean(target.closest(".mobile-editor-shell"));
+    const preventGesture = (event: Event) => {
+      if (!isMobileViewport() || !isInsideMobileShell(event.target)) {
+        return;
+      }
+      event.preventDefault();
+    };
+    const preventCtrlZoom = (event: WheelEvent) => {
+      if (!isMobileViewport() || !event.ctrlKey || !isInsideMobileShell(event.target)) {
+        return;
+      }
+      event.preventDefault();
+    };
+
+    let lastTapAt = 0;
+    const preventDoubleTapZoom = (event: TouchEvent) => {
+      if (!isMobileViewport() || !isInsideMobileShell(event.target)) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastTapAt < 320) {
+        event.preventDefault();
+      }
+      lastTapAt = now;
+    };
+
+    document.addEventListener("gesturestart", preventGesture, { passive: false });
+    document.addEventListener("gesturechange", preventGesture, { passive: false });
+    document.addEventListener("gestureend", preventGesture, { passive: false });
+    document.addEventListener("wheel", preventCtrlZoom, { passive: false });
+    document.addEventListener("touchend", preventDoubleTapZoom, { passive: false });
+
+    return () => {
+      document.removeEventListener("gesturestart", preventGesture);
+      document.removeEventListener("gesturechange", preventGesture);
+      document.removeEventListener("gestureend", preventGesture);
+      document.removeEventListener("wheel", preventCtrlZoom);
+      document.removeEventListener("touchend", preventDoubleTapZoom);
+    };
+  }, []);
 
   const slideDimensions = useMemo(
     () => SLIDE_FORMAT_DIMENSIONS[slideFormat],
@@ -532,13 +597,21 @@ export function Editor() {
 
       let data: {
         slides?: Array<{ title: string; text: string }>;
-        internetImages?: Array<{ slideIndex: number; imageUrl: string }>;
+        internetImages?: Array<{
+          slideIndex: number;
+          imageUrl: string;
+          relevanceScore?: number;
+        }>;
         error?: string;
       };
       try {
         data = (await response.json()) as {
           slides?: Array<{ title: string; text: string }>;
-          internetImages?: Array<{ slideIndex: number; imageUrl: string }>;
+          internetImages?: Array<{
+            slideIndex: number;
+            imageUrl: string;
+            relevanceScore?: number;
+          }>;
           error?: string;
         };
       } catch {
@@ -573,7 +646,9 @@ export function Editor() {
       setStatus(
         addedInternetImages > 0
           ? `Создано ${withInternetImages.length} слайдов, добавлено ${addedInternetImages} интернет-фото.`
-          : `Создано ${withInternetImages.length} слайдов в формате ${slideFormat}.`
+          : useInternetImages
+            ? `Создано ${withInternetImages.length} слайдов. Релевантные интернет-фото не найдены, оставлен текстовый layout.`
+            : `Создано ${withInternetImages.length} слайдов в формате ${slideFormat}.`
       );
     } catch (error) {
       if (requestId === generateRequestRef.current) {
@@ -1626,7 +1701,7 @@ export function Editor() {
 
 function applyInternetImagesToSlides(
   slides: Slide[],
-  suggestions: Array<{ slideIndex: number; imageUrl: string }>,
+  suggestions: Array<{ slideIndex: number; imageUrl: string; relevanceScore?: number }>,
   format: SlideFormat
 ) {
   if (!suggestions.length) {
@@ -1635,10 +1710,15 @@ function applyInternetImagesToSlides(
 
   const nextSlides = cloneSlides(slides);
   const maxSuggestions = Math.min(3, suggestions.length);
+  const usedSlides = new Set<number>();
 
   for (let index = 0; index < maxSuggestions; index += 1) {
     const suggestion = suggestions[index];
-    if (!suggestion || !suggestion.imageUrl) {
+    if (
+      !suggestion ||
+      !suggestion.imageUrl ||
+      (typeof suggestion.relevanceScore === "number" && suggestion.relevanceScore < 0.32)
+    ) {
       continue;
     }
 
@@ -1647,6 +1727,9 @@ function applyInternetImagesToSlides(
       0,
       nextSlides.length - 1
     );
+    if (usedSlides.has(safeSlideIndex)) {
+      continue;
+    }
     const targetSlide = nextSlides[safeSlideIndex];
 
     if (!targetSlide) {
@@ -1669,9 +1752,33 @@ function applyInternetImagesToSlides(
       nextSlides.length,
       format
     );
+    usedSlides.add(safeSlideIndex);
   }
 
   return nextSlides;
+}
+
+function isTextEntryElement(element: Element | null) {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (element.isContentEditable) {
+    return true;
+  }
+
+  const tagName = element.tagName;
+  if (tagName === "TEXTAREA") {
+    return true;
+  }
+
+  if (tagName !== "INPUT") {
+    return false;
+  }
+
+  const input = element as HTMLInputElement;
+  const type = input.type.toLowerCase();
+  return !["checkbox", "radio", "range", "button", "submit", "reset", "file"].includes(type);
 }
 
 async function waitForNextFrame() {

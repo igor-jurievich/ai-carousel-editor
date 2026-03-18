@@ -632,21 +632,21 @@ type ImageTopLayout = {
 
 function getImageTopLayout(format: SlideFormat): ImageTopLayout {
   const { height } = SLIDE_FORMAT_DIMENSIONS[format];
-  const footerReserve = getFormatLayout(format).footerBottom + 76;
-  const cardX = 52;
-  const cardY = 52;
-  const cardWidth = 976;
+  const cardX = 56;
+  const cardY = 56;
+  const cardWidth = 968;
   const cardHeight = Math.max(360, height - cardY * 2);
-  const imageX = 74;
-  const imageY = 74;
-  const imageWidth = 932;
-  const imageHeight = format === "9:16" ? 740 : format === "4:5" ? 530 : 420;
-  const textPanelY = imageY + imageHeight - 10;
-  const textPanelHeight = Math.max(240, height - textPanelY - cardY);
-  const textX = 102;
-  const textWidth = 876;
-  const titleY = textPanelY + 54;
-  const textBottom = Math.max(titleY + 140, height - footerReserve);
+  const imageX = cardX + 24;
+  const imageY = cardY + 24;
+  const imageWidth = cardWidth - 48;
+  const imageHeight = format === "9:16" ? 612 : format === "4:5" ? 502 : 392;
+  const textPanelY = imageY + imageHeight - 4;
+  const textPanelHeight = Math.max(230, cardY + cardHeight - textPanelY - 20);
+  const textX = cardX + 56;
+  const textWidth = cardWidth - 112;
+  const titleY = textPanelY + 42;
+  const textBottom =
+    cardY + cardHeight - (format === "9:16" ? 170 : format === "4:5" ? 154 : 144);
 
   return {
     cardX,
@@ -1009,8 +1009,18 @@ function createImageTopFrame(
       width: layout.cardWidth,
       height: layout.cardHeight,
       fill: template.surface,
-      cornerRadius: 34,
-      opacity: 0.98
+      cornerRadius: 32,
+      opacity: 0.985
+    }),
+    createShapeElement({
+      metaKey: "image-top-frame",
+      x: layout.imageX - 2,
+      y: layout.imageY - 2,
+      width: layout.imageWidth + 4,
+      height: layout.imageHeight + 4,
+      fill: "rgba(255,255,255,0.9)",
+      cornerRadius: 24,
+      opacity: 0.9
     }),
     createImageElement(imageSrc, {
       metaKey: "internet-image-top",
@@ -1018,27 +1028,27 @@ function createImageTopFrame(
       y: layout.imageY,
       width: layout.imageWidth,
       height: layout.imageHeight,
-      cornerRadius: 26
+      cornerRadius: 22
     }),
     createShapeElement({
       metaKey: "image-top-text-panel",
-      x: layout.cardX + 2,
+      x: layout.cardX + 20,
       y: layout.textPanelY,
-      width: layout.cardWidth - 4,
+      width: layout.cardWidth - 40,
       height: layout.textPanelHeight,
       fill: template.surface,
-      cornerRadius: 30,
-      opacity: 0.98
+      cornerRadius: 24,
+      opacity: 0.99
     }),
     createShapeElement({
       metaKey: "image-top-divider",
       x: layout.textX,
-      y: layout.textPanelY + 22,
-      width: 188,
-      height: 6,
+      y: layout.textPanelY + 20,
+      width: 144,
+      height: 5,
       fill: template.accent,
       cornerRadius: 999,
-      opacity: 0.72
+      opacity: 0.62
     })
   ];
 }
@@ -1154,7 +1164,7 @@ function applyTextOverflowGuard(
 
   while (keepCount > 6) {
     keepCount = Math.max(6, keepCount - Math.max(2, Math.ceil(keepCount * 0.1)));
-    candidateText = `${words.slice(0, keepCount).join(" ")}…`;
+    candidateText = words.slice(0, keepCount).join(" ").concat("...");
     candidateFit = fitTextBlock({
       ...options,
       text: candidateText
@@ -1310,18 +1320,16 @@ function createManagedTitleForImageTop(
   format: SlideFormat
 ): TextElement {
   const layout = getImageTopLayout(format);
-  const baseSize = format === "9:16" ? 58 : format === "4:5" ? 62 : 66;
-  const maxHeight = format === "9:16" ? 208 : 186;
+  const maxHeight = format === "9:16" ? 196 : 178;
   const fitted = fitTextBlock({
     text,
     width: layout.textWidth,
-    initialFontSize: baseSize,
-    minFontSize: format === "9:16" ? 18 : 20,
+    initialFontSize: format === "9:16" ? 54 : format === "4:5" ? 58 : 62,
+    minFontSize: format === "9:16" ? 16 : 18,
     maxHeight,
-    lineHeight: 1.03,
+    lineHeight: 1.04,
     minLineHeight: 0.94
   });
-
   return createTextElement({
     metaKey: "managed-title",
     role: "title",
@@ -1345,17 +1353,17 @@ function createManagedBodyForImageTop(
   startY: number
 ): TextElement {
   const layout = getImageTopLayout(format);
-  const bodyY = Math.max(layout.titleY + 92, startY);
-  const baseSize = format === "9:16" ? 28 : 32;
-  const maxHeight = Math.max(148, layout.textBottom - bodyY);
+  const bodyY = Math.max(layout.titleY + 82, startY);
+  const baseSize = format === "9:16" ? 24 : 29;
+  const maxHeight = Math.max(140, layout.textBottom - bodyY);
   const fitted = fitTextBlock({
     text,
     width: layout.textWidth,
     initialFontSize: baseSize,
     minFontSize: format === "9:16" ? 12 : 13,
     maxHeight,
-    lineHeight: 1.14,
-    minLineHeight: 0.96
+    lineHeight: 1.12,
+    minLineHeight: 0.94
   });
   const overflowGuard = applyTextOverflowGuard(
     text,

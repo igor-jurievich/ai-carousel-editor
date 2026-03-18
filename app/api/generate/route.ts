@@ -93,7 +93,12 @@ export async function POST(request: Request) {
       );
     }
 
-    let internetImages: Array<{ slideIndex: number; imageUrl: string }> = [];
+    let internetImages: Array<{
+      slideIndex: number;
+      imageUrl: string;
+      source?: string;
+      relevanceScore?: number;
+    }> = [];
     if (useInternetImages) {
       internetImages = await findInternetImagesForCarousel(topic, slides, 3).catch(() => []);
     }

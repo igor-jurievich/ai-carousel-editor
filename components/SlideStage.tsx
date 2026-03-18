@@ -292,6 +292,7 @@ function SlideTextNode({
       onTransformEnd={(event) => onTransformEnd?.(event.target as Konva.Text)}
       strokeEnabled={false}
       shadowEnabled={false}
+      perfectDrawEnabled={false}
     />
   );
 }

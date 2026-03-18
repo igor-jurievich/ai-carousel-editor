@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, type TouchEvent } from "react";
 import { SLIDE_FORMAT_DIMENSIONS } from "@/lib/carousel";
 import type { CanvasElement, Slide, SlideFormat, TextElement } from "@/types/editor";
 import { SlideStage } from "@/components/SlideStage";
@@ -78,18 +79,91 @@ export function CanvasEditor({
   const formatLabel = SLIDE_FORMAT_DIMENSIONS[activeFormat].label;
   const activeSlide = slides.find((slide) => slide.id === activeSlideId) ?? slides[0] ?? null;
   const activeSlideIndex = activeSlide ? slides.findIndex((slide) => slide.id === activeSlide.id) : -1;
+  const swipeStateRef = useRef<{ x: number; y: number; timestamp: number } | null>(null);
 
   if (mode === "single" && activeSlide) {
     const isEditingActiveSlide = editingTextElement && activeSlide.id === activeSlideId;
     const selectedElementStyle =
-      selectedElement ? getFloatingActionStyle(selectedElement, scale, displayWidth, displayHeight) : null;
+      selectedElement
+        ? getFloatingActionStyle(selectedElement, scale, displayWidth, displayHeight, {
+            horizontalInset: 58,
+            verticalInset: 10
+          })
+        : null;
     const canGoPrev = activeSlideIndex > 0;
     const canGoNext = activeSlideIndex >= 0 && activeSlideIndex < slides.length - 1;
+    const canSwipeNavigate =
+      !disabled && !previewMode && !selectedElementId && !editingTextElement && slides.length > 1;
+
+    const handleSwipeStart = (event: TouchEvent<HTMLElement>) => {
+      if (!canSwipeNavigate) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("button, input, select, textarea, [role='button']")
+      ) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      if (!touch) {
+        return;
+      }
+
+      swipeStateRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        timestamp: Date.now()
+      };
+    };
+
+    const handleSwipeEnd = (event: TouchEvent<HTMLElement>) => {
+      if (!canSwipeNavigate || !swipeStateRef.current) {
+        swipeStateRef.current = null;
+        return;
+      }
+
+      const touch = event.changedTouches[0];
+      if (!touch) {
+        swipeStateRef.current = null;
+        return;
+      }
+
+      const deltaX = touch.clientX - swipeStateRef.current.x;
+      const deltaY = touch.clientY - swipeStateRef.current.y;
+      const elapsed = Date.now() - swipeStateRef.current.timestamp;
+      swipeStateRef.current = null;
+
+      if (elapsed > 650) {
+        return;
+      }
+
+      if (Math.abs(deltaX) < 52 || Math.abs(deltaY) > 44) {
+        return;
+      }
+
+      if (Math.abs(deltaX) < Math.abs(deltaY) * 1.3) {
+        return;
+      }
+
+      if (deltaX < 0 && canGoNext) {
+        onSelectSlide(slides[activeSlideIndex + 1].id);
+      } else if (deltaX > 0 && canGoPrev) {
+        onSelectSlide(slides[activeSlideIndex - 1].id);
+      }
+    };
 
     return (
       <section className="panel canvas-panel canvas-panel-mobile">
         <div className="mobile-canvas-root">
-          <div className="mobile-canvas-frame">
+          <div
+            className="mobile-canvas-frame"
+            onTouchStartCapture={handleSwipeStart}
+            onTouchEndCapture={handleSwipeEnd}
+          >
             <div className="slide-stack-shell active mobile-slide-shell mobile-preview-shell">
               {showSlideBadge ? (
                 <div className="active-slide-pill">
@@ -437,19 +511,28 @@ function getFloatingActionStyle(
   element: CanvasElement,
   scale: number,
   displayWidth: number,
-  displayHeight: number
+  displayHeight: number,
+  options?: {
+    horizontalInset?: number;
+    verticalInset?: number;
+  }
 ) {
   const buttonSize = 40;
+  const horizontalInset = options?.horizontalInset ?? 8;
+  const verticalInset = options?.verticalInset ?? 8;
   const right = element.x + element.width;
   const top = element.y;
   const nextLeft = Math.min(
-    displayWidth - buttonSize - 8,
-    Math.max(8, right * scale - buttonSize * 0.2)
+    displayWidth - buttonSize - horizontalInset,
+    Math.max(horizontalInset, right * scale - buttonSize * 0.2)
   );
-  const preferredTop = top * scale - buttonSize - 10;
+  const preferredTop = top * scale - buttonSize - (verticalInset + 2);
   const nextTop =
-    preferredTop < 8
-      ? Math.min(displayHeight - buttonSize - 8, (element.y + element.height) * scale + 10)
+    preferredTop < verticalInset
+      ? Math.min(
+          displayHeight - buttonSize - verticalInset,
+          (element.y + element.height) * scale + verticalInset + 2
+        )
       : preferredTop;
 
   return {
