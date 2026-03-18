@@ -23,6 +23,8 @@ import {
   projectTitleFromTopic,
   relayoutSlidesForFormat,
   reorderSlides,
+  setSlideBackgroundImageStyle,
+  setSlideFrameColor,
   SLIDE_FORMAT_DIMENSIONS,
   setSlideBackgroundImage,
   syncSlideOrderMeta,
@@ -50,11 +52,6 @@ const MAX_TOPIC_CHARS = 4000;
 const MIN_TOPIC_CHARS = 3;
 const EXPORT_LOCK_STATUS = "Дождитесь завершения экспорта и повторите действие.";
 const GENERATE_LOCK_STATUS = "Дождитесь завершения генерации и повторите действие.";
-const TEXT_SAFE_AREA = {
-  insetX: 56,
-  insetTop: 84,
-  insetBottom: 96
-};
 const IMAGE_MODE_TEMPLATE_ROTATION: CarouselTemplateId[] = [
   "technology",
   "editorial",
@@ -317,6 +314,31 @@ export function Editor() {
     () => activeSlide?.elements.find((element) => element.id === selectedElementId) ?? null,
     [activeSlide, selectedElementId]
   );
+  const activeImageBlockElement = useMemo(
+    () =>
+      activeSlide?.elements.find(
+        (element): element is Extract<CanvasElement, { type: "image" }> =>
+          element.type === "image" && element.metaKey === "internet-image-top"
+      ) ?? null,
+    [activeSlide]
+  );
+  const hasImageBlockLayout = Boolean(
+    activeSlide?.backgroundImage &&
+      (activeSlide?.imageLayoutMode === "top" || activeSlide?.imageLayoutMode === "bottom")
+  );
+  const activeHasBackgroundImage = useMemo(() => {
+    if (!activeSlide) {
+      return false;
+    }
+    if (Boolean(activeSlide.backgroundImage)) {
+      return true;
+    }
+    return activeSlide.elements.some(
+      (element) =>
+        element.type === "image" &&
+        (element.metaKey === "background-image" || element.metaKey === "internet-image-top")
+    );
+  }, [activeSlide]);
 
   useEffect(() => {
     if (
@@ -540,6 +562,135 @@ export function Editor() {
     }, options);
   };
 
+  const normalizeImageBlockLayout = (
+    slide: Slide,
+    options?: {
+      mode?: "top" | "bottom";
+      imageHeight?: number;
+    }
+  ) => {
+    const card = slide.elements.find(
+      (element): element is Extract<CanvasElement, { type: "shape" }> =>
+        element.type === "shape" && element.metaKey === "image-top-card"
+    );
+    const image = slide.elements.find(
+      (element): element is Extract<CanvasElement, { type: "image" }> =>
+        element.type === "image" && element.metaKey === "internet-image-top"
+    );
+
+    if (!card || !image) {
+      return slide;
+    }
+
+    const mode =
+      options?.mode ??
+      (slide.imageLayoutMode === "bottom" ? "bottom" : "top");
+    const imageHeight = clampValue(
+      options?.imageHeight ?? image.height,
+      slideFormat === "9:16" ? 300 : slideFormat === "4:5" ? 240 : 210,
+      slideFormat === "9:16" ? 760 : slideFormat === "4:5" ? 610 : 500
+    );
+    const cardPadding = 20;
+    const textPadX = 52;
+    const panelPad = 18;
+    const footerReserve = slideFormat === "9:16" ? 194 : slideFormat === "4:5" ? 176 : 166;
+    const maxImageBottom = card.y + card.height - footerReserve;
+    const imageY =
+      mode === "bottom" ? Math.max(card.y + 220, maxImageBottom - imageHeight) : card.y + cardPadding;
+    const imageX = card.x + cardPadding;
+    const imageWidth = card.width - cardPadding * 2;
+    const panelY = mode === "bottom" ? card.y + panelPad : imageY + imageHeight - 2;
+    const panelHeight =
+      mode === "bottom"
+        ? Math.max(170, imageY - panelY - 16)
+        : Math.max(170, card.y + card.height - panelY - 16);
+    const textX = card.x + textPadX;
+    const textWidth = card.width - textPadX * 2;
+    const titleY = panelY + 46;
+    const maxBodyBottom =
+      mode === "bottom"
+        ? imageY - 34
+        : card.y + card.height - (slideFormat === "9:16" ? 170 : 146);
+
+    const nextElements = slide.elements.map((element) => {
+      if (element.type === "image" && element.metaKey === "internet-image-top") {
+        return {
+          ...element,
+          x: imageX,
+          y: imageY,
+          width: imageWidth,
+          height: imageHeight
+        };
+      }
+
+      if (element.type === "shape" && element.metaKey === "image-top-frame") {
+        return {
+          ...element,
+          x: imageX - 2,
+          y: imageY - 2,
+          width: imageWidth + 4,
+          height: imageHeight + 4
+        };
+      }
+
+      if (element.type === "shape" && element.metaKey === "image-top-text-panel") {
+        return {
+          ...element,
+          x: card.x + panelPad,
+          y: panelY,
+          width: card.width - panelPad * 2,
+          height: panelHeight
+        };
+      }
+
+      if (element.type === "shape" && element.metaKey === "image-top-divider") {
+        return {
+          ...element,
+          x: textX,
+          y: panelY + 20
+        };
+      }
+
+      if (element.type === "text" && element.metaKey === "managed-title") {
+        const titleHeight = clampValue(element.height, 54, Math.max(84, panelHeight - 120));
+        return {
+          ...element,
+          x: textX,
+          y: titleY,
+          width: textWidth,
+          height: titleHeight
+        };
+      }
+
+      if (element.type === "text" && element.metaKey === "managed-body") {
+        const titleElement = slide.elements.find(
+          (item): item is Extract<CanvasElement, { type: "text" }> =>
+            item.type === "text" && item.metaKey === "managed-title"
+        );
+        const nextBodyY =
+          titleY +
+          clampValue(titleElement?.height ?? 92, 52, Math.max(84, panelHeight - 120)) +
+          24;
+        const maxHeight = Math.max(42, maxBodyBottom - nextBodyY);
+        return {
+          ...element,
+          x: textX,
+          y: nextBodyY,
+          width: textWidth,
+          height: clampValue(element.height, 42, maxHeight)
+        };
+      }
+
+      return element;
+    });
+
+    return {
+      ...slide,
+      imageLayoutMode: mode,
+      elements: nextElements
+    };
+  };
+
   const handleGenerate = async () => {
     if (isGenerating) {
       return;
@@ -696,6 +847,118 @@ export function Editor() {
     }));
   };
 
+  const handleFrameColorChange = (color: string) => {
+    if (generationLocked) {
+      return;
+    }
+
+    if (!activeSlide || activeSlideIndex === -1) {
+      return;
+    }
+
+    updateSlide(activeSlide.id, (slide) =>
+      setSlideFrameColor(slide, color, activeSlideIndex, slides.length, slideFormat)
+    );
+  };
+
+  const handleUpdateBackgroundImageStyle = (updates: {
+    fitMode?: "cover" | "contain" | "original";
+    zoom?: number;
+    offsetX?: number;
+    offsetY?: number;
+    darken?: number;
+  }) => {
+    if (generationLocked) {
+      return;
+    }
+
+    if (!activeSlide || activeSlideIndex === -1 || !activeSlide.backgroundImage) {
+      return;
+    }
+
+    updateSlide(activeSlide.id, (slide) =>
+      setSlideBackgroundImageStyle(slide, updates, activeSlideIndex, slides.length, slideFormat)
+    );
+  };
+
+  const handleApplyGlobalTypography = (titleFont: string, bodyFont: string) => {
+    if (generationLocked) {
+      return;
+    }
+
+    pushHistorySnapshot(true);
+    setSlides((current) =>
+      current.map((slide) => ({
+        ...slide,
+        elements: slide.elements.map((element) => {
+          if (element.type !== "text") {
+            return element;
+          }
+
+          if (element.metaKey === "managed-title" || element.role === "title") {
+            return {
+              ...element,
+              fontFamily: titleFont
+            };
+          }
+
+          if (
+            element.metaKey === "managed-body" ||
+            element.role === "body" ||
+            element.metaKey === "profile-handle" ||
+            element.metaKey === "profile-subtitle"
+          ) {
+            return {
+              ...element,
+              fontFamily: bodyFont
+            };
+          }
+
+          return element;
+        })
+      }))
+    );
+    setStatus("Глобальная типографика применена ко всей карусели.");
+  };
+
+  const handleToggleImageBlockPosition = () => {
+    if (generationLocked || !activeSlide || activeSlideIndex === -1 || !hasImageBlockLayout) {
+      return;
+    }
+
+    const nextMode = activeSlide.imageLayoutMode === "bottom" ? "top" : "bottom";
+    updateSlide(activeSlide.id, (slide) => normalizeImageBlockLayout(slide, { mode: nextMode }));
+    setStatus(
+      nextMode === "bottom"
+        ? "Блок изображения перемещён вниз."
+        : "Блок изображения перемещён вверх."
+    );
+  };
+
+  const handleSetImageBlockHeight = (height: number) => {
+    if (generationLocked || !activeSlide || activeSlideIndex === -1 || !hasImageBlockLayout) {
+      return;
+    }
+
+    updateSlide(activeSlide.id, (slide) =>
+      normalizeImageBlockLayout(slide, {
+        imageHeight: height
+      })
+    );
+  };
+
+  const handleResetSelectedRotation = () => {
+    if (generationLocked || !selectedElementId) {
+      return;
+    }
+
+    updateElement(selectedElementId, (element) => ({
+      ...element,
+      rotation: 0
+    }));
+    setStatus("Поворот элемента сброшен.");
+  };
+
   const handleUpdateElementPosition = (elementId: string, x: number, y: number) => {
     if (generationLocked) {
       return;
@@ -783,46 +1046,6 @@ export function Editor() {
     setStatus("Элемент удалён.");
   };
 
-  const handleCenterSelectedElement = () => {
-    if (generationLocked) {
-      return;
-    }
-
-    if (!selectedElement) {
-      return;
-    }
-
-    updateElement(selectedElement.id, (element) => {
-      const centeredX = (slideDimensions.width - element.width) / 2;
-      const centeredY = (slideDimensions.height - element.height) / 2;
-
-      if (element.type === "text") {
-        const maxX = Math.max(
-          TEXT_SAFE_AREA.insetX,
-          slideDimensions.width - TEXT_SAFE_AREA.insetX - element.width
-        );
-        const maxY = Math.max(
-          TEXT_SAFE_AREA.insetTop,
-          slideDimensions.height - TEXT_SAFE_AREA.insetBottom - element.height
-        );
-
-        return {
-          ...element,
-          x: Math.round(Math.max(TEXT_SAFE_AREA.insetX, Math.min(maxX, centeredX))),
-          y: Math.round(Math.max(TEXT_SAFE_AREA.insetTop, Math.min(maxY, centeredY)))
-        };
-      }
-
-      return {
-        ...element,
-        x: Math.round(Math.max(0, Math.min(slideDimensions.width - element.width, centeredX))),
-        y: Math.round(Math.max(0, Math.min(slideDimensions.height - element.height, centeredY)))
-      };
-    });
-
-    setStatus("Элемент выровнен по центру.");
-  };
-
   const handleAddText = (slideId = activeSlideId ?? "") => {
     if (generationLocked) {
       setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
@@ -879,11 +1102,27 @@ export function Editor() {
 
     try {
       const dataUrl = await fileToOptimizedDataUrl(file);
+      const imageMeta = await readImageMeta(dataUrl);
+      const maxWidth = Math.min(900, slideDimensions.width - 180);
+      const maxHeight = Math.max(180, Math.min(560, slideDimensions.height * 0.42));
+      const fitRatio = Math.min(
+        1,
+        maxWidth / Math.max(1, imageMeta.width),
+        maxHeight / Math.max(1, imageMeta.height)
+      );
+      const imageWidth = Math.round(Math.max(160, imageMeta.width * fitRatio));
+      const imageHeight = Math.round(Math.max(120, imageMeta.height * fitRatio));
       const element = createImageElement(dataUrl, {
-        width: 860,
-        height: Math.round(Math.min(slideDimensions.height * 0.36, 460)),
-        x: 110,
-        y: 92
+        width: imageWidth,
+        height: imageHeight,
+        x: Math.round((slideDimensions.width - imageWidth) / 2),
+        y: Math.round(Math.max(72, (slideDimensions.height - imageHeight) * 0.26)),
+        fitMode: "contain",
+        zoom: 1,
+        offsetX: 0,
+        offsetY: 0,
+        naturalWidth: imageMeta.width,
+        naturalHeight: imageMeta.height
       });
       const targetSlideId = pendingImageSlideId ?? activeSlideId;
 
@@ -1153,10 +1392,12 @@ export function Editor() {
 
     setActiveSlideId(slideId);
     updateSlide(slideId, (slide) => ({
-      ...slide,
-      elements: slide.elements.map((element) =>
-        element.id === elementId ? { ...element, ...updates } : element
-      )
+      ...normalizeImageBlockLayout({
+        ...slide,
+        elements: slide.elements.map((element) =>
+          element.id === elementId ? { ...element, ...updates } : element
+        )
+      })
     }));
   };
 
@@ -1167,6 +1408,8 @@ export function Editor() {
       throw new Error("Экспортируемый слайд ещё не готов.");
     }
 
+    stage.draw();
+
     return stage.toDataURL({ pixelRatio: 2 });
   };
 
@@ -1174,7 +1417,7 @@ export function Editor() {
     const targetIds = slides.map((slide) => slide.id);
     let stageAttempts = 0;
 
-    while (stageAttempts < 120) {
+    while (stageAttempts < 240) {
       const allStagesReady = targetIds.every((slideId) => Boolean(exportStageRefs.current[slideId]));
 
       if (allStagesReady) {
@@ -1186,18 +1429,21 @@ export function Editor() {
       await waitForNextFrame();
     }
 
-    if (stageAttempts >= 120) {
+    if (stageAttempts >= 240) {
       throw new Error("Не удалось подготовить слайды к экспорту.");
     }
 
     let imageAttempts = 0;
-    while (imageAttempts < 240) {
+    while (imageAttempts < 720) {
       const allImagesReady = targetIds.every((slideId) => {
         const stage = exportStageRefs.current[slideId];
         return stage ? areStageImagesReady(stage) : false;
       });
 
       if (allImagesReady) {
+        targetIds.forEach((slideId) => {
+          exportStageRefs.current[slideId]?.draw();
+        });
         return true;
       }
 
@@ -1245,7 +1491,9 @@ export function Editor() {
       setStatus(`Подготавливаю экспорт: ${exportModeLabel}.`);
       const imagesReady = await ensureExportStagesReady();
       if (!imagesReady) {
-        setStatus("Часть изображений ещё загружается, запускаю экспорт с текущим состоянием.");
+        throw new Error(
+          "Не удалось дождаться загрузки всех изображений для экспорта. Повторите попытку через несколько секунд."
+        );
       }
 
       if (exportMode === "png" || exportMode === "jpg") {
@@ -1414,13 +1662,26 @@ export function Editor() {
                   footerVariant={activeSlide.footerVariant ?? "v1"}
                   profileHandle={activeSlide.profileHandle ?? ""}
                   profileSubtitle={activeSlide.profileSubtitle ?? ""}
-                  hasBackgroundImage={Boolean(activeSlide.backgroundImage)}
+                  hasBackgroundImage={activeHasBackgroundImage}
                   exportMode={exportMode}
                   isGenerating={isGenerating}
                   isExporting={isExportRendering}
                   onExportModeChange={setExportMode}
                   onExport={handleExport}
                   onBackgroundChange={handleBackgroundChange}
+                  frameColor={activeSlide.frameColor ?? "#ffffff"}
+                  onFrameColorChange={handleFrameColorChange}
+                  onUpdateBackgroundImageStyle={handleUpdateBackgroundImageStyle}
+                  backgroundImageFitMode={activeSlide.backgroundImageFitMode ?? "cover"}
+                  backgroundImageZoom={activeSlide.backgroundImageZoom ?? 1}
+                  backgroundImageOffsetX={activeSlide.backgroundImageOffsetX ?? 0}
+                  backgroundImageOffsetY={activeSlide.backgroundImageOffsetY ?? 0}
+                  backgroundImageDarken={activeSlide.backgroundImageDarken ?? 0}
+                  hasImageBlockLayout={hasImageBlockLayout}
+                  imageBlockPosition={activeSlide.imageLayoutMode ?? "background"}
+                  imageBlockHeight={activeImageBlockElement?.height ?? 360}
+                  onToggleImageBlockPosition={handleToggleImageBlockPosition}
+                  onImageBlockHeightChange={handleSetImageBlockHeight}
                   onUploadBackgroundImage={() => handleAddBackgroundImage(activeSlide.id)}
                   onRemoveBackgroundImage={() => {
                     if (activeSlideIndex === -1) {
@@ -1429,6 +1690,8 @@ export function Editor() {
                     updateSlide(activeSlide.id, (slide) =>
                       setSlideBackgroundImage(slide, null, activeSlideIndex, slides.length, slideFormat)
                     );
+                    setSelectedElementId(null);
+                    setEditingTextElementId(null);
                     setStatus("Фоновое изображение удалено.");
                   }}
                   onFormatChange={handleFormatChange}
@@ -1444,7 +1707,8 @@ export function Editor() {
                     handleUpdateFooter({ footerVariant: value as FooterVariantId })
                   }
                   onUpdateElement={updateElement}
-                  onCenterSelectedElement={handleCenterSelectedElement}
+                  onApplyGlobalTypography={handleApplyGlobalTypography}
+                  onResetElementRotation={handleResetSelectedRotation}
                   disabled={generationLocked}
                   previewMode={isPreviewMode}
                   showSlideBadge={showSlideBadge}
@@ -1636,8 +1900,21 @@ export function Editor() {
               footerVariant={activeSlide.footerVariant ?? "v1"}
               profileHandle={activeSlide.profileHandle ?? ""}
               profileSubtitle={activeSlide.profileSubtitle ?? ""}
-              hasBackgroundImage={Boolean(activeSlide.backgroundImage)}
+              hasBackgroundImage={activeHasBackgroundImage}
               onBackgroundChange={handleBackgroundChange}
+              frameColor={activeSlide.frameColor ?? "#ffffff"}
+              onFrameColorChange={handleFrameColorChange}
+              onUpdateBackgroundImageStyle={handleUpdateBackgroundImageStyle}
+              backgroundImageFitMode={activeSlide.backgroundImageFitMode ?? "cover"}
+              backgroundImageZoom={activeSlide.backgroundImageZoom ?? 1}
+              backgroundImageOffsetX={activeSlide.backgroundImageOffsetX ?? 0}
+              backgroundImageOffsetY={activeSlide.backgroundImageOffsetY ?? 0}
+              backgroundImageDarken={activeSlide.backgroundImageDarken ?? 0}
+              hasImageBlockLayout={hasImageBlockLayout}
+              imageBlockPosition={activeSlide.imageLayoutMode ?? "background"}
+              imageBlockHeight={activeImageBlockElement?.height ?? 360}
+              onToggleImageBlockPosition={handleToggleImageBlockPosition}
+              onImageBlockHeightChange={handleSetImageBlockHeight}
               onUploadBackgroundImage={() => handleAddBackgroundImage(activeSlide.id)}
               onRemoveBackgroundImage={() => {
                 if (activeSlideIndex === -1) {
@@ -1646,6 +1923,8 @@ export function Editor() {
                 updateSlide(activeSlide.id, (slide) =>
                   setSlideBackgroundImage(slide, null, activeSlideIndex, slides.length, slideFormat)
                 );
+                setSelectedElementId(null);
+                setEditingTextElementId(null);
                 setStatus("Фоновое изображение удалено.");
               }}
               onTemplateCategoryChange={setActiveTemplateCategory}
@@ -1655,7 +1934,8 @@ export function Editor() {
               onProfileSubtitleChange={(value) => handleUpdateFooter({ profileSubtitle: value })}
               onFooterVariantChange={(value) => handleUpdateFooter({ footerVariant: value })}
               onUpdateElement={updateElement}
-              onCenterSelectedElement={handleCenterSelectedElement}
+              onApplyGlobalTypography={handleApplyGlobalTypography}
+              onResetElementRotation={handleResetSelectedRotation}
               toolbarRef={mobileToolbarRef}
               toolSheetRef={mobileToolSheetRef}
               disabled={generationLocked}
@@ -1818,7 +2098,10 @@ function areStageImagesReady(stage: Konva.Stage) {
 
   return imageNodes.every((node) => {
     const image = node.image();
-    return !image || isCanvasImageSourceReady(image);
+    if (!image) {
+      return false;
+    }
+    return isCanvasImageSourceReady(image);
   });
 }
 
@@ -1964,6 +2247,14 @@ async function downscaleDataUrl(dataUrl: string, maxSide: number) {
 
   const webp = canvas.toDataURL("image/webp", 0.88);
   return webp.startsWith("data:image/webp") ? webp : dataUrl;
+}
+
+async function readImageMeta(dataUrl: string) {
+  const image = await loadHtmlImage(dataUrl);
+  return {
+    width: image.naturalWidth || image.width || 1,
+    height: image.naturalHeight || image.height || 1
+  };
 }
 
 async function loadHtmlImage(src: string) {

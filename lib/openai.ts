@@ -61,6 +61,7 @@ const TEMPLATE_ID_VALUES = [
   "technology",
   "charge",
   "minimal",
+  "blank",
   "editorial",
   "business-light",
   "jungle",

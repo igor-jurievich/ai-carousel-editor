@@ -436,7 +436,7 @@ button:disabled {
   gap: 14px;
   padding: 18px;
   border-radius: 28px;
-  border: 1px solid rgba(195, 206, 203, 0.88);
+  border: 1px solid rgba(195, 206, 203, 0.36);
   background: #f7f9f8;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
@@ -623,7 +623,7 @@ button:disabled {
 
 .settings-card {
   border-radius: 22px;
-  border: 1px solid rgba(193, 206, 202, 0.92);
+  border: 1px solid rgba(193, 206, 202, 0.42);
   background: rgba(248, 251, 250, 0.94);
   box-shadow: var(--shadow-soft);
   padding: 16px;
@@ -649,7 +649,7 @@ button:disabled {
 
 .settings-block {
   border-radius: 16px;
-  border: 1px solid rgba(208, 218, 216, 0.95);
+  border: 1px solid rgba(208, 218, 216, 0.36);
   background: var(--surface);
   padding: 12px;
   display: grid;
@@ -1006,19 +1006,21 @@ button:disabled {
   align-items: center;
   gap: 8px;
   border-radius: 12px;
-  border: 1px solid rgba(186, 199, 195, 0.88);
+  border: 1px solid rgba(186, 199, 195, 0.4);
   background: #ffffff;
   padding: 9px 10px;
   text-align: left;
 }
 
 .slides-list-item:hover {
-  border-color: rgba(116, 184, 176, 0.76);
+  border-color: rgba(116, 184, 176, 0.62);
+  box-shadow: 0 4px 10px rgba(50, 93, 89, 0.08);
 }
 
 .slides-list-item.active {
-  border-color: rgba(100, 191, 182, 0.96);
-  background: rgba(102, 208, 198, 0.11);
+  border-color: rgba(100, 191, 182, 0.84);
+  background: rgba(102, 208, 198, 0.08);
+  box-shadow: 0 0 0 1px rgba(100, 191, 182, 0.18);
 }
 
 .slides-list-index {
@@ -1691,6 +1693,12 @@ button:disabled {
     background: rgba(248, 253, 252, 0.97);
     box-shadow: var(--shadow-elevated);
     overflow: hidden;
+    transition: transform 0.22s ease;
+    touch-action: pan-y;
+  }
+
+  .mobile-tool-sheet.is-dragging {
+    transition: none;
   }
 
   .mobile-tool-sheet-handle {

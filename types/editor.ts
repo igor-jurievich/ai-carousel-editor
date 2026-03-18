@@ -4,6 +4,7 @@ export type SlideFormat = "1:1" | "4:5" | "9:16";
 export type FooterVariantId = "v1" | "v2" | "v3" | "v4";
 export type TemplateCategoryId = "dark" | "light" | "color";
 export type ElementMetaKey = string;
+export type ImageFitMode = "cover" | "contain" | "original";
 export type CarouselSlideRole =
   | "cover"
   | "problem"
@@ -86,6 +87,13 @@ export type ImageElement = {
   opacity: number;
   rotation: number;
   cornerRadius: number;
+  fitMode?: ImageFitMode;
+  zoom?: number;
+  offsetX?: number;
+  offsetY?: number;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  darken?: number;
 };
 
 export type CanvasElement = TextElement | ShapeElement | ImageElement;
@@ -100,7 +108,13 @@ export type Slide = {
   profileHandle?: string;
   profileSubtitle?: string;
   backgroundImage?: string | null;
-  imageLayoutMode?: "background" | "top";
+  imageLayoutMode?: "background" | "top" | "bottom";
+  backgroundImageFitMode?: ImageFitMode;
+  backgroundImageZoom?: number;
+  backgroundImageOffsetX?: number;
+  backgroundImageOffsetY?: number;
+  backgroundImageDarken?: number;
+  frameColor?: string;
   generationRole?: CarouselSlideRole;
   generationCoreIdea?: string;
   layoutType?: CarouselLayoutType;
@@ -152,6 +166,6 @@ export type CarouselTemplate = {
   bodyWidth?: number;
   bodyHeight?: number;
   chipStyle: "solid" | "outline";
-  decoration: "band" | "grid" | "glow" | "paper" | "dots" | "lines" | "bolts";
+  decoration: "band" | "grid" | "glow" | "paper" | "dots" | "lines" | "bolts" | "none";
   preview?: string;
 };

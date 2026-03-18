@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   BACKGROUND_STYLE_PRESETS,
   FOOTER_VARIANTS,
@@ -56,7 +56,27 @@ type SettingsPanelProps = {
   onProfileSubtitleChange: (value: string) => void;
   onFooterVariantChange: (value: FooterVariantId) => void;
   onUpdateElement: (elementId: string, updater: (element: CanvasElement) => CanvasElement) => void;
-  onCenterSelectedElement: () => void;
+  onApplyGlobalTypography: (titleFont: string, bodyFont: string) => void;
+  frameColor: string;
+  onFrameColorChange: (value: string) => void;
+  onUpdateBackgroundImageStyle: (updates: {
+    fitMode?: "cover" | "contain" | "original";
+    zoom?: number;
+    offsetX?: number;
+    offsetY?: number;
+    darken?: number;
+  }) => void;
+  backgroundImageFitMode: "cover" | "contain" | "original";
+  backgroundImageZoom: number;
+  backgroundImageOffsetX: number;
+  backgroundImageOffsetY: number;
+  backgroundImageDarken: number;
+  hasImageBlockLayout: boolean;
+  imageBlockPosition: "top" | "bottom" | "background";
+  imageBlockHeight: number;
+  onToggleImageBlockPosition: () => void;
+  onImageBlockHeightChange: (height: number) => void;
+  onResetElementRotation: () => void;
   showSlideBadge: boolean;
   onToggleSlideBadge: () => void;
   disabled?: boolean;
@@ -97,7 +117,21 @@ export function SettingsPanel({
   onProfileSubtitleChange,
   onFooterVariantChange,
   onUpdateElement,
-  onCenterSelectedElement,
+  onApplyGlobalTypography,
+  frameColor,
+  onFrameColorChange,
+  onUpdateBackgroundImageStyle,
+  backgroundImageFitMode,
+  backgroundImageZoom,
+  backgroundImageOffsetX,
+  backgroundImageOffsetY,
+  backgroundImageDarken,
+  hasImageBlockLayout,
+  imageBlockPosition,
+  imageBlockHeight,
+  onToggleImageBlockPosition,
+  onImageBlockHeightChange,
+  onResetElementRotation,
   showSlideBadge,
   onToggleSlideBadge,
   disabled = false,
@@ -107,6 +141,8 @@ export function SettingsPanel({
   const visibleTemplates = getTemplatesByCategory(activeTemplateCategory);
   const primaryTemplates = getPrimaryTemplates();
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [globalTitleFont, setGlobalTitleFont] = useState("");
+  const [globalBodyFont, setGlobalBodyFont] = useState("");
   const currentTemplate = visibleTemplates.find((template) => template.id === activeTemplateId);
   const activeIndex = Math.max(
     0,
@@ -148,6 +184,22 @@ export function SettingsPanel({
         ? "Выбрано изображение"
         : "Выбрана фигура"
     : null;
+  const firstTitleFont = useMemo(
+    () =>
+      slide.elements.find(
+        (element): element is Extract<CanvasElement, { type: "text" }> =>
+          element.type === "text" && (element.metaKey === "managed-title" || element.role === "title")
+      )?.fontFamily ?? "Manrope",
+    [slide.elements]
+  );
+  const firstBodyFont = useMemo(
+    () =>
+      slide.elements.find(
+        (element): element is Extract<CanvasElement, { type: "text" }> =>
+          element.type === "text" && (element.metaKey === "managed-body" || element.role === "body")
+      )?.fontFamily ?? "Inter",
+    [slide.elements]
+  );
 
   if (previewMode) {
     return (
@@ -414,7 +466,17 @@ export function SettingsPanel({
               onChange={(event) => onBackgroundChange(event.target.value)}
               disabled={disabled}
             />
-            <span>{slide.background}</span>
+            <span>Background: {slide.background}</span>
+          </label>
+          <label className="color-row">
+            <input
+              className="color-input"
+              type="color"
+              value={frameColor}
+              onChange={(event) => onFrameColorChange(event.target.value)}
+              disabled={disabled}
+            />
+            <span>Frame: {frameColor}</span>
           </label>
           <span className="settings-label">Стили фона</span>
           <div className="mobile-style-grid">
@@ -448,6 +510,177 @@ export function SettingsPanel({
               Удалить фон
             </button>
           </div>
+
+          {hasBackgroundImage ? (
+            <>
+              <span className="settings-label">Режим изображения</span>
+              <div className="segment-control">
+                {(["cover", "contain", "original"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`segment-item ${backgroundImageFitMode === mode ? "active" : ""}`}
+                    onClick={() => onUpdateBackgroundImageStyle({ fitMode: mode })}
+                    disabled={disabled}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+
+              <div className="field-row">
+                <label className="field-label">
+                  Zoom
+                  <input
+                    className="field"
+                    type="number"
+                    min={0.4}
+                    max={4}
+                    step={0.05}
+                    value={backgroundImageZoom}
+                    onChange={(event) =>
+                      onUpdateBackgroundImageStyle({
+                        zoom: Number(event.target.value) || 1
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                </label>
+                <label className="field-label">
+                  Darken
+                  <input
+                    className="field"
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={backgroundImageDarken}
+                    onChange={(event) =>
+                      onUpdateBackgroundImageStyle({
+                        darken: Number(event.target.value) || 0
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                </label>
+              </div>
+
+              <div className="field-row">
+                <label className="field-label">
+                  Offset X
+                  <input
+                    className="field"
+                    type="number"
+                    min={-640}
+                    max={640}
+                    step={1}
+                    value={backgroundImageOffsetX}
+                    onChange={(event) =>
+                      onUpdateBackgroundImageStyle({
+                        offsetX: Number(event.target.value) || 0
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                </label>
+                <label className="field-label">
+                  Offset Y
+                  <input
+                    className="field"
+                    type="number"
+                    min={-640}
+                    max={640}
+                    step={1}
+                    value={backgroundImageOffsetY}
+                    onChange={(event) =>
+                      onUpdateBackgroundImageStyle({
+                        offsetY: Number(event.target.value) || 0
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                </label>
+              </div>
+
+              {hasImageBlockLayout ? (
+                <>
+                  <button
+                    type="button"
+                    className="ghost-chip"
+                    onClick={onToggleImageBlockPosition}
+                    disabled={disabled}
+                  >
+                    {imageBlockPosition === "bottom"
+                      ? "Картинка снизу (переместить вверх)"
+                      : "Картинка сверху (переместить вниз)"}
+                  </button>
+                  <label className="field-label">
+                    Высота блока изображения
+                    <input
+                      className="range"
+                      type="range"
+                      min={180}
+                      max={760}
+                      value={imageBlockHeight}
+                      onChange={(event) =>
+                        onImageBlockHeightChange(Number(event.target.value) || imageBlockHeight)
+                      }
+                      disabled={disabled}
+                    />
+                  </label>
+                </>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+
+        <div className="settings-block">
+          <span className="settings-label">Глобальная типографика</span>
+          <div className="field-row">
+            <label className="field-label">
+              Заголовок
+              <select
+                className="select"
+                value={globalTitleFont || firstTitleFont}
+                onChange={(event) => setGlobalTitleFont(event.target.value)}
+                disabled={disabled}
+              >
+                {FONT_OPTIONS.map((font) => (
+                  <option key={`global-title-${font}`} value={font}>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              Описание
+              <select
+                className="select"
+                value={globalBodyFont || firstBodyFont}
+                onChange={(event) => setGlobalBodyFont(event.target.value)}
+                disabled={disabled}
+              >
+                {FONT_OPTIONS.map((font) => (
+                  <option key={`global-body-${font}`} value={font}>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <button
+            type="button"
+            className="ghost-chip"
+            onClick={() =>
+              onApplyGlobalTypography(
+                globalTitleFont || firstTitleFont,
+                globalBodyFont || firstBodyFont
+              )
+            }
+            disabled={disabled}
+          >
+            Применить ко всем слайдам
+          </button>
         </div>
 
         <div className="settings-block">
@@ -507,11 +740,11 @@ export function SettingsPanel({
           <div className="field-grid">
             <button
               type="button"
-              className="ghost-chip"
-              onClick={onCenterSelectedElement}
+              className="ghost-chip ghost-chip-muted"
+              onClick={onResetElementRotation}
               disabled={disabled}
             >
-              Center element
+              Reset rotation (0°)
             </button>
 
             {selectedElement.type === "text" ? (
@@ -732,21 +965,127 @@ export function SettingsPanel({
             ) : null}
 
             {selectedElement.type === "image" ? (
-              <label className="field-label">
-                Ссылка на изображение
-                <textarea
-                  className="textarea"
-                  rows={4}
-                  value={selectedElement.src}
-                  onChange={(event) =>
-                    updateImageElement((element) => ({
-                      ...element,
-                      src: event.target.value
-                    }))
-                  }
-                  disabled={disabled}
-                />
-              </label>
+              <>
+                <label className="field-label">
+                  Ссылка на изображение
+                  <textarea
+                    className="textarea"
+                    rows={4}
+                    value={selectedElement.src}
+                    onChange={(event) =>
+                      updateImageElement((element) => ({
+                        ...element,
+                        src: event.target.value
+                      }))
+                    }
+                    disabled={disabled}
+                  />
+                </label>
+
+                <div className="field-label">
+                  Режим
+                  <div className="segment-control">
+                    {(["cover", "contain", "original"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`segment-item ${
+                          (selectedElement.fitMode ?? "cover") === mode ? "active" : ""
+                        }`}
+                        onClick={() =>
+                          updateImageElement((element) => ({
+                            ...applyImageFitMode(element, mode),
+                            fitMode: mode
+                          }))
+                        }
+                        disabled={disabled}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="field-row">
+                  <label className="field-label">
+                    Zoom
+                    <input
+                      className="field"
+                      type="number"
+                      min={0.4}
+                      max={4}
+                      step={0.05}
+                      value={selectedElement.zoom ?? 1}
+                      onChange={(event) =>
+                        updateImageElement((element) => ({
+                          ...element,
+                          zoom: Number(event.target.value) || 1
+                        }))
+                      }
+                      disabled={disabled}
+                    />
+                  </label>
+
+                  <label className="field-label">
+                    Darken
+                    <input
+                      className="field"
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={selectedElement.darken ?? 0}
+                      onChange={(event) =>
+                        updateImageElement((element) => ({
+                          ...element,
+                          darken: Number(event.target.value) || 0
+                        }))
+                      }
+                      disabled={disabled}
+                    />
+                  </label>
+                </div>
+
+                <div className="field-row">
+                  <label className="field-label">
+                    Offset X
+                    <input
+                      className="field"
+                      type="number"
+                      min={-640}
+                      max={640}
+                      step={1}
+                      value={selectedElement.offsetX ?? 0}
+                      onChange={(event) =>
+                        updateImageElement((element) => ({
+                          ...element,
+                          offsetX: Number(event.target.value) || 0
+                        }))
+                      }
+                      disabled={disabled}
+                    />
+                  </label>
+
+                  <label className="field-label">
+                    Offset Y
+                    <input
+                      className="field"
+                      type="number"
+                      min={-640}
+                      max={640}
+                      step={1}
+                      value={selectedElement.offsetY ?? 0}
+                      onChange={(event) =>
+                        updateImageElement((element) => ({
+                          ...element,
+                          offsetY: Number(event.target.value) || 0
+                        }))
+                      }
+                      disabled={disabled}
+                    />
+                  </label>
+                </div>
+              </>
             ) : null}
           </div>
         ) : (
@@ -827,6 +1166,44 @@ export function SettingsPanel({
       </section>
     </>
   );
+}
+
+function applyImageFitMode(
+  element: Extract<CanvasElement, { type: "image" }>,
+  mode: "cover" | "contain" | "original"
+) {
+  const sourceWidth = element.naturalWidth ?? element.width;
+  const sourceHeight = element.naturalHeight ?? element.height;
+  if (!sourceWidth || !sourceHeight) {
+    return element;
+  }
+
+  const sourceRatio = sourceWidth / sourceHeight;
+  const frameRatio = element.width / Math.max(1, element.height);
+  let width = element.width;
+  let height = element.height;
+
+  if (mode === "contain") {
+    if (sourceRatio > frameRatio) {
+      height = Math.max(24, Math.round(element.width / sourceRatio));
+    } else {
+      width = Math.max(24, Math.round(element.height * sourceRatio));
+    }
+  } else if (mode === "original") {
+    const capRatio = Math.min(1.2, 1280 / Math.max(sourceWidth, sourceHeight));
+    width = Math.max(24, Math.round(sourceWidth * capRatio));
+    height = Math.max(24, Math.round(sourceHeight * capRatio));
+  } else if (sourceRatio > frameRatio) {
+    width = Math.max(24, Math.round(element.height * sourceRatio));
+  } else {
+    height = Math.max(24, Math.round(element.width / sourceRatio));
+  }
+
+  return {
+    ...element,
+    width,
+    height
+  };
 }
 
 function getExportLabel(mode: ExportMode) {

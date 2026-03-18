@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type Konva from "konva";
 import useImage from "use-image";
 import {
@@ -29,14 +29,11 @@ type SlideStageProps = {
   showSlideBadge?: boolean;
 };
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(value, max));
-}
-
-const TEXT_SAFE_AREA = {
-  insetX: 56,
-  insetTop: 84,
-  insetBottom: 96
+type SafeArea = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
 };
 
 type DragBounds = {
@@ -46,38 +43,61 @@ type DragBounds = {
   maxY: number;
 };
 
+type SnapGuides = {
+  vertical: number[];
+  horizontal: number[];
+};
+
+const SNAP_THRESHOLD = 10;
+const ROTATION_SNAP_VALUES = [-180, -90, 0, 90, 180];
+const ROTATION_SNAP_THRESHOLD = 6;
+const EMPTY_GUIDES: SnapGuides = { vertical: [], horizontal: [] };
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, max));
+}
+
+function resolveSafeArea(canvasWidth: number, canvasHeight: number, stageWidth: number): SafeArea {
+  const mobileLike = stageWidth <= 420;
+  const insetX = mobileLike ? 40 : 80;
+  const insetTop = mobileLike ? 40 : 80;
+  const insetBottom = mobileLike ? 52 : 88;
+  const right = Math.max(insetX, canvasWidth - insetX);
+  const bottom = Math.max(insetTop, canvasHeight - insetBottom);
+
+  return {
+    left: insetX,
+    right,
+    top: insetTop,
+    bottom
+  };
+}
+
 function resolveDragBounds(
   element: CanvasElement,
   canvasWidth: number,
   canvasHeight: number,
+  safeArea: SafeArea,
   width = element.width,
   height = element.height
 ): DragBounds {
-  if (element.type !== "text") {
-    return {
-      minX: 0,
-      maxX: Math.max(0, canvasWidth - width),
-      minY: 0,
-      maxY: Math.max(0, canvasHeight - height)
-    };
-  }
+  const safeWidth = Math.max(60, safeArea.right - safeArea.left);
+  const safeHeight = Math.max(40, safeArea.bottom - safeArea.top);
+  const forceCanvasBounds =
+    element.type === "image" && element.metaKey === "background-image";
+  const useCanvasX = forceCanvasBounds || width > safeWidth;
+  const useCanvasY = forceCanvasBounds || height > safeHeight;
 
-  const maxTextWidth = Math.max(60, canvasWidth - TEXT_SAFE_AREA.insetX * 2);
-  const maxTextHeight = Math.max(
-    28,
-    canvasHeight - TEXT_SAFE_AREA.insetTop - TEXT_SAFE_AREA.insetBottom
-  );
-  const safeWidth = Math.min(width, maxTextWidth);
-  const safeHeight = Math.min(height, maxTextHeight);
+  const minX = useCanvasX ? 0 : safeArea.left;
+  const maxX = useCanvasX ? Math.max(0, canvasWidth - width) : Math.max(minX, safeArea.right - width);
+  const minY = useCanvasY ? 0 : safeArea.top;
+  const maxY = useCanvasY ? Math.max(0, canvasHeight - height) : Math.max(minY, safeArea.bottom - height);
 
   return {
-    minX: TEXT_SAFE_AREA.insetX,
-    maxX: Math.max(TEXT_SAFE_AREA.insetX, canvasWidth - TEXT_SAFE_AREA.insetX - safeWidth),
-    minY: TEXT_SAFE_AREA.insetTop,
-    maxY: Math.max(
-      TEXT_SAFE_AREA.insetTop,
-      canvasHeight - TEXT_SAFE_AREA.insetBottom - safeHeight
-    )
+    minX,
+    maxX,
+    minY,
+    maxY
   };
 }
 
@@ -106,6 +126,183 @@ function estimateTextHeight(element: TextElement, width: number) {
   return Math.ceil(lines * element.fontSize * lineHeight + element.fontSize * 0.4);
 }
 
+function areGuidesEqual(left: SnapGuides, right: SnapGuides) {
+  if (left.vertical.length !== right.vertical.length || left.horizontal.length !== right.horizontal.length) {
+    return false;
+  }
+
+  return (
+    left.vertical.every((value, index) => Math.abs(value - right.vertical[index]) < 0.25) &&
+    left.horizontal.every((value, index) => Math.abs(value - right.horizontal[index]) < 0.25)
+  );
+}
+
+function getCoverCrop(
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+  zoom = 1,
+  offsetX = 0,
+  offsetY = 0
+) {
+  if (!sourceWidth || !sourceHeight || !targetWidth || !targetHeight) {
+    return null;
+  }
+
+  const sourceRatio = sourceWidth / sourceHeight;
+  const targetRatio = targetWidth / targetHeight;
+  let cropWidth: number;
+  let cropHeight: number;
+  let cropX = 0;
+  let cropY = 0;
+
+  if (sourceRatio > targetRatio) {
+    cropHeight = sourceHeight;
+    cropWidth = cropHeight * targetRatio;
+    cropX = (sourceWidth - cropWidth) / 2;
+  } else {
+    cropWidth = sourceWidth;
+    cropHeight = cropWidth / targetRatio;
+    cropY = (sourceHeight - cropHeight) / 2;
+  }
+
+  const safeZoom = clamp(zoom, 0.4, 4);
+  if (safeZoom > 1) {
+    cropWidth /= safeZoom;
+    cropHeight /= safeZoom;
+  }
+
+  const offsetScaleX = cropWidth / Math.max(1, targetWidth);
+  const offsetScaleY = cropHeight / Math.max(1, targetHeight);
+
+  cropX = clamp(cropX + offsetX * offsetScaleX, 0, Math.max(0, sourceWidth - cropWidth));
+  cropY = clamp(cropY + offsetY * offsetScaleY, 0, Math.max(0, sourceHeight - cropHeight));
+
+  return {
+    x: cropX,
+    y: cropY,
+    width: cropWidth,
+    height: cropHeight
+  };
+}
+
+function resolveBackgroundPlacement(
+  element: ImageElement,
+  sourceWidth: number,
+  sourceHeight: number
+) {
+  const fitMode = element.fitMode ?? "cover";
+  const zoom = clamp(element.zoom ?? 1, 0.4, 4);
+  const offsetX = element.offsetX ?? 0;
+  const offsetY = element.offsetY ?? 0;
+
+  if (fitMode === "cover") {
+    return {
+      x: element.x,
+      y: element.y,
+      width: element.width,
+      height: element.height,
+      crop: getCoverCrop(
+        sourceWidth,
+        sourceHeight,
+        element.width,
+        element.height,
+        zoom,
+        offsetX,
+        offsetY
+      )
+    };
+  }
+
+  const baseScale =
+    fitMode === "contain"
+      ? Math.min(element.width / sourceWidth, element.height / sourceHeight)
+      : 1;
+  const scale = Math.max(0.02, baseScale * zoom);
+  const renderWidth = sourceWidth * scale;
+  const renderHeight = sourceHeight * scale;
+
+  return {
+    x: element.x + (element.width - renderWidth) / 2 + offsetX,
+    y: element.y + (element.height - renderHeight) / 2 + offsetY,
+    width: renderWidth,
+    height: renderHeight,
+    crop: null
+  };
+}
+
+function snapRotationAngle(value: number) {
+  const normalized = ((value % 360) + 360) % 360;
+  const signed = normalized > 180 ? normalized - 360 : normalized;
+  let best = signed;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const angle of ROTATION_SNAP_VALUES) {
+    const distance = Math.abs(signed - angle);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = angle;
+    }
+  }
+
+  return bestDistance <= ROTATION_SNAP_THRESHOLD ? best : signed;
+}
+
+function resolveSnap(
+  position: { x: number; y: number },
+  elementSize: { width: number; height: number },
+  bounds: DragBounds,
+  safeArea: SafeArea,
+  canvasWidth: number,
+  canvasHeight: number
+) {
+  const xCandidates = [
+    { target: bounds.minX, guide: safeArea.left },
+    { target: bounds.maxX, guide: safeArea.right },
+    {
+      target: clamp((canvasWidth - elementSize.width) / 2, bounds.minX, bounds.maxX),
+      guide: canvasWidth / 2
+    }
+  ];
+  const yCandidates = [
+    { target: bounds.minY, guide: safeArea.top },
+    { target: bounds.maxY, guide: safeArea.bottom },
+    {
+      target: clamp((canvasHeight - elementSize.height) / 2, bounds.minY, bounds.maxY),
+      guide: canvasHeight / 2
+    }
+  ];
+
+  let nextX = position.x;
+  let nextY = position.y;
+  const guides: SnapGuides = { vertical: [], horizontal: [] };
+
+  const nearestX = xCandidates
+    .map((candidate) => ({ ...candidate, diff: Math.abs(position.x - candidate.target) }))
+    .sort((left, right) => left.diff - right.diff)[0];
+  if (nearestX && nearestX.diff <= SNAP_THRESHOLD) {
+    nextX = nearestX.target;
+    guides.vertical.push(nearestX.guide);
+  }
+
+  const nearestY = yCandidates
+    .map((candidate) => ({ ...candidate, diff: Math.abs(position.y - candidate.target) }))
+    .sort((left, right) => left.diff - right.diff)[0];
+  if (nearestY && nearestY.diff <= SNAP_THRESHOLD) {
+    nextY = nearestY.target;
+    guides.horizontal.push(nearestY.guide);
+  }
+
+  return {
+    position: {
+      x: clamp(nextX, bounds.minX, bounds.maxX),
+      y: clamp(nextY, bounds.minY, bounds.maxY)
+    },
+    guides
+  };
+}
+
 function SlideImageNode({
   element,
   interactive = false,
@@ -127,72 +324,85 @@ function SlideImageNode({
 }) {
   const [image] = useImage(element.src, "anonymous");
   const isBackground = element.metaKey === "background-image";
-  const coverCrop = useMemo(() => {
-    if (!image || element.metaKey !== "internet-image-top") {
-      return null;
-    }
-
-    const sourceWidth = image.naturalWidth || image.width;
-    const sourceHeight = image.naturalHeight || image.height;
-
-    if (!sourceWidth || !sourceHeight || !element.width || !element.height) {
-      return null;
-    }
-
-    const sourceRatio = sourceWidth / sourceHeight;
-    const targetRatio = element.width / element.height;
-
-    if (sourceRatio > targetRatio) {
-      const cropHeight = sourceHeight;
-      const cropWidth = cropHeight * targetRatio;
-      return {
-        x: (sourceWidth - cropWidth) / 2,
-        y: 0,
-        width: cropWidth,
-        height: cropHeight
-      };
-    }
-
-    const cropWidth = sourceWidth;
-    const cropHeight = cropWidth / targetRatio;
-    return {
-      x: 0,
-      y: (sourceHeight - cropHeight) / 2,
-      width: cropWidth,
-      height: cropHeight
-    };
-  }, [image, element.height, element.metaKey, element.width]);
+  const isManagedImageBlock = element.metaKey === "internet-image-top";
+  const sourceWidth = image?.naturalWidth || image?.width || 0;
+  const sourceHeight = image?.naturalHeight || image?.height || 0;
+  const backgroundPlacement =
+    isBackground && sourceWidth > 0 && sourceHeight > 0
+      ? resolveBackgroundPlacement(element, sourceWidth, sourceHeight)
+      : null;
+  const shouldCrop =
+    !backgroundPlacement &&
+    sourceWidth > 0 &&
+    sourceHeight > 0 &&
+    ((element.fitMode ?? "cover") === "cover" ||
+      element.metaKey === "internet-image-top" ||
+      element.metaKey === "background-image");
+  const coverCrop = shouldCrop
+    ? getCoverCrop(
+        sourceWidth,
+        sourceHeight,
+        element.width,
+        element.height,
+        element.zoom ?? 1,
+        element.offsetX ?? 0,
+        element.offsetY ?? 0
+      )
+    : null;
+  const drawX = backgroundPlacement?.x ?? element.x;
+  const drawY = backgroundPlacement?.y ?? element.y;
+  const drawWidth = backgroundPlacement?.width ?? element.width;
+  const drawHeight = backgroundPlacement?.height ?? element.height;
+  const darken = clamp(element.darken ?? 0, 0, 1);
 
   return (
-    <KonvaImage
-      ref={nodeRef}
-      image={image}
-      x={element.x}
-      y={element.y}
-      width={element.width}
-      height={element.height}
-      opacity={element.opacity}
-      rotation={element.rotation}
-      cornerRadius={element.cornerRadius}
-      cropX={coverCrop?.x}
-      cropY={coverCrop?.y}
-      cropWidth={coverCrop?.width}
-      cropHeight={coverCrop?.height}
-      listening={!isBackground}
-      draggable={interactive && selected && !isBackground}
-      dragDistance={10}
-      dragBoundFunc={isBackground ? undefined : dragBoundFunc}
-      onClick={isBackground ? undefined : onSelect}
-      onTap={isBackground ? undefined : onSelect}
-      onDragEnd={
-        isBackground ? undefined : (event) => onDragEnd?.(event.target.x(), event.target.y())
-      }
-      onTransformEnd={isBackground ? undefined : (event) => onTransformEnd?.(event.target as Konva.Image)}
-      stroke={selected ? "#72d6cb" : undefined}
-      strokeWidth={selected ? 4 : 0}
-      shadowBlur={selected ? 18 : 0}
-      shadowColor={selected ? "rgba(114, 214, 203, 0.35)" : undefined}
-    />
+    <>
+      <KonvaImage
+        ref={nodeRef}
+        image={image}
+        x={drawX}
+        y={drawY}
+        width={drawWidth}
+        height={drawHeight}
+        opacity={element.opacity}
+        rotation={element.rotation}
+        cornerRadius={element.cornerRadius}
+        cropX={backgroundPlacement?.crop?.x ?? coverCrop?.x}
+        cropY={backgroundPlacement?.crop?.y ?? coverCrop?.y}
+        cropWidth={backgroundPlacement?.crop?.width ?? coverCrop?.width}
+        cropHeight={backgroundPlacement?.crop?.height ?? coverCrop?.height}
+        listening={!isBackground}
+        draggable={interactive && selected && !isBackground && !isManagedImageBlock}
+        dragDistance={10}
+        dragBoundFunc={isBackground || isManagedImageBlock ? undefined : dragBoundFunc}
+        onClick={isBackground ? undefined : onSelect}
+        onTap={isBackground ? undefined : onSelect}
+        onDragEnd={
+          isBackground || isManagedImageBlock
+            ? undefined
+            : (event) => onDragEnd?.(event.target.x(), event.target.y())
+        }
+        onTransformEnd={
+          isBackground ? undefined : (event) => onTransformEnd?.(event.target as Konva.Image)
+        }
+        stroke={selected ? "#72d6cb" : undefined}
+        strokeWidth={selected ? 4 : 0}
+        shadowBlur={selected ? 18 : 0}
+        shadowColor={selected ? "rgba(114, 214, 203, 0.35)" : undefined}
+      />
+      {darken > 0 ? (
+        <Rect
+          x={drawX}
+          y={drawY}
+          width={drawWidth}
+          height={drawHeight}
+          cornerRadius={element.cornerRadius}
+          fill="#000000"
+          opacity={darken}
+          listening={false}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -315,6 +525,20 @@ export function SlideStage({
   const scale = useMemo(() => width / canvasWidth, [canvasWidth, width]);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const nodeRefs = useRef<Record<string, Konva.Node | null>>({});
+  const safeArea = useMemo(
+    () => resolveSafeArea(canvasWidth, canvasHeight, width),
+    [canvasHeight, canvasWidth, width]
+  );
+  const [snapGuides, setSnapGuides] = useState<SnapGuides>(EMPTY_GUIDES);
+  const snapGuidesRef = useRef<SnapGuides>(EMPTY_GUIDES);
+
+  const updateSnapGuides = (next: SnapGuides) => {
+    if (areGuidesEqual(snapGuidesRef.current, next)) {
+      return;
+    }
+    snapGuidesRef.current = next;
+    setSnapGuides(next);
+  };
 
   useEffect(() => {
     if (!interactive || !transformerRef.current) {
@@ -327,6 +551,10 @@ export function SlideStage({
     transformerRef.current.getLayer()?.batchDraw();
   }, [interactive, selectedElementId, slide.elements]);
 
+  useEffect(() => {
+    updateSnapGuides(EMPTY_GUIDES);
+  }, [selectedElementId, slide.id]);
+
   const selectedElement = selectedElementId
     ? slide.elements.find((element) => element.id === selectedElementId) ?? null
     : null;
@@ -334,14 +562,10 @@ export function SlideStage({
   const handleTransformEnd = (element: CanvasElement, node: Konva.Node) => {
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
-    const maxWidth =
-      element.type === "text"
-        ? Math.max(120, canvasWidth - TEXT_SAFE_AREA.insetX * 2)
-        : canvasWidth;
-    const maxHeight =
-      element.type === "text"
-        ? Math.max(42, canvasHeight - TEXT_SAFE_AREA.insetTop - TEXT_SAFE_AREA.insetBottom)
-        : canvasHeight;
+    const safeWidth = Math.max(120, safeArea.right - safeArea.left);
+    const safeHeight = Math.max(42, safeArea.bottom - safeArea.top);
+    const maxWidth = element.type === "text" ? safeWidth : canvasWidth;
+    const maxHeight = element.type === "text" ? safeHeight : canvasHeight;
     let nextWidth = clamp(
       element.width * scaleX,
       element.type === "text" ? 120 : 30,
@@ -353,7 +577,7 @@ export function SlideStage({
       maxHeight
     );
 
-    if (element.type === "image") {
+    if (element.type === "image" && element.metaKey !== "internet-image-top") {
       const aspect = element.width / Math.max(1, element.height);
       if (Math.abs(scaleX - 1) >= Math.abs(scaleY - 1)) {
         nextHeight = clamp(nextWidth / aspect, 24, maxHeight);
@@ -372,18 +596,26 @@ export function SlideStage({
       nextHeight = clamp(estimateTextHeight(element, nextWidth), 42, maxHeight);
     }
 
-    const bounds = resolveDragBounds(element, canvasWidth, canvasHeight, nextWidth, nextHeight);
+    const bounds = resolveDragBounds(
+      element,
+      canvasWidth,
+      canvasHeight,
+      safeArea,
+      nextWidth,
+      nextHeight
+    );
     const clampedPosition = clampPosition({ x: node.x(), y: node.y() }, bounds);
     const updates: Record<string, number> = {
       x: clampedPosition.x,
       y: clampedPosition.y,
       width: nextWidth,
       height: nextHeight,
-      rotation: node.rotation()
+      rotation: snapRotationAngle(node.rotation())
     };
 
     node.scaleX(1);
     node.scaleY(1);
+    updateSnapGuides(EMPTY_GUIDES);
     onTransformElement?.(element.id, updates);
   };
 
@@ -401,11 +633,13 @@ export function SlideStage({
       }}
       onMouseDown={(event) => {
         if (event.target === event.target.getStage()) {
+          updateSnapGuides(EMPTY_GUIDES);
           onSelectElement?.(null);
         }
       }}
       onTouchStart={(event) => {
         if (event.target === event.target.getStage()) {
+          updateSnapGuides(EMPTY_GUIDES);
           onSelectElement?.(null);
         }
       }}
@@ -426,6 +660,60 @@ export function SlideStage({
           listening={false}
         />
 
+        {interactive ? (
+          <>
+            <Rect
+              x={safeArea.left}
+              y={safeArea.top}
+              width={Math.max(4, safeArea.right - safeArea.left)}
+              height={Math.max(4, safeArea.bottom - safeArea.top)}
+              stroke="rgba(64, 167, 156, 0.22)"
+              strokeWidth={1.2}
+              dash={[8, 8]}
+              listening={false}
+            />
+            <Rect
+              x={canvasWidth / 2}
+              y={safeArea.top}
+              width={1}
+              height={Math.max(4, safeArea.bottom - safeArea.top)}
+              fill="rgba(64, 167, 156, 0.12)"
+              listening={false}
+            />
+            <Rect
+              x={safeArea.left}
+              y={canvasHeight / 2}
+              width={Math.max(4, safeArea.right - safeArea.left)}
+              height={1}
+              fill="rgba(64, 167, 156, 0.12)"
+              listening={false}
+            />
+          </>
+        ) : null}
+
+        {snapGuides.vertical.map((value) => (
+          <Rect
+            key={`snap-v-${value}`}
+            x={value}
+            y={safeArea.top}
+            width={1.4}
+            height={Math.max(4, safeArea.bottom - safeArea.top)}
+            fill="rgba(56, 170, 158, 0.7)"
+            listening={false}
+          />
+        ))}
+        {snapGuides.horizontal.map((value) => (
+          <Rect
+            key={`snap-h-${value}`}
+            x={safeArea.left}
+            y={value}
+            width={Math.max(4, safeArea.right - safeArea.left)}
+            height={1.4}
+            fill="rgba(56, 170, 158, 0.7)"
+            listening={false}
+          />
+        ))}
+
         {slide.elements
           .filter((element) => {
             if (showSlideBadge) {
@@ -434,66 +722,85 @@ export function SlideStage({
             return element.metaKey !== "slide-chip" && element.metaKey !== "slide-chip-text";
           })
           .map((element) => {
-          const selected = selectedElementId === element.id;
-          const dragBounds = resolveDragBounds(element, canvasWidth, canvasHeight);
+            const selected = selectedElementId === element.id;
+            const dragBounds = resolveDragBounds(element, canvasWidth, canvasHeight, safeArea);
 
-          const handleDragEnd = (x: number, y: number) => {
-            const nextPosition = clampPosition({ x, y }, dragBounds);
-            const safeX = nextPosition.x;
-            const safeY = nextPosition.y;
-            onUpdateElementPosition?.(element.id, safeX, safeY);
-          };
+            const handleDragEnd = (x: number, y: number) => {
+              const snapped = resolveSnap(
+                clampPosition({ x, y }, dragBounds),
+                { width: element.width, height: element.height },
+                dragBounds,
+                safeArea,
+                canvasWidth,
+                canvasHeight
+              );
+              updateSnapGuides(EMPTY_GUIDES);
+              onUpdateElementPosition?.(element.id, snapped.position.x, snapped.position.y);
+            };
 
-          const dragBoundFunc = (position: { x: number; y: number }) =>
-            clampPosition(position, dragBounds);
+            const dragBoundFunc = (position: { x: number; y: number }) => {
+              const clamped = clampPosition(position, dragBounds);
+              const snapped = resolveSnap(
+                clamped,
+                { width: element.width, height: element.height },
+                dragBounds,
+                safeArea,
+                canvasWidth,
+                canvasHeight
+              );
+              if (interactive && selected) {
+                updateSnapGuides(snapped.guides);
+              }
+              return snapped.position;
+            };
 
-          const nodeRef = (node: Konva.Node | null) => {
-            nodeRefs.current[element.id] = node;
-          };
+            const nodeRef = (node: Konva.Node | null) => {
+              nodeRefs.current[element.id] = node;
+            };
 
-          if (element.type === "text") {
+            if (element.type === "text") {
+              return (
+                <SlideTextNode
+                  key={element.id}
+                  element={element}
+                  selected={selected}
+                  interactive={interactive}
+                  nodeRef={nodeRef as (node: Konva.Text | null) => void}
+                  dragBoundFunc={dragBoundFunc}
+                  onSelect={() => onSelectElement?.(element.id)}
+                  onDoubleClick={() => onStartTextEditing?.(element.id)}
+                  onDragEnd={handleDragEnd}
+                  onTransformEnd={(node) => handleTransformEnd(element, node)}
+                />
+              );
+            }
+
+            if (element.type === "shape") {
+              return (
+                <SlideShapeNode
+                  key={element.id}
+                  element={element}
+                  selected={false}
+                  interactive={false}
+                  nodeRef={nodeRef as (node: Konva.Rect | null) => void}
+                  dragBoundFunc={dragBoundFunc}
+                />
+              );
+            }
+
             return (
-              <SlideTextNode
+              <SlideImageNode
                 key={element.id}
                 element={element}
                 selected={selected}
                 interactive={interactive}
-                nodeRef={nodeRef as (node: Konva.Text | null) => void}
+                nodeRef={nodeRef as (node: Konva.Image | null) => void}
                 dragBoundFunc={dragBoundFunc}
                 onSelect={() => onSelectElement?.(element.id)}
-                onDoubleClick={() => onStartTextEditing?.(element.id)}
                 onDragEnd={handleDragEnd}
                 onTransformEnd={(node) => handleTransformEnd(element, node)}
               />
             );
-          }
-
-          if (element.type === "shape") {
-            return (
-              <SlideShapeNode
-                key={element.id}
-                element={element}
-                selected={false}
-                interactive={false}
-                nodeRef={nodeRef as (node: Konva.Rect | null) => void}
-                dragBoundFunc={dragBoundFunc}
-              />
-            );
-          }
-
-          return (
-            <SlideImageNode
-              key={element.id}
-              element={element}
-              selected={selected}
-              interactive={interactive}
-              nodeRef={nodeRef as (node: Konva.Image | null) => void}
-              dragBoundFunc={dragBoundFunc}
-              onSelect={() => onSelectElement?.(element.id)}
-              onDragEnd={handleDragEnd}
-              onTransformEnd={(node) => handleTransformEnd(element, node)}
-            />
-          );
           })}
 
         {interactive ? (
@@ -501,10 +808,16 @@ export function SlideStage({
             ref={transformerRef}
             rotateEnabled
             flipEnabled={false}
-            keepRatio={selectedElement?.type === "image"}
+            keepRatio={
+              selectedElement?.type === "image" &&
+              selectedElement.metaKey !== "internet-image-top"
+            }
             enabledAnchors={
               selectedElement?.type === "text"
                 ? ["middle-left", "middle-right"]
+                : selectedElement?.type === "image" &&
+                    selectedElement.metaKey === "internet-image-top"
+                  ? ["top-center", "bottom-center"]
                 : ["top-left", "top-right", "bottom-left", "bottom-right"]
             }
             borderStroke="#72d6cb"

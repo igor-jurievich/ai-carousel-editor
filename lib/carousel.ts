@@ -294,6 +294,28 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     preview: "Минимум визуального шума, максимум читабельности."
   },
   {
+    id: "blank",
+    category: "light",
+    name: "Blank",
+    description: "Чистый белый холст без декоративных слоёв.",
+    accent: "#2caea1",
+    accentAlt: "#72d6cb",
+    background: "#ffffff",
+    surface: "#ffffff",
+    titleColor: "#161f21",
+    bodyColor: "#374749",
+    titleFont: "Manrope",
+    bodyFont: "Inter",
+    titleOffsetY: 232,
+    bodyOffsetY: 504,
+    titleWidth: 880,
+    bodyWidth: 820,
+    bodyHeight: 248,
+    chipStyle: "outline",
+    decoration: "none",
+    preview: "Нейтральный стартовый шаблон под ручную сборку композиции."
+  },
+  {
     id: "editorial",
     category: "light",
     name: "Editorial",
@@ -484,6 +506,19 @@ type ManagedContent = {
   subtitle: string;
 };
 
+type ManagedTextStyle = Pick<
+  TextElement,
+  "fontSize" | "fontFamily" | "fontStyle" | "fill" | "align" | "lineHeight" | "letterSpacing" | "textDecoration"
+>;
+
+type BackgroundImageStyle = {
+  fitMode?: ImageElement["fitMode"];
+  zoom?: number;
+  offsetX?: number;
+  offsetY?: number;
+  darken?: number;
+};
+
 type OutlineLike = Partial<CarouselOutlineSlide> & {
   body?: string;
   description?: string;
@@ -577,11 +612,28 @@ export function createImageElement(src: string, overrides: Partial<ImageElement>
     height: overrides.height ?? 430,
     opacity: overrides.opacity ?? 1,
     rotation: overrides.rotation ?? 0,
-    cornerRadius: overrides.cornerRadius ?? 32
+    cornerRadius: overrides.cornerRadius ?? 32,
+    fitMode: overrides.fitMode ?? "cover",
+    zoom: overrides.zoom ?? 1,
+    offsetX: overrides.offsetX ?? 0,
+    offsetY: overrides.offsetY ?? 0,
+    naturalWidth: overrides.naturalWidth,
+    naturalHeight: overrides.naturalHeight,
+    darken: overrides.darken ?? 0
   };
 }
 
-function createBackgroundImageElement(src: string, format: SlideFormat) {
+function createBackgroundImageElement(
+  src: string,
+  format: SlideFormat,
+  options?: {
+    fitMode?: ImageElement["fitMode"];
+    zoom?: number;
+    offsetX?: number;
+    offsetY?: number;
+    darken?: number;
+  }
+) {
   const { width, height } = SLIDE_FORMAT_DIMENSIONS[format];
   return createImageElement(src, {
     metaKey: "background-image",
@@ -589,7 +641,12 @@ function createBackgroundImageElement(src: string, format: SlideFormat) {
     y: 0,
     width,
     height,
-    cornerRadius: 0
+    cornerRadius: 0,
+    fitMode: options?.fitMode ?? "cover",
+    zoom: options?.zoom ?? 1,
+    offsetX: options?.offsetX ?? 0,
+    offsetY: options?.offsetY ?? 0,
+    darken: options?.darken ?? 0
   });
 }
 
@@ -676,8 +733,59 @@ function getImageTopLayout(format: SlideFormat): ImageTopLayout {
   };
 }
 
+function getImageBottomLayout(format: SlideFormat): ImageTopLayout {
+  const { height } = SLIDE_FORMAT_DIMENSIONS[format];
+  const cardX = 52;
+  const cardY = 52;
+  const cardWidth = 976;
+  const cardHeight = Math.max(360, height - cardY * 2);
+  const imageWidth = cardWidth - 40;
+  const imageHeight = format === "9:16" ? 612 : format === "4:5" ? 468 : 368;
+  const imageBottomReserve = format === "9:16" ? 194 : format === "4:5" ? 176 : 168;
+  const imageBottom = cardY + cardHeight - imageBottomReserve;
+  const imageX = cardX + 20;
+  const imageY = Math.max(cardY + 220, imageBottom - imageHeight);
+  const textPanelY = cardY + 18;
+  const textPanelHeight = Math.max(180, imageY - textPanelY - 16);
+  const textX = cardX + 52;
+  const textWidth = cardWidth - 104;
+  const titleY = textPanelY + 46;
+  const textBottom = imageY - (format === "9:16" ? 164 : format === "4:5" ? 150 : 138);
+
+  return {
+    cardX,
+    cardY,
+    cardWidth,
+    cardHeight,
+    imageX,
+    imageY,
+    imageWidth,
+    imageHeight,
+    textPanelY,
+    textPanelHeight,
+    textX,
+    textWidth,
+    titleY,
+    textBottom
+  };
+}
+
 function createDecoration(template: CarouselTemplate, format: SlideFormat): CanvasElement[] {
   const { height } = SLIDE_FORMAT_DIMENSIONS[format];
+
+  if (template.decoration === "none") {
+    return [
+      createShapeElement({
+        metaKey: "decor-bg",
+        x: 0,
+        y: 0,
+        width: SLIDE_SIZE,
+        height,
+        fill: template.background,
+        cornerRadius: 0
+      })
+    ];
+  }
 
   if (template.decoration === "grid") {
     return [
@@ -997,10 +1105,11 @@ function createChipText(_template: CarouselTemplate, index: number, format: Slid
 function createImageTopFrame(
   template: CarouselTemplate,
   format: SlideFormat,
-  imageSrc: string
+  imageSrc: string,
+  mode: "top" | "bottom" = "top"
 ): CanvasElement[] {
   const { height } = SLIDE_FORMAT_DIMENSIONS[format];
-  const layout = getImageTopLayout(format);
+  const layout = mode === "bottom" ? getImageBottomLayout(format) : getImageTopLayout(format);
 
   return [
     createShapeElement({
@@ -1327,10 +1436,18 @@ function createManagedBody(
 function createManagedTitleForImageTop(
   template: CarouselTemplate,
   text: string,
-  format: SlideFormat
+  format: SlideFormat,
+  mode: "top" | "bottom" = "top"
 ): TextElement {
-  const layout = getImageTopLayout(format);
-  const maxHeight = format === "9:16" ? 196 : 178;
+  const layout = mode === "bottom" ? getImageBottomLayout(format) : getImageTopLayout(format);
+  const maxHeight =
+    mode === "bottom"
+      ? format === "9:16"
+        ? 240
+        : 210
+      : format === "9:16"
+        ? 196
+        : 178;
   const fitted = fitTextBlock({
     text,
     width: layout.textWidth,
@@ -1360,12 +1477,13 @@ function createManagedBodyForImageTop(
   template: CarouselTemplate,
   text: string,
   format: SlideFormat,
-  startY: number
+  startY: number,
+  mode: "top" | "bottom" = "top"
 ): TextElement {
-  const layout = getImageTopLayout(format);
-  const bodyY = Math.max(layout.titleY + 76, startY);
+  const layout = mode === "bottom" ? getImageBottomLayout(format) : getImageTopLayout(format);
+  const bodyY = Math.max(layout.titleY + (mode === "bottom" ? 62 : 76), startY);
   const baseSize = format === "9:16" ? 23 : 27;
-  const maxHeight = Math.max(140, layout.textBottom - bodyY);
+  const maxHeight = Math.max(mode === "bottom" ? 122 : 140, layout.textBottom - bodyY);
   const fitted = fitTextBlock({
     text,
     width: layout.textWidth,
@@ -1625,6 +1743,90 @@ function extractManagedContent(slide: Slide): ManagedContent {
   return { title, body, handle, subtitle };
 }
 
+function extractManagedTextStyle(
+  slide: Slide,
+  target: "title" | "body"
+): ManagedTextStyle | null {
+  const byMeta = slide.elements.find(
+    (element): element is TextElement =>
+      element.type === "text" &&
+      element.metaKey === (target === "title" ? "managed-title" : "managed-body")
+  );
+
+  const byRole = slide.elements.find(
+    (element): element is TextElement =>
+      element.type === "text" && element.role === (target === "title" ? "title" : "body")
+  );
+
+  const source = byMeta ?? byRole;
+  if (!source) {
+    return null;
+  }
+
+  return {
+    fontSize: source.fontSize,
+    fontFamily: source.fontFamily,
+    fontStyle: source.fontStyle,
+    fill: source.fill,
+    align: source.align,
+    lineHeight: source.lineHeight,
+    letterSpacing: source.letterSpacing,
+    textDecoration: source.textDecoration
+  };
+}
+
+function applyManagedTextStyles(
+  managedElements: CanvasElement[],
+  styles: {
+    title: ManagedTextStyle | null;
+    body: ManagedTextStyle | null;
+  }
+) {
+  return managedElements.map((element) => {
+    if (element.type !== "text") {
+      return element;
+    }
+
+    const style = element.metaKey === "managed-title"
+      ? styles.title
+      : element.metaKey === "managed-body"
+        ? styles.body
+        : null;
+
+    if (!style) {
+      return element;
+    }
+
+    return {
+      ...element,
+      fontSize: style.fontSize,
+      fontFamily: style.fontFamily,
+      fontStyle: style.fontStyle,
+      fill: style.fill,
+      align: style.align,
+      lineHeight: style.lineHeight,
+      letterSpacing: style.letterSpacing,
+      textDecoration: style.textDecoration
+    };
+  });
+}
+
+function extractBackgroundImageStyle(slide: Slide): BackgroundImageStyle {
+  const backgroundImage = slide.elements.find(
+    (element): element is ImageElement =>
+      element.type === "image" &&
+      (element.metaKey === "background-image" || element.metaKey === "internet-image-top")
+  );
+
+  return {
+    fitMode: slide.backgroundImageFitMode ?? backgroundImage?.fitMode ?? "cover",
+    zoom: slide.backgroundImageZoom ?? backgroundImage?.zoom ?? 1,
+    offsetX: slide.backgroundImageOffsetX ?? backgroundImage?.offsetX ?? 0,
+    offsetY: slide.backgroundImageOffsetY ?? backgroundImage?.offsetY ?? 0,
+    darken: slide.backgroundImageDarken ?? backgroundImage?.darken ?? 0
+  };
+}
+
 function buildManagedElements(
   slide: Slide,
   templateId: CarouselTemplateId,
@@ -1636,24 +1838,44 @@ function buildManagedElements(
 ) {
   const template = getTemplate(templateId);
   const managed: CanvasElement[] = [];
-  const imageTopMode = Boolean(slide.backgroundImage && slide.imageLayoutMode === "top");
+  const imageBlockMode =
+    slide.backgroundImage && (slide.imageLayoutMode === "top" || slide.imageLayoutMode === "bottom")
+      ? slide.imageLayoutMode
+      : null;
+  const backgroundImageStyle = extractBackgroundImageStyle(slide);
 
-  if (imageTopMode && slide.backgroundImage) {
-    managed.push(...createImageTopFrame(template, format, slide.backgroundImage));
+  if (imageBlockMode && slide.backgroundImage) {
+    managed.push(
+      ...createImageTopFrame(template, format, slide.backgroundImage, imageBlockMode).map((element) =>
+        element.type === "image" && element.metaKey === "internet-image-top"
+          ? {
+              ...element,
+              fitMode: backgroundImageStyle.fitMode ?? "cover",
+              zoom: backgroundImageStyle.zoom ?? 1,
+              offsetX: backgroundImageStyle.offsetX ?? 0,
+              offsetY: backgroundImageStyle.offsetY ?? 0,
+              darken: backgroundImageStyle.darken ?? 0
+            }
+          : element
+      )
+    );
   } else {
     managed.push(...createDecoration(template, format));
 
     if (slide.backgroundImage) {
-      managed.push(createBackgroundImageElement(slide.backgroundImage, format));
+      managed.push(
+        createBackgroundImageElement(slide.backgroundImage, format, backgroundImageStyle)
+      );
     }
   }
 
-  const managedTitle = imageTopMode
-    ? createManagedTitleForImageTop(template, titleText, format)
+  const imageMode = imageBlockMode ?? "top";
+  const managedTitle = imageBlockMode
+    ? createManagedTitleForImageTop(template, titleText, format, imageMode)
     : createManagedTitle(template, titleText, format);
-  const bodyStart = managedTitle.y + managedTitle.height + (imageTopMode ? 24 : 28);
-  const managedBody = imageTopMode
-    ? createManagedBodyForImageTop(template, bodyText, format, bodyStart)
+  const bodyStart = managedTitle.y + managedTitle.height + (imageBlockMode ? 24 : 28);
+  const managedBody = imageBlockMode
+    ? createManagedBodyForImageTop(template, bodyText, format, bodyStart, imageMode)
     : createManagedBody(template, bodyText, format, bodyStart);
 
   managed.push(
@@ -1664,7 +1886,26 @@ function buildManagedElements(
   );
   managed.push(...createFooterElements(slide, template, index, totalSlides, format));
 
-  return managed;
+  if (!slide.frameColor) {
+    return managed;
+  }
+
+  return managed.map((element) => {
+    if (
+      element.type === "shape" &&
+      element.metaKey &&
+      /decor-(surface|card|sheet|grid-surface|dots-surface|lines-surface|bolts-surface|paper-top|band-sheet|card-surface|overlay|frame|text-panel)/.test(
+        element.metaKey
+      )
+    ) {
+      return {
+        ...element,
+        fill: slide.frameColor as string
+      };
+    }
+
+    return element;
+  });
 }
 
 function scaleElement(
@@ -1714,22 +1955,38 @@ function rebuildSlide(
   totalSlides: number,
   templateId: CarouselTemplateId,
   format: SlideFormat,
-  customElements: CanvasElement[]
+  customElements: CanvasElement[],
+  options?: {
+    preserveTextStyles?: boolean;
+  }
 ): Slide {
   const content = extractManagedContent(slide);
+  const managedStyles = {
+    title: options?.preserveTextStyles === false ? null : extractManagedTextStyle(slide, "title"),
+    body: options?.preserveTextStyles === false ? null : extractManagedTextStyle(slide, "body")
+  };
+  const backgroundImageStyle = extractBackgroundImageStyle(slide);
   const existingBackgroundImage = slide.elements.find(
     (element): element is ImageElement =>
       element.type === "image" &&
       (element.metaKey === "background-image" || element.metaKey === "internet-image-top")
   )?.src;
-  const resolvedBackgroundImage = slide.backgroundImage ?? existingBackgroundImage ?? null;
+  const resolvedBackgroundImage =
+    slide.backgroundImage !== undefined ? slide.backgroundImage : existingBackgroundImage ?? null;
+  const imageModeFromElements = (() => {
+    const imageElement = slide.elements.find(
+      (element): element is ImageElement =>
+        element.type === "image" && element.metaKey === "internet-image-top"
+    );
+    if (!imageElement) {
+      return undefined;
+    }
+    const { height } = SLIDE_FORMAT_DIMENSIONS[format];
+    return imageElement.y > height * 0.5 ? "bottom" : "top";
+  })();
   const resolvedImageLayoutMode = resolvedBackgroundImage
     ? slide.imageLayoutMode ??
-      (slide.elements.some(
-        (element) => element.type === "image" && element.metaKey === "internet-image-top"
-      )
-        ? "top"
-        : "background")
+      (imageModeFromElements ?? "background")
     : undefined;
 
   return {
@@ -1742,22 +1999,30 @@ function rebuildSlide(
     profileSubtitle: content.subtitle,
     backgroundImage: resolvedBackgroundImage,
     imageLayoutMode: resolvedImageLayoutMode,
+    backgroundImageFitMode: backgroundImageStyle.fitMode ?? "cover",
+    backgroundImageZoom: backgroundImageStyle.zoom ?? 1,
+    backgroundImageOffsetX: backgroundImageStyle.offsetX ?? 0,
+    backgroundImageOffsetY: backgroundImageStyle.offsetY ?? 0,
+    backgroundImageDarken: backgroundImageStyle.darken ?? 0,
     elements: [
-      ...buildManagedElements(
-        {
-          ...slide,
-          profileHandle: content.handle,
-          profileSubtitle: content.subtitle,
-          footerVariant: slide.footerVariant ?? DEFAULT_FOOTER_VARIANT,
-          backgroundImage: resolvedBackgroundImage,
-          imageLayoutMode: resolvedImageLayoutMode
-        },
-        templateId,
-        index,
-        totalSlides,
-        format,
-        content.title,
-        content.body
+      ...applyManagedTextStyles(
+        buildManagedElements(
+          {
+            ...slide,
+            profileHandle: content.handle,
+            profileSubtitle: content.subtitle,
+            footerVariant: slide.footerVariant ?? DEFAULT_FOOTER_VARIANT,
+            backgroundImage: resolvedBackgroundImage,
+            imageLayoutMode: resolvedImageLayoutMode
+          },
+          templateId,
+          index,
+          totalSlides,
+          format,
+          content.title,
+          content.body
+        ),
+        managedStyles
       ),
       ...customElements
     ]
@@ -1957,7 +2222,10 @@ export function relayoutSlidesForFormat(
       slides.length,
       slide.templateId ?? "technology",
       toFormat,
-      customElements
+      customElements,
+      {
+        preserveTextStyles: false
+      }
     );
   });
 }
@@ -1993,12 +2261,78 @@ export function setSlideBackgroundImage(
   format: SlideFormat,
   layoutMode: Slide["imageLayoutMode"] = "background"
 ) {
+  const backgroundStyle = extractBackgroundImageStyle(slide);
   const customElements = slide.elements.filter((element) => !isManagedElement(element));
   return rebuildSlide(
     {
       ...slide,
       backgroundImage: src,
-      imageLayoutMode: src ? layoutMode : undefined
+      imageLayoutMode: src ? layoutMode : undefined,
+      backgroundImageFitMode: src ? backgroundStyle.fitMode ?? "cover" : undefined,
+      backgroundImageZoom: src ? backgroundStyle.zoom ?? 1 : undefined,
+      backgroundImageOffsetX: src ? backgroundStyle.offsetX ?? 0 : undefined,
+      backgroundImageOffsetY: src ? backgroundStyle.offsetY ?? 0 : undefined,
+      backgroundImageDarken: src ? backgroundStyle.darken ?? 0 : 0
+    },
+    index,
+    totalSlides,
+    slide.templateId ?? "technology",
+    format,
+    customElements
+  );
+}
+
+export function setSlideBackgroundImageStyle(
+  slide: Slide,
+  updates: Partial<Pick<ImageElement, "fitMode" | "zoom" | "offsetX" | "offsetY" | "darken">>,
+  index: number,
+  totalSlides: number,
+  format: SlideFormat
+) {
+  if (!slide.backgroundImage) {
+    return slide;
+  }
+
+  const backgroundStyle = extractBackgroundImageStyle(slide);
+  const nextStyle = {
+    fitMode: updates.fitMode ?? backgroundStyle.fitMode ?? "cover",
+    zoom: updates.zoom ?? backgroundStyle.zoom ?? 1,
+    offsetX: updates.offsetX ?? backgroundStyle.offsetX ?? 0,
+    offsetY: updates.offsetY ?? backgroundStyle.offsetY ?? 0,
+    darken: updates.darken ?? backgroundStyle.darken ?? 0
+  };
+
+  const customElements = slide.elements.filter((element) => !isManagedElement(element));
+
+  return rebuildSlide(
+    {
+      ...slide,
+      backgroundImageFitMode: nextStyle.fitMode,
+      backgroundImageZoom: nextStyle.zoom,
+      backgroundImageOffsetX: nextStyle.offsetX,
+      backgroundImageOffsetY: nextStyle.offsetY,
+      backgroundImageDarken: nextStyle.darken
+    },
+    index,
+    totalSlides,
+    slide.templateId ?? "technology",
+    format,
+    customElements
+  );
+}
+
+export function setSlideFrameColor(
+  slide: Slide,
+  color: string | null,
+  index: number,
+  totalSlides: number,
+  format: SlideFormat
+) {
+  const customElements = slide.elements.filter((element) => !isManagedElement(element));
+  return rebuildSlide(
+    {
+      ...slide,
+      frameColor: color ?? undefined
     },
     index,
     totalSlides,

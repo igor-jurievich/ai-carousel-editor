@@ -86,8 +86,8 @@ export function CanvasEditor({
     const selectedElementStyle =
       selectedElement
         ? getFloatingActionStyle(selectedElement, scale, displayWidth, displayHeight, {
-            horizontalInset: 58,
-            verticalInset: 10
+            horizontalInset: 72,
+            verticalInset: 14
           })
         : null;
     const canGoPrev = activeSlideIndex > 0;
