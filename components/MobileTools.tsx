@@ -302,7 +302,7 @@ export function MobileTools({
                 onClick={onResetElementRotation}
                 disabled={disabled || Math.abs(selectedElement.rotation) < 0.01}
               >
-                Reset rotation (0°)
+                Сбросить поворот (0°)
               </button>
             ) : null}
             {activeTab === "templates" ? (
@@ -549,7 +549,7 @@ export function MobileTools({
                           onClick={() => onUpdateBackgroundImageStyle({ fitMode: mode })}
                           disabled={disabled}
                         >
-                          {mode}
+                          {getFitModeLabel(mode)}
                         </button>
                       ))}
                     </div>
@@ -1312,7 +1312,7 @@ export function MobileTools({
                           }
                           disabled={disabled}
                         >
-                          {mode}
+                          {getFitModeLabel(mode)}
                         </button>
                       ))}
                     </div>
@@ -1505,6 +1505,18 @@ function applyImageFitMode(
     width,
     height
   };
+}
+
+function getFitModeLabel(mode: "cover" | "contain" | "original") {
+  if (mode === "cover") {
+    return "Заполнить";
+  }
+
+  if (mode === "contain") {
+    return "Вписать";
+  }
+
+  return "Оригинал";
 }
 
 function getTabTitle(tab: MobileToolTab) {

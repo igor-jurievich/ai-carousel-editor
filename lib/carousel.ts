@@ -883,19 +883,6 @@ function composeManagedTextLayout(options: {
     body.y = title.y + title.height + 26;
     body.fontSize = clampValue(Math.round(body.fontSize * 0.78), 18, 44);
     body.lineHeight = 1.05;
-
-    extras.push(
-      createShapeElement({
-        metaKey: "layout-statement-tag",
-        x: title.x,
-        y: title.y - 34,
-        width: 132,
-        height: 10,
-        fill: template.accent,
-        cornerRadius: 999,
-        opacity: 0.66
-      })
-    );
   } else if (composition === "list") {
     title.width = clampValue(Math.round(title.width * 0.88), 620, 900);
     title.x = Math.round((SLIDE_SIZE - title.width) / 2);
@@ -905,25 +892,8 @@ function composeManagedTextLayout(options: {
     body.y = title.y + title.height + 30;
     body.fontSize = clampValue(Math.round(body.fontSize * 0.92), 18, 42);
     body.lineHeight = Math.max(1.2, body.lineHeight ?? 1.14);
-
-    extras.push(
-      createShapeElement({
-        metaKey: "layout-list-card",
-        x: body.x - 28,
-        y: title.y - 24,
-        width: body.width + 56,
-        height: clampValue(body.height + title.height + 72, 320, Math.round(height * 0.58)),
-        fill: "rgba(255,255,255,0.22)",
-        cornerRadius: 26,
-        opacity: 0.62
-      })
-    );
   } else if (composition === "split") {
-    const panelWidth = format === "9:16" ? 306 : 282;
-    const panelX = SLIDE_SIZE - panelWidth - 72;
-    const panelY = format === "9:16" ? 178 : 152;
-    const panelHeight = Math.max(360, height - panelY * 2);
-    const textWidth = panelX - 142;
+    const textWidth = format === "9:16" ? 656 : 708;
 
     title.x = 104;
     title.y = clampValue(title.y - 26, 176, Math.round(height * 0.42));
@@ -936,24 +906,14 @@ function composeManagedTextLayout(options: {
 
     extras.push(
       createShapeElement({
-        metaKey: "layout-split-panel",
-        x: panelX,
-        y: panelY,
-        width: panelWidth,
-        height: panelHeight,
-        fill: template.accentAlt ?? template.accent,
-        cornerRadius: 30,
-        opacity: 0.2
-      }),
-      createShapeElement({
-        metaKey: "layout-split-panel-line",
-        x: panelX + 24,
-        y: panelY + 28,
-        width: panelWidth - 48,
-        height: 4,
+        metaKey: "layout-split-accent",
+        x: 88,
+        y: title.y - 18,
+        width: 6,
+        height: body.y + body.height - (title.y - 18),
         fill: template.accent,
-        cornerRadius: 999,
-        opacity: 0.62
+        cornerRadius: 12,
+        opacity: 0.42
       })
     );
   } else if (composition === "dark-slide") {
@@ -969,19 +929,6 @@ function composeManagedTextLayout(options: {
     body.y = title.y + title.height + 28;
     body.fill = "#d6e2f0";
     body.fontSize = clampValue(Math.round(body.fontSize * 0.88), 18, 40);
-
-    extras.push(
-      createShapeElement({
-        metaKey: "layout-dark-overlay",
-        x: 54,
-        y: 54,
-        width: 972,
-        height: Math.max(320, height - 108),
-        fill: "rgba(12,14,18,0.32)",
-        cornerRadius: 34,
-        opacity: 0.96
-      })
-    );
   } else if (composition === "cta") {
     title.align = "center";
     title.width = clampValue(Math.round(title.width * 0.82), 540, 820);
@@ -993,38 +940,12 @@ function composeManagedTextLayout(options: {
     body.x = Math.round((SLIDE_SIZE - body.width) / 2);
     body.y = title.y + title.height + 24;
     body.fontSize = clampValue(Math.round(body.fontSize * 0.86), 18, 38);
-
-    extras.push(
-      createShapeElement({
-        metaKey: "layout-cta-chip",
-        x: Math.round((SLIDE_SIZE - 438) / 2),
-        y: clampValue(height - 208, 780, height - 148),
-        width: 438,
-        height: 68,
-        fill: template.accent,
-        cornerRadius: 999,
-        opacity: 0.2
-      })
-    );
   } else {
     title.width = clampValue(Math.round(title.width * 0.9), 600, 870);
     title.x = Math.round((SLIDE_SIZE - title.width) / 2);
     body.width = clampValue(Math.round(title.width * 0.9), 560, 790);
     body.x = Math.round((SLIDE_SIZE - body.width) / 2);
     body.y = title.y + title.height + 30;
-
-    extras.push(
-      createShapeElement({
-        metaKey: "layout-card-panel",
-        x: body.x - 26,
-        y: title.y - 26,
-        width: body.width + 52,
-        height: clampValue(title.height + body.height + 78, 280, Math.round(height * 0.5)),
-        fill: "rgba(255,255,255,0.16)",
-        cornerRadius: 28,
-        opacity: 0.62
-      })
-    );
   }
 
   const cappedBodyHeight = Math.max(42, height - body.y - (format === "9:16" ? 180 : 140));
@@ -1035,299 +956,152 @@ function composeManagedTextLayout(options: {
 
 function createDecoration(template: CarouselTemplate, format: SlideFormat): CanvasElement[] {
   const { height } = SLIDE_FORMAT_DIMENSIONS[format];
+  const base: CanvasElement[] = [
+    createShapeElement({
+      metaKey: "decor-bg",
+      x: 0,
+      y: 0,
+      width: SLIDE_SIZE,
+      height,
+      fill: template.background,
+      cornerRadius: 0
+    }),
+    createShapeElement({
+      metaKey: "decor-surface",
+      x: 52,
+      y: 52,
+      width: 976,
+      height: Math.max(340, height - 104),
+      fill: template.surface,
+      cornerRadius: 34,
+      opacity: template.decoration === "none" ? 1 : 0.98
+    })
+  ];
 
   if (template.decoration === "none") {
-    return [
-      createShapeElement({
-        metaKey: "decor-bg",
-        x: 0,
-        y: 0,
-        width: SLIDE_SIZE,
-        height,
-        fill: template.background,
-        cornerRadius: 0
-      })
-    ];
+    return base;
   }
 
   if (template.decoration === "grid") {
     return [
-      createShapeElement({
-        metaKey: "decor-bg",
-        x: 0,
-        y: 0,
-        width: SLIDE_SIZE,
-        height,
-        fill: template.background,
-        cornerRadius: 0
-      }),
-      createShapeElement({
-        metaKey: "decor-grid-surface",
-        x: 52,
-        y: 52,
-        width: 976,
-        height: Math.max(300, height - 104),
-        fill: template.surface,
-        cornerRadius: 34,
-        opacity: 0.94
-      }),
-      ...Array.from({ length: 11 }, (_, index) =>
+      ...base,
+      ...Array.from({ length: 4 }, (_, index) =>
         createShapeElement({
           metaKey: `decor-grid-v-${index}`,
-          x: 78 + index * 92,
-          y: 50,
+          x: 232 + index * 184,
+          y: 72,
           width: 1,
-          height,
+          height: height - 144,
           fill: "rgba(0,0,0,0.045)",
           cornerRadius: 0
         })
-      ),
-      ...Array.from({ length: Math.ceil(height / 92) }, (_, index) =>
-        createShapeElement({
-          metaKey: `decor-grid-h-${index}`,
-          x: 52,
-          y: 52 + index * 92,
-          width: SLIDE_SIZE,
-          height: 1,
-          fill: "rgba(0,0,0,0.036)",
-          cornerRadius: 0
-        })
       )
-    ];
-  }
-
-  if (template.decoration === "paper") {
-    return [
-      createShapeElement({
-        metaKey: "decor-paper",
-        x: 0,
-        y: 0,
-        width: SLIDE_SIZE,
-        height,
-        fill: template.background,
-        cornerRadius: 0
-      }),
-      createShapeElement({
-        metaKey: "decor-card",
-        x: 54,
-        y: 52,
-        width: 972,
-        height: Math.max(380, height - 104),
-        fill: template.surface,
-        cornerRadius: 34,
-        opacity: 0.96
-      }),
-      createShapeElement({
-        metaKey: "decor-paper-top",
-        x: 78,
-        y: 80,
-        width: 420,
-        height: 74,
-        fill: "rgba(255,255,255,0.78)",
-        cornerRadius: 18,
-        opacity: 0.72
-      })
     ];
   }
 
   if (template.decoration === "dots") {
     return [
-      createShapeElement({
-        metaKey: "decor-dots-bg",
-        x: 0,
-        y: 0,
-        width: SLIDE_SIZE,
-        height,
-        fill: template.background,
-        cornerRadius: 0
-      }),
-      createShapeElement({
-        metaKey: "decor-dots-surface",
-        x: 56,
-        y: 56,
-        width: 968,
-        height: Math.max(360, height - 112),
-        fill: template.surface,
-        cornerRadius: 34,
-        opacity: 0.96
-      }),
-      ...Array.from({ length: 88 }, (_, index) =>
+      ...base,
+      ...Array.from({ length: 14 }, (_, index) =>
         createShapeElement({
           metaKey: `decor-dot-${index}`,
-          x: 92 + (index % 8) * 114,
-          y: 96 + Math.floor(index / 8) * 106,
-          width: 7,
-          height: 7,
+          x: 760 + (index % 7) * 28,
+          y: 120 + Math.floor(index / 7) * 28,
+          width: 5,
+          height: 5,
           shape: "circle",
-          fill: "rgba(0,0,0,0.075)",
-          cornerRadius: 999
+          fill: "rgba(0,0,0,0.085)",
+          cornerRadius: 999,
+          opacity: 0.8
         })
       )
     ];
   }
 
+  if (template.decoration === "lines") {
+    return [
+      ...base,
+      createShapeElement({
+        metaKey: "decor-line-top",
+        x: 86,
+        y: 118,
+        width: 280,
+        height: 2,
+        fill: "rgba(0,0,0,0.1)",
+        cornerRadius: 999
+      }),
+      createShapeElement({
+        metaKey: "decor-line-bottom",
+        x: 86,
+        y: height - 134,
+        width: 220,
+        height: 2,
+        fill: "rgba(0,0,0,0.08)",
+        cornerRadius: 999
+      })
+    ];
+  }
+
   if (template.decoration === "glow") {
     return [
+      ...base,
       createShapeElement({
-        metaKey: "decor-bg",
-        x: 0,
-        y: 0,
-        width: SLIDE_SIZE,
-        height,
-        fill: template.background,
-        cornerRadius: 0
-      }),
-      createShapeElement({
-        metaKey: "decor-surface",
-        x: 52,
-        y: 52,
-        width: 976,
-        height: Math.max(360, height - 104),
-        fill: template.surface,
-        cornerRadius: 36
-      }),
-      createShapeElement({
-        metaKey: "decor-glow-left",
-        x: -180,
-        y: Math.round(height * 0.28),
-        width: 460,
-        height: 460,
+        metaKey: "decor-glow",
+        x: 762,
+        y: 96,
+        width: 208,
+        height: 208,
         shape: "circle",
-        fill: "rgba(255,255,255,0.13)",
-        cornerRadius: 999,
-        opacity: 0.78
-      }),
-      createShapeElement({
-        metaKey: "decor-glow-right",
-        x: 760,
-        y: Math.round(height * 0.08),
-        width: 420,
-        height: 420,
-        shape: "circle",
-        fill: "rgba(255,255,255,0.1)",
+        fill: "rgba(255,255,255,0.12)",
         cornerRadius: 999,
         opacity: 0.62
       })
     ];
   }
 
-  if (template.decoration === "lines") {
+  if (template.decoration === "paper") {
     return [
+      ...base,
       createShapeElement({
-        metaKey: "decor-lines-bg",
-        x: 0,
-        y: 0,
-        width: SLIDE_SIZE,
-        height,
-        fill: template.background,
-        cornerRadius: 0
-      }),
-      createShapeElement({
-        metaKey: "decor-lines-surface",
-        x: 54,
-        y: 54,
-        width: 972,
-        height: Math.max(340, height - 108),
-        fill: template.surface,
-        cornerRadius: 36,
-        opacity: 0.96
-      }),
-      ...Array.from({ length: 8 }, (_, index) =>
-        createShapeElement({
-          metaKey: `decor-line-${index}`,
-          x: -120 + index * 165,
-          y: 88 + index * 24,
-          width: 320,
-          height: 2,
-          fill: "rgba(0,0,0,0.11)",
-          cornerRadius: 999,
-          rotation: -20
-        })
-      )
+        metaKey: "decor-paper-strip",
+        x: 86,
+        y: 110,
+        width: 300,
+        height: 26,
+        fill: "rgba(255,255,255,0.42)",
+        cornerRadius: 14,
+        opacity: 0.74
+      })
     ];
   }
 
   if (template.decoration === "bolts") {
     return [
+      ...base,
       createShapeElement({
-        metaKey: "decor-bolts-bg",
-        x: 0,
-        y: 0,
-        width: SLIDE_SIZE,
-        height,
-        fill: template.background,
-        cornerRadius: 0
+        metaKey: "decor-bolt-a",
+        x: 818,
+        y: 126,
+        width: 120,
+        height: 8,
+        fill: "rgba(255,255,255,0.2)",
+        cornerRadius: 999,
+        rotation: -36
       }),
       createShapeElement({
-        metaKey: "decor-bolts-surface",
-        x: 54,
-        y: 54,
-        width: 972,
-        height: Math.max(340, height - 108),
-        fill: template.surface,
-        cornerRadius: 34,
-        opacity: 0.95
-      }),
-      ...Array.from({ length: 4 }, (_, index) => {
-        const x = 120 + index * 220;
-        const y = 110 + (index % 2 === 0 ? 0 : 180);
-        return createShapeElement({
-          metaKey: `decor-bolt-a-${index}`,
-          x,
-          y,
-          width: 120,
-          height: 10,
-          fill: "rgba(255,255,255,0.22)",
-          cornerRadius: 999,
-          rotation: 62
-        });
-      }),
-      ...Array.from({ length: 4 }, (_, index) => {
-        const x = 168 + index * 220;
-        const y = 160 + (index % 2 === 0 ? 0 : 180);
-        return createShapeElement({
-          metaKey: `decor-bolt-b-${index}`,
-          x,
-          y,
-          width: 100,
-          height: 10,
-          fill: "rgba(255,255,255,0.18)",
-          cornerRadius: 999,
-          rotation: -62
-        });
+        metaKey: "decor-bolt-b",
+        x: 792,
+        y: 152,
+        width: 104,
+        height: 8,
+        fill: "rgba(255,255,255,0.16)",
+        cornerRadius: 999,
+        rotation: 36
       })
     ];
   }
 
-  return [
-    createShapeElement({
-      metaKey: "decor-band-top",
-      x: 0,
-      y: 0,
-      width: SLIDE_SIZE,
-      height: Math.min(height * 0.4, 490),
-      fill: template.surface,
-      cornerRadius: 0
-    }),
-    createShapeElement({
-      metaKey: "decor-band-bottom",
-      x: 0,
-      y: Math.min(height * 0.4, 490),
-      width: SLIDE_SIZE,
-      height: height - Math.min(height * 0.4, 490),
-      fill: template.background,
-      cornerRadius: 0
-    }),
-    createShapeElement({
-      metaKey: "decor-band-sheet",
-      x: 56,
-      y: 62,
-      width: 968,
-      height: Math.max(360, height - 124),
-      fill: "rgba(255,255,255,0.92)",
-      cornerRadius: 34
-    })
-  ];
+  return base;
 }
 
 function createChip(_template: CarouselTemplate, index: number, format: SlideFormat) {
@@ -2475,40 +2249,40 @@ export function createStarterSlides(
       titleFont: "Manrope",
       bodyFont: "Inter",
       layoutType: "hero",
-      title: "AI Carousel Editor",
-      text: "Соберите карусель за несколько минут: идея, генерация, правки и экспорт в одном редакторе."
+      title: "Карусель, которую хочется публиковать",
+      text: "Вводите тему, получайте готовую серию и доводите её до финала за один поток работы."
     },
     {
       templateId: "atlas",
       titleFont: "Oswald",
       bodyFont: "DM Sans",
       layoutType: "list",
-      title: "1. Введите тему и создайте карусель",
-      text: "Напишите тему или вставьте набросок. AI соберёт структуру слайдов и сразу даст рабочий черновик под публикацию."
+      title: "1. Начните с темы, а не с пустого холста",
+      text: "• Введите идею в 1-2 фразах.\n• Укажите количество карточек.\n• Нажмите «Сгенерировать» — получите осмысленный сценарий."
     },
     {
       templateId: "technology",
       titleFont: "Space Grotesk",
       bodyFont: "Inter",
       layoutType: "split",
-      title: "2. Редактируйте текст как в привычном editor-flow",
-      text: "Тап по блоку выбирает элемент, двойной тап включает редактирование. Заголовок и описание правятся прямо на canvas."
+      title: "2. Редактируйте прямо на canvas",
+      text: "Выбирайте блок тапом, открывайте текст двойным тапом и сразу видьте результат в финальной композиции."
     },
     {
       titleFont: "El Messiri",
       bodyFont: "Roboto Condensed",
       templateId: "premium",
       layoutType: "dark-slide",
-      title: "3. Управляйте шрифтами и ритмом",
-      text: "Выберите пару «заголовок + описание» для всей серии или меняйте отдельные блоки. Стиль обновляется сразу."
+      title: "3. Управляйте типографикой серии",
+      text: "Меняйте шрифты заголовков и описания глобально: ритм и характер карусели обновляются мгновенно."
     },
     {
       templateId: "aurora",
       titleFont: "Space Grotesk",
       bodyFont: "Inter",
       layoutType: "card",
-      title: "4. Настраивайте фон и характер подачи",
-      text: "Светлая, тёмная или акцентная карточка — переключайте шаблоны, фон и рамку без пересборки контента."
+      title: "4. Переключайте стиль без потери контента",
+      text: "Светлая, тёмная или акцентная подача: меняется визуал, а текст и структура остаются на месте."
     },
     {
       templateId: "founder-dark",
@@ -2516,24 +2290,24 @@ export function createStarterSlides(
       bodyFont: "Inter",
       layoutType: "image-top",
       includeDemoImage: true,
-      title: "5. Добавляйте изображения без хаоса",
-      text: "Фото встраиваются в композицию с safe-зонами: текст остаётся читаемым, а карточка выглядит аккуратной."
+      title: "5. Добавляйте изображения без визуального хаоса",
+      text: "Фото встраивается в layout image-top: текст остаётся читаемым, а карточка выглядит как готовый пост."
     },
     {
       templateId: "netflix",
       titleFont: "Fira Code",
       bodyFont: "Inter",
       layoutType: "statement",
-      title: "6. Экспортируйте в нужном формате",
-      text: "Когда всё готово — скачайте ZIP, PNG, JPG или PDF. Эта инструкция — демо, удалите её и создайте свою серию."
+      title: "6. Адаптируйте под формат и платформу",
+      text: "1:1, 4:5 и 9:16 переключаются в один клик, а композиция перестраивается под выбранный формат."
     },
     {
       templateId: "mandarin",
       titleFont: "Russo One",
       bodyFont: "Inter",
       layoutType: "cta",
-      title: "7. Создайте свою первую карусель",
-      text: "Очистите демо-серию, введите тему и нажмите «Сгенерировать». Через пару минут у вас будет готовая карусель под публикацию."
+      title: "7. Экспортируйте и публикуйте",
+      text: "Скачайте ZIP, PNG, JPG или PDF и выложите карусель. Очистите демо и создайте свою серию прямо сейчас."
     }
   ];
 

@@ -27,6 +27,7 @@ import {
   setSlideBackgroundImageStyle,
   setSlideFrameColor,
   SLIDE_FORMAT_DIMENSIONS,
+  STYLE_PRESETS,
   setSlideBackgroundImage,
   syncSlideOrderMeta,
   type StylePresetId,
@@ -1197,6 +1198,8 @@ export function Editor() {
       return;
     }
 
+    const templateName = getTemplate(templateId).name;
+
     pushHistorySnapshot(true);
     if (templateScope === "all") {
       setSlides((current) =>
@@ -1206,7 +1209,7 @@ export function Editor() {
           globalTypography.bodyFont
         )
       );
-      setStatus("Шаблон применён ко всей карусели.");
+      setStatus(`Шаблон «${templateName}» применён ко всей карусели.`);
     } else {
       if (!activeSlide || activeSlideIndex === -1) {
         return;
@@ -1219,7 +1222,7 @@ export function Editor() {
           globalTypography.bodyFont
         )
       );
-      setStatus("Шаблон применён к текущему слайду.");
+      setStatus(`Шаблон «${templateName}» применён к текущему слайду.`);
     }
 
     setSelectedElementId(null);
@@ -1242,7 +1245,7 @@ export function Editor() {
     );
     setSelectedElementId(null);
     setEditingTextElementId(null);
-    setStatus(`Пресет «${presetId}» применён ко всей серии.`);
+    setStatus(`Пресет «${getStylePresetLabel(presetId)}» применён ко всей серии.`);
   };
 
   const handleFormatChange = (format: SlideFormat) => {
@@ -1557,6 +1560,7 @@ export function Editor() {
           setStatus(
             `Подготавливаю экспорт: ${exportModeLabel} (${attempt}/${EXPORT_ATTEMPTS_MAX}).`
           );
+          await ensureFontsReadyForExport();
 
           const imagesReady = await ensureExportStagesReady();
           if (!imagesReady) {
@@ -1879,12 +1883,12 @@ export function Editor() {
               disabled={isExportRendering || isGenerating}
               title={`Экспорт в ${exportModeLabel}`}
             >
-              {isExportRendering ? "Экспорт..." : "Экспорт"}
+              {isExportRendering ? "Экспорт..." : `Экспорт ${exportModeLabel}`}
             </button>
           </header>
 
           <details className="mobile-generate-panel">
-            <summary>Создать новую карусель</summary>
+            <summary>Новая генерация: тема → карусель</summary>
             <div className="mobile-generate-body">
               <textarea
                 value={topic}
@@ -1928,7 +1932,7 @@ export function Editor() {
                 />
                 <span>
                   Использовать картинки из интернета
-                  <small>Автоподбор 1-3 релевантных фото по теме</small>
+                  <small>Автоподбор 1-3 фото. Если релевантных нет — останется чистый текстовый layout.</small>
                 </span>
               </label>
             </div>
@@ -2163,6 +2167,23 @@ async function waitForNextFrame() {
   });
 }
 
+async function ensureFontsReadyForExport() {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  if (!("fonts" in document) || !document.fonts?.ready) {
+    return;
+  }
+
+  await Promise.race([
+    document.fonts.ready.catch(() => undefined),
+    new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 1800);
+    })
+  ]);
+}
+
 function cloneSlides(slides: Slide[]) {
   return slides.map((slide) => ({
     ...slide,
@@ -2271,6 +2292,10 @@ function getExportModeLabel(mode: ExportMode) {
     return "PDF";
   }
   return "ZIP";
+}
+
+function getStylePresetLabel(presetId: StylePresetId) {
+  return STYLE_PRESETS.find((preset) => preset.id === presetId)?.label ?? presetId;
 }
 
 function resolveUserFacingError(error: unknown, fallback: string) {

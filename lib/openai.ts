@@ -199,7 +199,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 72,
     bodyMin: 18,
-    bodyMax: 120,
+    bodyMax: 150,
     preferredLinesMin: 1,
     preferredLinesMax: 2
   },
@@ -207,7 +207,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 64,
     bodyMin: 18,
-    bodyMax: 110,
+    bodyMax: 145,
     preferredLinesMin: 1,
     preferredLinesMax: 2
   },
@@ -223,7 +223,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 66,
     bodyMin: 32,
-    bodyMax: 170,
+    bodyMax: 190,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -231,7 +231,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 68,
     bodyMin: 34,
-    bodyMax: 170,
+    bodyMax: 190,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -239,7 +239,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 66,
     bodyMin: 22,
-    bodyMax: 120,
+    bodyMax: 140,
     preferredLinesMin: 1,
     preferredLinesMax: 2
   },
@@ -255,7 +255,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 68,
     bodyMin: 34,
-    bodyMax: 170,
+    bodyMax: 190,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -287,7 +287,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 66,
     bodyMin: 32,
-    bodyMax: 170,
+    bodyMax: 190,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -295,7 +295,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 66,
     bodyMin: 32,
-    bodyMax: 170,
+    bodyMax: 190,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -303,7 +303,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 66,
     bodyMin: 28,
-    bodyMax: 150,
+    bodyMax: 170,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -311,7 +311,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 62,
     bodyMin: 22,
-    bodyMax: 120,
+    bodyMax: 145,
     preferredLinesMin: 1,
     preferredLinesMax: 2
   },
@@ -319,7 +319,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 68,
     bodyMin: 30,
-    bodyMax: 150,
+    bodyMax: 170,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   }
@@ -333,22 +333,22 @@ const LAYOUT_WORD_LIMITS: Record<
     lineWords: number;
   }
 > = {
-  hero: { titleWords: 8, bodyWords: 12, lineWords: 6 },
-  statement: { titleWords: 8, bodyWords: 11, lineWords: 6 },
+  hero: { titleWords: 9, bodyWords: 16, lineWords: 9 },
+  statement: { titleWords: 9, bodyWords: 21, lineWords: 10 },
   list: { titleWords: 8, bodyWords: 24, lineWords: 6 },
-  split: { titleWords: 8, bodyWords: 14, lineWords: 7 },
-  card: { titleWords: 9, bodyWords: 16, lineWords: 7 },
-  "dark-slide": { titleWords: 8, bodyWords: 12, lineWords: 6 },
-  "cover-hero": { titleWords: 8, bodyWords: 12, lineWords: 6 },
-  "title-body": { titleWords: 9, bodyWords: 16, lineWords: 7 },
+  split: { titleWords: 8, bodyWords: 24, lineWords: 10 },
+  card: { titleWords: 9, bodyWords: 24, lineWords: 10 },
+  "dark-slide": { titleWords: 8, bodyWords: 15, lineWords: 9 },
+  "cover-hero": { titleWords: 8, bodyWords: 16, lineWords: 9 },
+  "title-body": { titleWords: 9, bodyWords: 24, lineWords: 10 },
   bullets: { titleWords: 8, bodyWords: 24, lineWords: 6 },
   steps: { titleWords: 8, bodyWords: 24, lineWords: 6 },
   checklist: { titleWords: 8, bodyWords: 24, lineWords: 6 },
-  "case-split": { titleWords: 8, bodyWords: 14, lineWords: 7 },
-  comparison: { titleWords: 8, bodyWords: 14, lineWords: 7 },
-  summary: { titleWords: 8, bodyWords: 13, lineWords: 6 },
-  cta: { titleWords: 8, bodyWords: 12, lineWords: 6 },
-  "image-top": { titleWords: 8, bodyWords: 14, lineWords: 6 }
+  "case-split": { titleWords: 8, bodyWords: 24, lineWords: 10 },
+  comparison: { titleWords: 8, bodyWords: 24, lineWords: 10 },
+  summary: { titleWords: 8, bodyWords: 20, lineWords: 10 },
+  cta: { titleWords: 8, bodyWords: 18, lineWords: 10 },
+  "image-top": { titleWords: 8, bodyWords: 22, lineWords: 10 }
 };
 
 const STRUCTURED_LAYOUTS = new Set<CarouselLayoutType>([
@@ -436,6 +436,42 @@ const SIMILARITY_STOP_WORDS = new Set([
   "шаг"
 ]);
 
+const WEAK_COPY_PATTERNS = [
+  /в\s+современном\s+мире/i,
+  /следует\s+отметить/i,
+  /данн(ый|ая|ое)\s+аспект/i,
+  /явля(ет|ются)\s+важн/i,
+  /для\s+достижения\s+максимальн/i,
+  /необходимо\s+(учитывать|понимать|помнить)/i,
+  /можно\s+сказать/i,
+  /в\s+целом/i,
+  /it\s+is\s+important\s+to\s+note/i,
+  /in\s+today(?:'s)?\s+world/i,
+  /it\s+should\s+be\s+considered/i
+];
+
+const HANGING_ENDING_PATTERN =
+  /\b(и|но|или|либо|чтобы|если|когда|потому|так\s+как|поэтому|а|а\s+также|to|for|with|from|of|in|on|at|by|and|or|as|a|when|if|because)\s*$/i;
+
+const CTA_ACTION_PATTERN =
+  /(сделайт|запусти|проверь|примени|выбери|внедри|сохран|начни|попробуй|поделись|подпиш|save|start|try|share|follow|apply|check)/i;
+
+const HOOK_TITLE_PREFIXES = [
+  "Вы теряете результат, пока",
+  "Почему у вас буксует рост, даже если",
+  "Где сливается эффект, когда",
+  "Из-за чего тема «%topic%» не даёт результат",
+  "Ошибка, из-за которой в теме «%topic%» всё тормозит"
+];
+
+const HOOK_TITLE_PREFIXES_EN = [
+  "You lose results while",
+  "Why growth stalls even when",
+  "Where performance drops when",
+  "Why “%topic%” still underperforms",
+  "The mistake that slows “%topic%”"
+];
+
 const KEYWORD_TRANSLATIONS: Record<string, string> = {
   грибы: "mushrooms",
   гриб: "mushroom",
@@ -511,60 +547,42 @@ export async function generateCarouselFromTopic(topic: string, requestedSlidesCo
     return buildDeterministicFallbackSlides(coreTopic, deterministicPlan, brief, targetCount);
   }
 
-  const modelCandidates = buildModelCandidates();
-  const plan = await generatePlanWithFallback(
-    openai,
-    modelCandidates,
-    topic,
-    brief,
-    lens,
-    deterministicPlan,
-    targetCount
-  );
-
-  const draftedSlides = await generateSlidesFromPlanWithFallback(
-    openai,
-    modelCandidates,
-    topic,
-    brief,
-    plan,
-    targetCount
-  );
-
-  let slides = normalizeSlides(coreTopic, draftedSlides, plan, targetCount, brief);
-  let quality = assessSlidesQuality(coreTopic, slides, plan);
-
-  for (let pass = 0; pass < 2 && quality.needsRepair; pass += 1) {
-    const repairIndexes = quality.problematicIndexes.slice(0, Math.max(1, Math.min(4, targetCount)));
-
-    let repaired = await repairSlidesWithFallback(
+  const model = resolvePrimaryGenerationModel();
+  let draftedSlides: SlideDraft[] = [];
+  try {
+    draftedSlides = await requestCarouselSlides(
       openai,
-      modelCandidates,
+      model,
       topic,
       brief,
-      plan,
-      slides,
-      repairIndexes,
+      deterministicPlan,
       targetCount
     );
-
-    if (!repaired) {
-      repaired = buildDeterministicRepairs(coreTopic, plan, brief, repairIndexes, targetCount);
-    }
-
-    slides = applyRepairs(slides, repaired, plan, coreTopic, brief, targetCount);
-    quality = assessSlidesQuality(coreTopic, slides, plan);
+  } catch (error) {
+    console.error("OpenAI carousel generation failed, fallback engaged:", error);
+    draftedSlides = buildDraftSlidesFromPlan(deterministicPlan, brief, targetCount);
   }
 
-  if (quality.needsRepair && quality.problematicIndexes.length) {
+  let slides = normalizeSlides(coreTopic, draftedSlides, deterministicPlan, targetCount, brief);
+  const quality = assessSlidesQuality(coreTopic, slides, deterministicPlan);
+  const criticalRepairIndexes = pickCriticalRepairIndexes(slides, quality.problematicIndexes);
+
+  if (criticalRepairIndexes.length) {
     const deterministicRepairs = buildDeterministicRepairs(
       coreTopic,
-      plan,
+      deterministicPlan,
       brief,
-      quality.problematicIndexes,
+      criticalRepairIndexes,
       targetCount
     );
-    slides = applyRepairs(slides, deterministicRepairs, plan, coreTopic, brief, targetCount);
+    slides = applyRepairs(
+      slides,
+      deterministicRepairs,
+      deterministicPlan,
+      coreTopic,
+      brief,
+      targetCount
+    );
   }
 
   return slides;
@@ -680,11 +698,13 @@ async function repairSlidesWithFallback(
   return null;
 }
 
-function buildModelCandidates() {
-  const configuredModel = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
-  return [configuredModel, "gpt-4.1-mini"].filter(
-    (value, index, list): value is string => Boolean(value) && list.indexOf(value) === index
-  );
+function resolvePrimaryGenerationModel() {
+  const configuredModel = process.env.OPENAI_MODEL?.trim();
+  if (configuredModel && !/mini/i.test(configuredModel)) {
+    return configuredModel;
+  }
+
+  return "gpt-4.1";
 }
 
 async function requestCarouselPlan(
@@ -758,6 +778,7 @@ async function requestCarouselSlides(
 ) {
   const response = await openai.responses.create({
     model,
+    temperature: 0.4,
     input: [
       {
         role: "system",
@@ -765,16 +786,18 @@ async function requestCarouselSlides(
           {
             type: "input_text",
             text: [
-              "You write final Russian carousel slide copy for social media.",
+              "You write publication-ready social carousel slides.",
               "Return only JSON that matches schema.",
-              "No meta phrases, no brief echo, no filler.",
-              "Write practical, human, concise copy with clear hierarchy.",
-              "Each slide should deliver a unique idea and advance the narrative.",
-              "One slide = one thought. No mixed ideas on one slide.",
-              "Keep copy short: up to 2-3 lines per slide, 8-12 words for regular lines.",
-              "Keep text within provided layout limits. Do not overflow.",
-              "Do not repeat same advice in different words.",
-              `Use exactly ${targetCount} slides in the same order as the plan.`
+              "Write in the same language as topic.",
+              "Every slide must be a complete micro-idea with real value.",
+              "One slide = one finished thought. No fragments, no hanging endings.",
+              "Avoid filler and fake expertise.",
+              "Forbidden RU filler: «в современном мире», «следует отметить», «необходимо учитывать», «данный аспект».",
+              "Forbidden EN filler: «it is important to note», «in today’s world», «it should be considered».",
+              "Use simple conversational phrasing, concrete causal logic and actionable clarity.",
+              "Do not duplicate ideas across slides.",
+              "Keep copy compact and readable for social cards (2-3 lines usually).",
+              `Use exactly ${targetCount} slides in provided order with fixed role and layout.`
             ].join(" ")
           }
         ]
@@ -1018,28 +1041,49 @@ function buildContentPrompt(topic: string, brief: ParsedBrief, plan: CarouselPla
         `${layout}: title ${limits.titleMin}-${limits.titleMax} chars, body ${limits.bodyMin}-${limits.bodyMax} chars`
     )
     .join("\n");
+  const languageHint = isMostlyEnglish(brief.coreTopic || topic)
+    ? "English"
+    : "Russian";
+  const slideSequence = plan.slides
+    .map((slide, index) =>
+      [
+        `#${index + 1}`,
+        `role=${slide.role}`,
+        `layout=${normalizeLayoutType(slide.layoutType)}`,
+        `idea=${slide.coreIdea}`,
+        `imageIntent=${slide.imageIntent}`,
+        slide.imageQueryDraft ? `imageQueryDraft=${slide.imageQueryDraft}` : "imageQueryDraft="
+      ].join(" | ")
+    )
+    .join("\n");
 
   return [
-    `Тема карусели: ${brief.coreTopic || topic}`,
-    `Аудитория: ${plan.audience}`,
-    `Цель: ${plan.goal}`,
-    `Тон: ${plan.tone}`,
+    `Topic: ${brief.coreTopic || topic}`,
+    `Language: ${languageHint}`,
+    `Audience: ${plan.audience}`,
+    `Goal: ${plan.goal}`,
+    `Tone: ${plan.tone}`,
     "",
-    "План слайдов (строго в этом порядке):",
-    JSON.stringify(plan.slides, null, 2),
+    "Fixed slide sequence (strict order, do not reorder):",
+    slideSequence,
     "",
-    "Лимиты по layout:",
+    "Layout limits:",
     layoutLimitsBlock,
     "",
-    "Правила:",
-    "- Пиши живым русским языком, без воды и канцелярита.",
-    "- Не повторяй мысли между слайдами.",
-    "- Заголовок короткий и сильный.",
-    "- 1 слайд = 1 мысль. Не склеивай несколько идей на одном слайде.",
-    "- Для обычных layout делай 2-3 короткие строки (8-12 слов).",
-    "- Для layout list/bullets/checklist/steps делай 3-5 пунктов по одной короткой строке.",
-    "- На каждом 2-3 слайде добавляй один акцентный формулировочный крючок.",
-    "- Не включай служебные слова типа 'слайд 1', 'логика', 'ТЗ'."
+    "Strict writing rules:",
+    "- Each slide must be self-sufficient and understandable even as a standalone card.",
+    "- 1 slide = 1 complete micro-idea: claim + short explanation + practical value.",
+    "- No unfinished endings. No sentence fragments.",
+    "- No generic empty phrases. No pseudo-expert jargon.",
+    "- Keep copy concise, but never cut meaning for brevity.",
+    "- If idea is complex, compress into a clear micro-insight, not a broken draft.",
+    "- Every text line must be a complete sentence.",
+    "- Never end a line with a conjunction/preposition (e.g., и/но/а/to/for/with).",
+    "- Avoid repeating the same advice with different wording.",
+    "- Hook slide must create tension (pain, conflict, sharp question or costly mistake).",
+    "- Final slide must close narrative with clear CTA action.",
+    "- For list/steps/checklist layouts, each bullet should be useful and concrete.",
+    "- Do not add technical notes, labels like 'slide 1', or prompt echoes."
   ].join("\n");
 }
 
@@ -1090,7 +1134,8 @@ function buildRepairPrompt(
     "Важно:",
     "- Не повторяй мысли уже сильных слайдов.",
     "- Сохрани роль и coreIdea каждого ремонтируемого слайда.",
-    "- Дай полезную конкретику, без мета-фраз и шаблонной воды."
+    "- Дай полезную конкретику, без мета-фраз и шаблонной воды.",
+    "- Каждая переписанная карточка должна содержать завершённую микро-идею, не обрывок."
   ].join("\n");
 }
 
@@ -1142,6 +1187,7 @@ function normalizePlan(
 
   dedupeCoreIdeas(normalizedSlides, fallbackPlan.slides);
   enforceLayoutRhythm(normalizedSlides);
+  enforceNarrativeLayoutMix(normalizedSlides);
 
   const maxImages = resolveImageBudget(lens, targetCount);
   limitImageUsage(normalizedSlides, maxImages, isTopicCategory(rawPlan.category) ? rawPlan.category : lens.category);
@@ -1397,6 +1443,64 @@ function enforceLayoutRhythm(slides: CarouselPlanSlide[]) {
   }
 }
 
+function enforceNarrativeLayoutMix(slides: CarouselPlanSlide[]) {
+  if (slides.length < 5) {
+    return;
+  }
+
+  const isCoreSlide = (index: number) => index > 0 && index < slides.length - 1;
+  const hasLayout = (layout: CarouselLayoutType) =>
+    slides.some((slide) => normalizeLayoutType(slide.layoutType) === layout);
+  const setLayoutByRole = (
+    preferredRoles: CarouselSlideRole[],
+    layout: CarouselLayoutType,
+    guard?: (slide: CarouselPlanSlide, index: number) => boolean
+  ) => {
+    const candidateIndex = slides.findIndex((slide, index) => {
+      if (!isCoreSlide(index)) {
+        return false;
+      }
+      if (!preferredRoles.includes(slide.role)) {
+        return false;
+      }
+      if (slide.layoutType === "image-top") {
+        return false;
+      }
+      if (guard && !guard(slide, index)) {
+        return false;
+      }
+      return true;
+    });
+
+    if (candidateIndex !== -1) {
+      slides[candidateIndex].layoutType = layout;
+    }
+  };
+
+  if (!hasLayout("statement")) {
+    setLayoutByRole(["problem", "mistake", "myth"], "statement");
+  }
+
+  if (!hasLayout("list")) {
+    setLayoutByRole(["steps", "checklist", "tip"], "list");
+  }
+
+  if (!hasLayout("split")) {
+    setLayoutByRole(["case", "comparison", "myth", "mistake"], "split");
+  }
+
+  if (!hasLayout("card")) {
+    setLayoutByRole(["tip", "summary", "case"], "card");
+  }
+
+  if (!hasLayout("hero")) {
+    const coverIndex = slides.findIndex((slide) => slide.role === "cover");
+    if (coverIndex >= 0 && slides[coverIndex].imageIntent === "none") {
+      slides[coverIndex].layoutType = "hero";
+    }
+  }
+}
+
 function rankImagePriority(role: CarouselSlideRole, imageIntent: CarouselImageIntent) {
   if (imageIntent === "none") {
     return -100;
@@ -1455,7 +1559,7 @@ function normalizeSlides(
   });
 
   if (normalized[0]) {
-    if (/^(сравнение|обзор|гайд|guide|summary)\b/i.test(normalized[0].title)) {
+    if (isWeakHookTitle(normalized[0].title)) {
       normalized[0].title = buildHookTitle(topic);
     }
     normalized[0].role = "cover";
@@ -1475,10 +1579,13 @@ function normalizeSlides(
     lastSlide.layoutType = "cta";
     lastSlide.imageIntent = "none";
     lastSlide.imageQueryDraft = "";
-    if (!/(сделай|сохрани|подпиш|проверь|запусти|внедри|начни|попробуй)/i.test(lastSlide.text)) {
+    if (!CTA_ACTION_PATTERN.test(lastSlide.text)) {
+      const ctaPadding = isMostlyEnglish(topic)
+        ? "Save this carousel and take the first step today."
+        : "Сохраните карусель и примените первый шаг сегодня.";
       lastSlide.text = fitSlideTextToLayout(
         lastSlide.title,
-        `${lastSlide.text}\nСохраните карусель и примените первый шаг сегодня.`,
+        `${lastSlide.text}\n${ctaPadding}`,
         "cta",
         "cta",
         lastSlide.coreIdea ?? topic
@@ -1489,14 +1596,66 @@ function normalizeSlides(
   return normalized;
 }
 
+function isWeakHookTitle(value: string) {
+  return /^(сравнение|обзор|гайд|guide|summary|чек-?лист|подборка|как\b)/i.test(value.trim());
+}
+
 function buildHookTitle(topic: string) {
   const basis = clean(topic).replace(/\s+/g, " ").trim();
   if (!basis) {
     return "Вы теряете результат и даже не замечаете";
   }
 
-  const short = clampSentenceByWords(basis.replace(/^как\s+/i, ""), 7);
-  return clampTitle(`Почему у вас не работает: ${short}`, 72);
+  const useEnglish = isMostlyEnglish(basis);
+  const compactTopic = clampSentenceByWords(
+    basis.replace(/^как\s+/i, "").replace(/^почему\s+/i, ""),
+    7
+  );
+  const variant =
+    useEnglish
+      ? HOOK_TITLE_PREFIXES_EN[Math.abs(stableHash(`${basis}|hook-en`)) % HOOK_TITLE_PREFIXES_EN.length]
+      : HOOK_TITLE_PREFIXES[Math.abs(stableHash(`${basis}|hook`)) % HOOK_TITLE_PREFIXES.length];
+  const title = variant.includes("%topic%")
+    ? variant.replace("%topic%", compactTopic)
+    : `${variant} ${compactTopic}`.trim();
+
+  return clampTitle(title.replace(/\s{2,}/g, " "), 72);
+}
+
+function isMostlyEnglish(value: string) {
+  const latin = (value.match(/[a-z]/gi) ?? []).length;
+  const cyrillic = (value.match(/[а-яё]/gi) ?? []).length;
+  return latin > 0 && latin >= cyrillic;
+}
+
+function isHookLikeTitle(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("?")) {
+    return true;
+  }
+
+  return /(почему|ошибк|теря|слива|тормоз|буксу|не\s+раст|не\s+работ|провал|риск|цена\s+ошибки)/i.test(
+    normalized
+  );
+}
+
+function isIncompleteTitle(value: string) {
+  const normalized = value
+    .replace(/[.!?…]+$/g, "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) {
+    return true;
+  }
+
+  if (/[-–—]\s*$/.test(normalized)) {
+    return true;
+  }
+
+  return /\b(?:to|for|with|from|of|in|on|at|by|and|or|as|while|when|if|because|because of|из-за|для|при|как|когда|если|потому|чтобы|и|или|а)\s*$/i.test(
+    normalized
+  );
 }
 
 function ensureDraftCount(
@@ -1532,6 +1691,7 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
 
   let score = 0;
   const problematic = new Set<number>();
+  const topicIsEnglish = isMostlyEnglish(topic);
 
   for (let index = 0; index < slides.length; index += 1) {
     const slide = slides[index];
@@ -1552,6 +1712,11 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
     if (hasMetaEcho(merged)) {
       problematic.add(index);
       score -= 10;
+    }
+
+    if (hasWeakCopy(merged)) {
+      problematic.add(index);
+      score -= 5;
     }
 
     if (title.length < limits.titleMin || title.length > limits.titleMax + 6) {
@@ -1586,6 +1751,35 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
       score -= 4;
     }
 
+    if (
+      index > 0 &&
+      index < slides.length - 1 &&
+      !STRUCTURED_LAYOUTS.has(layout) &&
+      layout !== "cta" &&
+      lineCount < 2
+    ) {
+      problematic.add(index);
+      score -= 4;
+    }
+
+    const bodyLines = text
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (
+      index > 0 &&
+      index < slides.length - 1 &&
+      bodyLines.some((line) => countWords(line) < 4) &&
+      !STRUCTURED_LAYOUTS.has(layout)
+    ) {
+      problematic.add(index);
+      score -= 3;
+    }
+    if (bodyLines.some((line) => hasHangingEnding(line))) {
+      problematic.add(index);
+      score -= 5;
+    }
+
     if (STRUCTURED_LAYOUTS.has(layout)) {
       const bulletLines = text
         .split(/\n+/)
@@ -1599,14 +1793,23 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
     }
 
     if ((planSlide?.role ?? slide.role) === "cta") {
-      const hasActionVerb = /(сделайт|запусти|проверь|примени|выбери|внедри|сохран|начни|попробуй)/i.test(text);
+      const hasActionVerb = CTA_ACTION_PATTERN.test(text);
       if (!hasActionVerb) {
         problematic.add(index);
         score -= 5;
       }
     }
 
-    if (/\b[a-z]{4,}\b/i.test(merged) && !/(cta|instagram|stories|reels)/i.test(merged)) {
+    if (index === 0 && !isHookLikeTitle(title)) {
+      problematic.add(index);
+      score -= 4;
+    }
+
+    if (
+      !topicIsEnglish &&
+      /\b[a-z]{4,}\b/i.test(merged) &&
+      !/(cta|instagram|stories|reels)/i.test(merged)
+    ) {
       problematic.add(index);
       score -= 2;
     }
@@ -1633,6 +1836,48 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
     score,
     problematicIndexes
   };
+}
+
+function pickCriticalRepairIndexes(
+  slides: CarouselOutlineSlide[],
+  problematicIndexes: number[]
+) {
+  if (!problematicIndexes.length) {
+    return [];
+  }
+
+  const selected = problematicIndexes.filter((index) => {
+    const slide = slides[index];
+    if (!slide) {
+      return false;
+    }
+
+    const title = clean(slide.title || "");
+    const text = clean(slide.text || "");
+    if (!title || !text) {
+      return true;
+    }
+
+    if (hasMetaEcho(`${title}\n${text}`)) {
+      return true;
+    }
+
+    const prev = slides[index - 1];
+    if (prev) {
+      const prevTitle = clean(prev.title || "");
+      const prevText = clean(prev.text || "");
+      if (
+        semanticSimilarity(title, prevTitle) > 0.9 ||
+        semanticSimilarity(`${title} ${text}`, `${prevTitle} ${prevText}`) > 0.9
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+
+  return Array.from(new Set(selected)).sort((left, right) => left - right);
 }
 
 function buildDeterministicRepairs(
@@ -1737,6 +1982,7 @@ function buildDeterministicPlan(
   const maxImages = resolveImageBudget(lens, targetCount);
   limitImageUsage(slides, maxImages, lens.category);
   enforceLayoutRhythm(slides);
+  enforceNarrativeLayoutMix(slides);
 
   return {
     topic,
@@ -1778,50 +2024,43 @@ function buildFallbackPlanSlide(
 }
 
 function buildRoleSequence(targetCount: number): CarouselSlideRole[] {
-  if (targetCount <= 5) {
-    const compact: CarouselSlideRole[] = ["cover", "problem", "tip", "mistake", "cta"];
-    return compact.slice(0, targetCount);
-  }
-
-  if (targetCount === 6) {
-    return ["cover", "problem", "myth", "tip", "summary", "cta"];
-  }
-
-  if (targetCount === 7) {
-    return ["cover", "problem", "mistake", "tip", "tip", "case", "cta"];
-  }
-
-  if (targetCount === 8) {
-    return ["cover", "problem", "myth", "steps", "tip", "case", "summary", "cta"];
-  }
-
-  if (targetCount === 9) {
-    return ["cover", "problem", "myth", "steps", "tip", "comparison", "case", "summary", "cta"];
-  }
-
-  const base: CarouselSlideRole[] = [
-    "cover",
-    "problem",
-    "myth",
-    "mistake",
-    "steps",
-    "tip",
-    "comparison",
-    "case",
-    "checklist",
-    "cta"
+  const canonical: CarouselSlideRole[] = [
+    "cover",      // 1 hook
+    "problem",    // 2 problem
+    "problem",    // 3 escalation
+    "mistake",    // 4 mistake/myth
+    "tip",        // 5 explanation
+    "tip",        // 6 solution
+    "steps",      // 7 plan
+    "case",       // 8 case
+    "comparison", // 9 comparison/escalation
+    "cta"         // 10 close
   ];
 
-  const result = [...base];
-  const extras: CarouselSlideRole[] = ["tip", "summary", "case", "checklist", "mistake"];
-
-  while (result.length < targetCount) {
-    result.splice(result.length - 1, 0, extras[(result.length - base.length) % extras.length]);
+  if (targetCount >= canonical.length) {
+    const expanded = [...canonical];
+    const extras: CarouselSlideRole[] = ["tip", "summary", "case", "checklist", "comparison"];
+    while (expanded.length < targetCount) {
+      expanded.splice(expanded.length - 1, 0, extras[(expanded.length - canonical.length) % extras.length]);
+    }
+    expanded[0] = "cover";
+    expanded[expanded.length - 1] = "cta";
+    return expanded.slice(0, targetCount);
   }
 
-  result[0] = "cover";
-  result[result.length - 1] = "cta";
-  return result.slice(0, targetCount);
+  const indexMaps: Record<number, number[]> = {
+    5: [0, 1, 3, 6, 9],
+    6: [0, 1, 3, 5, 6, 9],
+    7: [0, 1, 3, 4, 6, 7, 9],
+    8: [0, 1, 2, 3, 5, 6, 7, 9],
+    9: [0, 1, 2, 3, 4, 6, 7, 8, 9]
+  };
+  const mapped = indexMaps[targetCount];
+  if (mapped) {
+    return mapped.map((index) => canonical[index]);
+  }
+
+  return canonical.slice(0, targetCount);
 }
 
 function chooseLayoutForRole(role: CarouselSlideRole, imageIntent: CarouselImageIntent): CarouselLayoutType {
@@ -1838,15 +2077,15 @@ function chooseLayoutForRole(role: CarouselSlideRole, imageIntent: CarouselImage
   }
 
   if (role === "myth") {
-    return "split";
+    return "statement";
   }
 
   if (role === "mistake") {
-    return "card";
+    return "list";
   }
 
   if (role === "tip") {
-    return "list";
+    return "card";
   }
 
   if (role === "steps") {
@@ -1858,7 +2097,7 @@ function chooseLayoutForRole(role: CarouselSlideRole, imageIntent: CarouselImage
   }
 
   if (role === "case") {
-    return "split";
+    return "card";
   }
 
   if (role === "comparison") {
@@ -1866,7 +2105,7 @@ function chooseLayoutForRole(role: CarouselSlideRole, imageIntent: CarouselImage
   }
 
   if (role === "summary") {
-    return "card";
+    return "split";
   }
 
   if (role === "cta") {
@@ -2008,53 +2247,93 @@ function buildCoreIdea(
   index: number,
   totalSlides: number
 ) {
-  const cleanedSeed = clean(seed).slice(0, 160);
+  const topicClean = clean(topic).slice(0, 140) || "теме";
+  const seedClean = clean(seed).slice(0, 140);
+  const seedUseful = seedClean && seedClean.toLowerCase() !== topicClean.toLowerCase() ? seedClean : "";
+  const focus = seedUseful || topicClean;
+  const useEnglish = isMostlyEnglish(`${topicClean} ${focus}`);
+
+  if (useEnglish) {
+    if (role === "cover") {
+      return `Core conflict in ${focus}: effort is high, outcomes stay unstable`;
+    }
+    if (role === "problem") {
+      return index <= 1
+        ? `Where ${focus} breaks in practice and why users lose value`
+        : `What happens if ${focus} stays unresolved this quarter`;
+    }
+    if (role === "myth") {
+      return `Popular myth in ${focus} that creates false confidence`;
+    }
+    if (role === "mistake") {
+      return `Critical mistake in ${focus} that quietly kills momentum`;
+    }
+    if (role === "tip") {
+      return `Practical tactic for ${focus} that gives measurable progress`;
+    }
+    if (role === "steps") {
+      return `Action plan: 3-5 steps to execute ${focus} without chaos`;
+    }
+    if (role === "checklist") {
+      return `Checklist before launch: what must be true in ${focus}`;
+    }
+    if (role === "case") {
+      return `Short case: specific move that improved ${focus}`;
+    }
+    if (role === "comparison") {
+      return `Comparison: high-leverage approach vs low-impact routine in ${focus}`;
+    }
+    if (role === "summary") {
+      return `Key principle behind sustainable progress in ${focus}`;
+    }
+    if (index === totalSlides - 1) {
+      return `CTA: the first concrete move to make in ${focus} today`;
+    }
+    return `Practical insight that improves ${focus}`;
+  }
 
   if (role === "cover") {
-    return `Ключевой хук: ${cleanedSeed || topic}`;
+    return `Главный конфликт в теме «${focus}»: усилия есть, результат нестабилен`;
   }
-
   if (role === "problem") {
-    return `Почему результат по теме «${topic}» часто не растёт: ${cleanedSeed || "типичная причина"}`;
+    return index <= 1
+      ? `Где именно в теме «${focus}» теряется результат и почему это критично`
+      : `Что будет, если проблему в теме «${focus}» не исправить сейчас`;
   }
-
   if (role === "myth") {
-    return `Миф, который тормозит прогресс: ${cleanedSeed || "ложное убеждение"}`;
+    return `Популярный миф в теме «${focus}», который даёт ложную уверенность`;
   }
-
   if (role === "mistake") {
-    return `Ошибка, из-за которой теряется эффективность: ${cleanedSeed || "типичный провал"}`;
+    return `Критичная ошибка в теме «${focus}», которая съедает прогресс`;
   }
-
   if (role === "tip") {
-    return `Практический совет #${Math.max(1, index)}: ${cleanedSeed || "конкретный приём"}`;
+    return `Практический приём в теме «${focus}», который даёт измеримый сдвиг`;
   }
-
   if (role === "steps") {
-    return `Пошаговая схема внедрения по теме: ${cleanedSeed || topic}`;
+    return `План действий: 3-5 шагов, чтобы внедрить решение по теме «${focus}»`;
   }
-
   if (role === "checklist") {
-    return `Чеклист перед запуском: ${cleanedSeed || topic}`;
+    return `Чеклист перед запуском: что обязательно проверить в теме «${focus}»`;
   }
-
   if (role === "case") {
-    return `Мини-кейс: как это работает на практике — ${cleanedSeed || topic}`;
+    return `Короткий кейс: какое действие дало результат в теме «${focus}»`;
   }
-
   if (role === "comparison") {
-    return `Что делать vs чего избегать в теме «${topic}»`;
+    return `Сравнение: рабочий подход и путь, который тормозит результат в теме «${focus}»`;
   }
-
   if (role === "summary") {
-    return `Итог по теме и главный вывод: ${cleanedSeed || topic}`;
+    return `Ключевой принцип устойчивого результата в теме «${focus}»`;
   }
-
   if (index === totalSlides - 1) {
-    return `Финальный шаг и призыв к действию по теме «${topic}»`;
+    return `CTA: что сделать прямо сейчас по теме «${focus}»`;
   }
+  return `Практический тезис по теме «${focus}»`;
+}
 
-  return cleanedSeed || topic;
+function isTemplateCoreIdea(value: string) {
+  return /^(хук|проблема|усиление|миф|ошибка|объяснение|решение|план действий|чеклист|кейс|сравнение|вывод|cta)\s*:/i.test(
+    value
+  ) || /по\s+теме\s+«.+»/i.test(value);
 }
 
 function buildFallbackTitle(
@@ -2063,19 +2342,9 @@ function buildFallbackTitle(
   index: number,
   totalSlides: number
 ): string {
-  if (!planSlide) {
-    if (index === 0) {
-      return "Главная мысль по теме";
-    }
-    if (index === totalSlides - 1) {
-      return "Что делать дальше";
-    }
-    return "Ключевой рабочий тезис";
-  }
-
-  const idea = clean(planSlide.coreIdea).replace(/^[^:]+:\s*/, "");
-  const fallbackByRole: Record<CarouselSlideRole, string> = {
-    cover: "Главная мысль, которую нельзя пропустить",
+  const useEnglish = isMostlyEnglish(topic);
+  const fallbackByRoleRu: Record<CarouselSlideRole, string> = {
+    cover: "Вы теряете результат и даже не замечаете",
     problem: "Почему это не работает",
     myth: "Миф, который мешает результату",
     mistake: "Ошибка, которая всё ломает",
@@ -2085,8 +2354,38 @@ function buildFallbackTitle(
     case: "Кейс из практики",
     comparison: "Как правильно и как не надо",
     summary: "Ключевой вывод",
-    cta: "Что делать дальше"
+    cta: "Закрепите результат сегодня"
   };
+  const fallbackByRoleEn: Record<CarouselSlideRole, string> = {
+    cover: "You're losing results without noticing",
+    problem: "Why this doesn't work",
+    myth: "Myth that blocks your result",
+    mistake: "Mistake that breaks performance",
+    tip: "Action you can take today",
+    steps: "Step-by-step plan",
+    checklist: "Pre-launch checklist",
+    case: "Real case snapshot",
+    comparison: "What to do vs avoid",
+    summary: "Key takeaway",
+    cta: "Take the first step today"
+  };
+  const fallbackByRole = useEnglish ? fallbackByRoleEn : fallbackByRoleRu;
+
+  if (!planSlide) {
+    if (index === 0) {
+      return useEnglish ? "Main idea you should not miss" : "Главная мысль по теме";
+    }
+    if (index === totalSlides - 1) {
+      return useEnglish ? "What to do next" : "Что делать дальше";
+    }
+    return useEnglish ? "Key practical point" : "Ключевой рабочий тезис";
+  }
+
+  const rawIdea = clean(planSlide.coreIdea);
+  const idea = rawIdea && !isTemplateCoreIdea(rawIdea) ? rawIdea : "";
+  if (planSlide.role === "cover" && (!idea || isWeakHookTitle(idea))) {
+    return buildHookTitle(topic);
+  }
 
   const basis = idea || fallbackByRole[planSlide.role] || fallbackByRole.tip;
   return clampTitle(basis, LAYOUT_LIMITS[normalizeLayoutType(planSlide.layoutType)].titleMax);
@@ -2099,88 +2398,74 @@ function buildFallbackBody(
   totalSlides: number,
   brief: ParsedBrief
 ) {
+  const useEnglish = isMostlyEnglish(`${topic} ${planSlide?.coreIdea ?? ""}`);
   const role = planSlide?.role ?? (index === 0 ? "cover" : index === totalSlides - 1 ? "cta" : "tip");
   const coreIdea = planSlide?.coreIdea ?? pickSeedLine(brief.sourceIdeas, index, topic);
-  const shortIdea = clampSentenceByWords(clean(coreIdea).replace(/^[^:]+:\s*/, ""), 8);
+  const shortIdea = clampSentenceByWords(clean(coreIdea).replace(/^[^:]+:\s*/, ""), 8) || (useEnglish ? "this topic" : "этот фокус");
 
   if (role === "cover") {
-    return [
-      "Где вы теряете результат прямо сейчас.",
-      "Листайте: дальше только рабочие шаги."
-    ].join("\n");
+    return useEnglish
+      ? ["You are losing results right now — and likely not noticing it.", "Swipe for a practical breakdown and clear next move."].join("\n")
+      : ["Вы теряете результат прямо сейчас — и часто не замечаете где.", "Листайте: дальше только практичные шаги без воды."].join("\n");
   }
 
   if (role === "problem") {
-    return [
-      `Проблема: ${shortIdea}.`,
-      "Из-за этого действия есть, а роста нет."
-    ].join("\n");
+    return useEnglish
+      ? [`Core problem: ${shortIdea}.`, "Actions exist, but measurable growth is still missing."].join("\n")
+      : [`Проблема: ${shortIdea}.`, "Действия есть, а измеримого роста всё равно нет."].join("\n");
   }
 
   if (role === "myth") {
-    return [
-      `Миф: ${shortIdea}.`,
-      "Звучит логично, но на практике тормозит."
-    ].join("\n");
+    return useEnglish
+      ? [`Myth: ${shortIdea}.`, "Sounds logical, but in practice slows progress."].join("\n")
+      : [`Миф: ${shortIdea}.`, "Звучит логично, но на практике тормозит результат."].join("\n");
   }
 
   if (role === "mistake") {
-    return [
-      `Ошибка: ${shortIdea}.`,
-      "Уберите её первой и получите быстрый прирост."
-    ].join("\n");
+    return useEnglish
+      ? [`Mistake: ${shortIdea}.`, "Fix this first to unlock the quickest improvement."].join("\n")
+      : [`Ошибка: ${shortIdea}.`, "Исправьте это первым — и получите самый быстрый прирост."].join("\n");
   }
 
   if (role === "tip") {
-    return [
-      `• Фокус: ${shortIdea}.`,
-      "• Сделайте один шаг сегодня.",
-      "• Проверьте эффект через 3-7 дней."
-    ].join("\n");
+    return useEnglish
+      ? [`• Focus: ${shortIdea}.`, "• Apply one concrete step today.", "• Check impact within 3-7 days."].join("\n")
+      : [`• Фокус: ${shortIdea}.`, "• Сделайте один конкретный шаг сегодня.", "• Проверьте эффект через 3-7 дней."].join("\n");
   }
 
   if (role === "steps") {
-    return [
-      "1. Определите текущую точку.",
-      `2. Запустите шаг: ${shortIdea}.`,
-      "3. Измерьте результат и закрепите."
-    ].join("\n");
+    return useEnglish
+      ? ["1. Define your current baseline.", `2. Launch one focused step: ${shortIdea}.`, "3. Measure the change and lock what works."].join("\n")
+      : ["1. Определите текущую точку.", `2. Запустите один точный шаг: ${shortIdea}.`, "3. Измерьте результат и закрепите то, что сработало."].join("\n");
   }
 
   if (role === "checklist") {
-    return [
-      "• Цель формулируется в 1 строку.",
-      "• Ответственный назначен заранее.",
-      "• Действие можно сделать сегодня.",
-      "• Проверка результата в календаре."
-    ].join("\n");
+    return useEnglish
+      ? ["• Goal is clear in one sentence.", "• Ownership is assigned before launch.", "• First action can be done today.", "• Result check is scheduled in calendar."].join("\n")
+      : ["• Цель сформулирована в одной строке.", "• Ответственный назначен заранее.", "• Первое действие можно сделать сегодня.", "• Проверка результата стоит в календаре."].join("\n");
   }
 
   if (role === "case") {
-    return [
-      `Кейс: ${shortIdea}.`,
-      "Один узкий фикс дал заметный рост уже в первый цикл."
-    ].join("\n");
+    return useEnglish
+      ? [`Case: ${shortIdea}.`, "One focused fix delivered visible growth in the first cycle."].join("\n")
+      : [`Кейс: ${shortIdea}.`, "Один точный фикс дал заметный рост уже в первом цикле."].join("\n");
   }
 
   if (role === "comparison") {
-    return [
-      "Делать: один чёткий сценарий и метрика.",
-      "Не делать: хаотичные действия без проверки."
-    ].join("\n");
+    return useEnglish
+      ? ["Do: one clear scenario with one success metric.", "Avoid: chaotic actions without validation."].join("\n")
+      : ["Делать: один чёткий сценарий и одна метрика.", "Не делать: хаотичные действия без проверки."].join("\n");
   }
 
   if (role === "summary") {
-    return [
-      `Итог: ${shortIdea}.`,
-      "Лучшая стратегия: меньше шума, больше точных шагов."
-    ].join("\n");
+    return useEnglish
+      ? [`Summary: ${shortIdea}.`, "Best strategy: less noise, more precise actions."].join("\n")
+      : [`Итог: ${shortIdea}.`, "Лучшая стратегия: меньше шума, больше точных действий."].join("\n");
   }
 
-  return [
-    "Сохраните эту карусель, чтобы не потерять.",
-    "Сделайте первый шаг сегодня."
-  ].join("\n");
+  return useEnglish
+    ? ["Save this carousel so you can reuse the checklist.", "Take the first step today."] .join("\n")
+    : ["Сохраните эту карусель, чтобы не потерять шаги.", "Сделайте первый шаг сегодня."].join("\n");
 }
 
 function fitSlideTextToLayout(
@@ -2198,7 +2483,7 @@ function fitSlideTextToLayout(
     wordLimits.titleWords
   );
 
-  let preparedBody = body;
+  let preparedBody = ensureMicroIdeaBody(body, role, coreIdea, resolvedLayout);
   if (STRUCTURED_LAYOUTS.has(resolvedLayout)) {
     preparedBody = toStructuredBody(preparedBody, resolvedLayout, coreIdea, wordLimits.lineWords);
   } else {
@@ -2220,13 +2505,74 @@ function fitSlideTextToLayout(
     .map((line) => line.trim())
     .filter(Boolean)
     .slice(0, limits.preferredLinesMax)
-    .map((line) => clampSentenceByWords(line, wordLimits.lineWords))
+    .map((line) =>
+      STRUCTURED_LAYOUTS.has(resolvedLayout)
+        ? tidyLineEnding(clampSentence(stripHangingEnding(line), 120))
+        : ensureLineClosure(line)
+    )
+    .filter(Boolean)
     .join("\n");
 
   return {
     title: fittedTitle,
     body: normalizedLines
   };
+}
+
+function ensureMicroIdeaBody(
+  body: string,
+  role: CarouselSlideRole,
+  coreIdea: string,
+  layoutType: CarouselLayoutType
+) {
+  const normalizedLayout = normalizeLayoutType(layoutType);
+  if (STRUCTURED_LAYOUTS.has(normalizedLayout)) {
+    return body;
+  }
+
+  const rawLines = extractBodyLines(body)
+    .map((line) => line.replace(/^([•\-]|\d+\.)\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const nextLines = rawLines.length ? [...rawLines] : [buildBodyPadding(role, coreIdea)];
+
+  if (nextLines.length === 1 && role !== "cta") {
+    nextLines.push(buildMicroConclusion(role, coreIdea));
+  }
+
+  if (hasWeakCopy(nextLines.join(" "))) {
+    nextLines[0] = buildBodyPadding(role, coreIdea);
+  }
+
+  const lastIndex = nextLines.length - 1;
+  if (lastIndex >= 0 && hasHangingEnding(nextLines[lastIndex])) {
+    const stripped = stripHangingEnding(nextLines[lastIndex]);
+    nextLines[lastIndex] = stripped ? `${stripped}.` : buildBodyPadding(role, coreIdea);
+  }
+
+  if (role === "cta" && !CTA_ACTION_PATTERN.test(nextLines.join(" "))) {
+    nextLines[lastIndex] = isMostlyEnglish(coreIdea)
+      ? "Save this carousel and apply the first step today."
+      : "Сохраните карусель и внедрите первый шаг сегодня.";
+  }
+
+  const deduped = Array.from(
+    new Set(
+      nextLines.map((line) => {
+        let normalized = clean(line).replace(/\.+$/g, "").trim();
+        if (hasHangingEnding(normalized)) {
+          normalized = stripHangingEnding(normalized);
+        }
+        return normalized;
+      })
+    )
+  )
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => (countWords(line) < 4 ? buildBodyPadding(role, coreIdea) : line))
+    .slice(0, 3);
+
+  return deduped.join("\n");
 }
 
 function toStructuredBody(
@@ -2240,7 +2586,8 @@ function toStructuredBody(
   const targetLines = Math.max(3, Math.min(5, safeLines.length || 3));
   const compact = safeLines
     .slice(0, targetLines)
-    .map((line) => clampSentenceByWords(clampSentence(line, 78), lineWords));
+    .map((line) => tidyLineEnding(clampSentence(stripHangingEnding(line), Math.max(86, lineWords * 14))))
+    .filter(Boolean);
 
   if (layoutType === "steps") {
     return compact.map((line, index) => `${index + 1}. ${line}`).join("\n");
@@ -2260,25 +2607,32 @@ function toCompactBody(
     return normalized;
   }
 
-  const words = normalized.split(/\s+/).filter(Boolean).slice(0, bodyWords);
-  if (!words.length) {
+  const sentenceSource = normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const safeSentences = sentenceSource.length ? sentenceSource : [normalized];
+  const reducedSentences = safeSentences
+    .slice(0, maxLines)
+    .map((line) => tidyLineEnding(clampSentence(stripHangingEnding(line), Math.max(110, lineWords * 13))))
+    .filter(Boolean)
+    .map((line) => ensureLineClosure(line))
+    .filter(Boolean);
+  const sentenceWordCount = countWords(reducedSentences.join(" "));
+
+  if (reducedSentences.length >= 2 && sentenceWordCount <= bodyWords + 8) {
+    return reducedSentences.join("\n");
+  }
+
+  const fallbackLine = ensureLineClosure(
+    tidyLineEnding(clampSentence(stripHangingEnding(normalized), Math.max(120, bodyWords * 8)))
+  );
+
+  if (!fallbackLine) {
     return "";
   }
 
-  const lines: string[] = [];
-  let cursor = 0;
-
-  while (cursor < words.length && lines.length < maxLines) {
-    const chunk = words.slice(cursor, cursor + lineWords).join(" ");
-    lines.push(chunk);
-    cursor += lineWords;
-  }
-
-  const trimmedLines = lines.map((line, index) =>
-    index === lines.length - 1 ? clampSentence(line, 84) : line
-  );
-
-  return trimmedLines.join("\n");
+  return fallbackLine;
 }
 
 function extractBodyLines(value: string) {
@@ -2299,15 +2653,177 @@ function extractBodyLines(value: string) {
 }
 
 function buildBodyPadding(role: CarouselSlideRole, coreIdea: string) {
+  const useEnglish = isMostlyEnglish(coreIdea);
+  if (role === "cover") {
+    return useEnglish
+      ? "Show the core conflict and why it matters now."
+      : "Покажите конфликт и почему он важен прямо сейчас.";
+  }
+
   if (role === "cta") {
-    return "Сохраните и примените это сегодня.";
+    return useEnglish ? "Save and apply this today." : "Сохраните и примените это сегодня.";
   }
 
   if (role === "tip" || role === "checklist" || role === "steps") {
-    return "Проверьте шаг на практике и замерьте результат.";
+    return useEnglish
+      ? "Test the step in practice and measure the outcome."
+      : "Проверьте шаг на практике и замерьте результат.";
   }
 
-  return `${coreIdea}. Дайте один конкретный пример.`;
+  if (role === "problem") {
+    return useEnglish
+      ? "Show where results are lost and why it is critical."
+      : "Покажите, где именно теряется результат и почему это критично.";
+  }
+
+  if (role === "myth") {
+    return useEnglish
+      ? "Validate the belief with facts and remove false confidence."
+      : "Проверьте убеждение на фактах и уберите ложную опору.";
+  }
+
+  if (role === "mistake") {
+    return useEnglish
+      ? "Name one mistake and replace it with a working action."
+      : "Назовите одну ошибку и сразу замените её рабочим действием.";
+  }
+
+  if (role === "case") {
+    return useEnglish
+      ? "Short case: one action, one measurable result."
+      : "Короткий кейс: одно действие, один измеримый результат.";
+  }
+
+  if (role === "comparison") {
+    return useEnglish
+      ? "Compare working and weak options on one concrete example."
+      : "Сравните рабочий и слабый вариант на одном конкретном примере.";
+  }
+
+  if (role === "summary") {
+    return useEnglish
+      ? "Compress the key takeaway into one formula and act on it."
+      : "Соберите главный вывод в одну формулу и закрепите действием.";
+  }
+
+  return useEnglish
+    ? "Use one specific, measurable action instead of broad advice."
+    : "Сфокусируйтесь на одном конкретном действии и измеримом результате.";
+}
+
+function buildMicroConclusion(role: CarouselSlideRole, coreIdea: string) {
+  const useEnglish = isMostlyEnglish(coreIdea);
+  if (role === "problem") {
+    return useEnglish
+      ? "Until the root cause is fixed, growth will keep hitting a ceiling."
+      : "Пока причина не устранена, рост будет упираться в потолок.";
+  }
+
+  if (role === "myth") {
+    return useEnglish
+      ? "Validate this with data, not habit."
+      : "Проверьте это на данных, а не на привычке.";
+  }
+
+  if (role === "mistake") {
+    return useEnglish
+      ? "Fix this first and your metrics stabilize faster."
+      : "Исправьте это первым — и метрики стабилизируются быстрее.";
+  }
+
+  if (role === "case") {
+    return useEnglish
+      ? "Key lesson: one precise move outperformed ten random attempts."
+      : "Смысл кейса: сработал один точный шаг, а не десять хаотичных.";
+  }
+
+  if (role === "comparison") {
+    return useEnglish
+      ? "The winning option always has a clear action and a result check."
+      : "Выигрывает вариант, где есть чёткое действие и проверка результата.";
+  }
+
+  if (role === "summary") {
+    return useEnglish
+      ? "Focus on one step and carry it to an actual result."
+      : "Сфокусируйтесь на одном шаге и доведите его до результата.";
+  }
+
+  return buildBodyPadding(role, coreIdea);
+}
+
+function hasWeakCopy(value: string) {
+  return WEAK_COPY_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+function hasHangingEnding(value: string) {
+  return HANGING_ENDING_PATTERN.test(
+    value
+      .replace(/[.!?…]+$/g, "")
+      .trim()
+      .toLowerCase()
+  );
+}
+
+function clampLineByWordsSoft(value: string, targetWords: number, overflow = 2) {
+  const words = value
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+
+  if (words.length <= targetWords + overflow) {
+    return value.trim();
+  }
+
+  return clampSentenceByWords(value, targetWords);
+}
+
+function ensureLineClosure(value: string) {
+  const trimmed = tidyLineEnding(value);
+  if (!trimmed) {
+    return "";
+  }
+
+  const withoutHanging = hasHangingEnding(trimmed)
+    ? stripHangingEnding(trimmed)
+    : trimmed;
+  if (!withoutHanging) {
+    return "";
+  }
+
+  if (/[.!?…:]$/.test(withoutHanging)) {
+    return withoutHanging;
+  }
+
+  if (countWords(withoutHanging) >= 4) {
+    return `${withoutHanging}.`;
+  }
+
+  return withoutHanging;
+}
+
+function stripHangingEnding(value: string) {
+  const noPunctuation = clean(value).replace(/[.!?…]+$/g, "").trim();
+  return noPunctuation.replace(HANGING_ENDING_PATTERN, "").trim();
+}
+
+function tidyLineEnding(value: string) {
+  let normalized = clean(value).replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  normalized = normalized
+    .replace(/\s+[,:;.!?…]+$/g, (match) => match.trim())
+    .replace(/[,:;–—-]+$/g, "")
+    .trim();
+
+  if (/[«"(\[]$/.test(normalized)) {
+    normalized = normalized.slice(0, -1).trim();
+  }
+
+  return normalized;
 }
 
 function clampSentenceByWords(value: string, maxWords: number) {
@@ -2330,7 +2846,7 @@ function clampTitle(value: string, maxLength: number) {
     return "Ключевой тезис";
   }
 
-  return clampSentence(cleaned, maxLength);
+  return clampSentence(cleaned, maxLength).replace(/[.!?…]+$/g, "").trim();
 }
 
 function clampBody(value: string, maxLength: number) {
@@ -2360,13 +2876,29 @@ function clampSentence(value: string, maxLength: number) {
     return value;
   }
 
-  const truncated = value.slice(0, maxLength - 1).trimEnd();
-  const lastSpace = truncated.lastIndexOf(" ");
-  if (lastSpace > 24) {
-    return `${truncated.slice(0, lastSpace).trimEnd()}…`;
+  const truncated = value.slice(0, maxLength).trimEnd();
+  const sentenceBoundary = Math.max(
+    truncated.lastIndexOf("."),
+    truncated.lastIndexOf("!"),
+    truncated.lastIndexOf("?"),
+    truncated.lastIndexOf(";"),
+    truncated.lastIndexOf(":")
+  );
+  if (sentenceBoundary > Math.floor(maxLength * 0.55)) {
+    return truncated.slice(0, sentenceBoundary + 1).trimEnd();
   }
 
-  return `${truncated}…`;
+  const commaBoundary = truncated.lastIndexOf(",");
+  if (commaBoundary > Math.floor(maxLength * 0.6)) {
+    return `${truncated.slice(0, commaBoundary).trimEnd()}.`;
+  }
+
+  const lastSpace = truncated.lastIndexOf(" ");
+  if (lastSpace > 24) {
+    return `${truncated.slice(0, lastSpace).trimEnd()}.`;
+  }
+
+  return `${truncated.trimEnd()}.`;
 }
 
 function normalizeTitle(
@@ -2387,11 +2919,16 @@ function normalizeTitle(
     clampTitle(basis, LAYOUT_LIMITS[normalizeLayoutType(planSlide.layoutType)].titleMax)
   );
 
-  if (
-    planSlide.role === "cover" &&
-    /^(сравнение|обзор|гайд|guide|summary)\b/i.test(normalized)
-  ) {
-    return "Вы теряете результат и даже не замечаете";
+  if (planSlide.role === "cover" && isWeakHookTitle(normalized)) {
+    return buildHookTitle(topic);
+  }
+
+  if (isIncompleteTitle(normalized)) {
+    if (planSlide.role === "cover") {
+      return buildHookTitle(topic);
+    }
+
+    return buildFallbackTitle(planSlide, topic, index, total);
   }
 
   return normalized;
@@ -2778,6 +3315,10 @@ function buildImageQueryDraft(
   const inferredCategory = category ?? inferTopicLens(topic || coreIdea, [coreIdea]).category;
   const baseKeywords = extractSearchKeywords(`${coreIdea} ${topic}`).slice(0, 6);
   const translated = baseKeywords.map((token) => KEYWORD_TRANSLATIONS[token] ?? token);
+  const sceneKeywords = extractSearchKeywords(
+    translateSceneToEnglish(`${topic} ${coreIdea}`)
+  ).slice(0, 6);
+  const queryLanguageIsEnglish = isMostlyEnglish(`${topic} ${coreIdea}`);
   const categoryHints = getCategoryVisualHints(inferredCategory, role);
   const intentPrefix =
     imageIntent === "people-photo"
@@ -2795,17 +3336,60 @@ function buildImageQueryDraft(
         : role === "comparison"
           ? ["contrast", "scene"]
           : [];
+  const subjectTokens = queryLanguageIsEnglish ? baseKeywords : translated;
 
   const query = uniqueSearchTokens([
     ...intentPrefix,
     ...categoryHints,
     ...roleHint,
-    ...translated
+    ...sceneKeywords,
+    ...subjectTokens
   ])
     .slice(0, 10)
     .join(" ");
 
   return normalizeImageQuery(query);
+}
+
+function translateSceneToEnglish(value: string) {
+  const topic = value.toLowerCase();
+
+  if (/(элитн|дорог|премиум).*(недвиж|квартир|дом)|недвиж.*(элитн|дорог|премиум)/i.test(topic)) {
+    return "luxury real estate interior architecture daylight";
+  }
+
+  if (/(продаж|риелтор|ипотек|клиент).*(недвиж|квартир|дом)|недвиж.*(продаж|риелтор|ипотек)/i.test(topic)) {
+    return "real estate consultation office clients meeting";
+  }
+
+  if (/(съедоб|ядовит|гриб)/i.test(topic)) {
+    return "edible poisonous mushrooms forest closeup macro";
+  }
+
+  if (/(кофе|coffee|brew|barista)/i.test(topic)) {
+    return "coffee brewing barista closeup beans cup";
+  }
+
+  if (/(конверси|продаж|лид|воронк|маркетинг|sales|conversion)/i.test(topic)) {
+    return "business growth analytics strategy meeting";
+  }
+
+  if (/(instagram|creator|личн.*бренд)/i.test(topic)) {
+    return "creator workspace smartphone content planning portrait";
+  }
+
+  if (/(onboarding|saas|b2b)/i.test(topic)) {
+    return "saas onboarding workspace product team";
+  }
+
+  if (/(зуб|стомат|дентал|teeth|dental)/i.test(topic)) {
+    return "dental clinic consultation healthy teeth closeup";
+  }
+
+  return extractSearchKeywords(value)
+    .slice(0, 8)
+    .map((token) => KEYWORD_TRANSLATIONS[token] ?? token)
+    .join(" ");
 }
 
 function getCategoryVisualHints(category: TopicCategory, role: CarouselSlideRole) {

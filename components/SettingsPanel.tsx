@@ -591,7 +591,7 @@ export function SettingsPanel({
                     onClick={() => onUpdateBackgroundImageStyle({ fitMode: mode })}
                     disabled={disabled}
                   >
-                    {mode}
+                    {getFitModeLabel(mode)}
                   </button>
                 ))}
               </div>
@@ -877,7 +877,7 @@ export function SettingsPanel({
               onClick={onResetElementRotation}
               disabled={disabled || Math.abs(selectedElement.rotation) < 0.01}
             >
-              Reset rotation (0°)
+              Сбросить поворот (0°)
             </button>
 
             {selectedElement.type === "text" ? (
@@ -1020,9 +1020,9 @@ export function SettingsPanel({
                       }
                       disabled={disabled}
                     >
-                      <option value="left">Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
+                      <option value="left">Слева</option>
+                      <option value="center">По центру</option>
+                      <option value="right">Справа</option>
                     </select>
                   </label>
                 </div>
@@ -1205,7 +1205,7 @@ export function SettingsPanel({
                         }
                         disabled={disabled}
                       >
-                        {mode}
+                        {getFitModeLabel(mode)}
                       </button>
                     ))}
                   </div>
@@ -1460,6 +1460,18 @@ function getExportLabel(mode: ExportMode) {
     return "PDF";
   }
   return "ZIP";
+}
+
+function getFitModeLabel(mode: "cover" | "contain" | "original") {
+  if (mode === "cover") {
+    return "Заполнить";
+  }
+
+  if (mode === "contain") {
+    return "Вписать";
+  }
+
+  return "Оригинал";
 }
 
 const EXPORT_PRESETS: Array<{

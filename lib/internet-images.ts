@@ -7,7 +7,7 @@ import type {
 const OPENVERSE_API_URL = "https://api.openverse.engineering/v1/images";
 const WIKIMEDIA_API_URL = "https://commons.wikimedia.org/w/api.php";
 const IMAGE_SEARCH_TIMEOUT_MS = 5500;
-const MIN_RELEVANCE_SCORE = 0.34;
+const MIN_RELEVANCE_SCORE = 0.36;
 const MAX_QUERY_VARIANTS = 4;
 const MAX_QUERY_WORDS = 10;
 
@@ -85,6 +85,11 @@ const TRANSLATIONS: Record<string, string> = {
   сайта: "website",
   экспертный: "expert",
   instagram: "instagram",
+  зубы: "teeth",
+  зубов: "teeth",
+  стоматология: "dental",
+  стоматолог: "dentist",
+  клиника: "clinic",
   пенсионеров: "seniors",
   пенсионеры: "seniors",
   продажа: "sales",
@@ -120,6 +125,10 @@ const SCENE_TRANSLATIONS: Array<{ re: RegExp; replacement: string }> = [
   {
     re: /(instagram|инстаграм|creator|контент|личн.*бренд)/i,
     replacement: "creator workspace smartphone content planning portrait"
+  },
+  {
+    re: /(зуб|стомат|кариес|десн|дентал)/i,
+    replacement: "dental clinic consultation healthy teeth closeup"
   }
 ];
 
@@ -159,6 +168,57 @@ const CONCEPTUAL_TOKENS = new Set([
   "interior",
   "forest",
   "nature"
+]);
+
+const CRITICAL_ANCHOR_TOKENS = new Set([
+  "mushroom",
+  "mushrooms",
+  "poisonous",
+  "edible",
+  "estate",
+  "property",
+  "apartment",
+  "mortgage",
+  "house",
+  "interior",
+  "architecture",
+  "coffee",
+  "dental",
+  "teeth",
+  "clinic"
+]);
+
+const STRICT_VISUAL_ANCHOR_TOKENS = new Set([
+  "mushroom",
+  "mushrooms",
+  "poisonous",
+  "edible",
+  "estate",
+  "property",
+  "apartment",
+  "mortgage",
+  "house",
+  "coffee",
+  "dental",
+  "teeth",
+  "clinic"
+]);
+
+const OUT_OF_CONTEXT_NOISE_TOKENS = new Set([
+  "cat",
+  "cats",
+  "dog",
+  "dogs",
+  "bird",
+  "birds",
+  "wildlife",
+  "zoo",
+  "lion",
+  "tiger",
+  "elephant",
+  "horse",
+  "puppy",
+  "kitten"
 ]);
 
 const LOW_QUALITY_META_RE =
@@ -229,6 +289,7 @@ export async function findInternetImagesForCarousel(
   maxImages = 3
 ) {
   const safeMaxImages = Math.max(1, Math.min(3, Math.round(maxImages)));
+  const topicCategory = inferImageTopicCategory(topic);
   if (!slides.length) {
     return [];
   }
@@ -269,17 +330,29 @@ export async function findInternetImagesForCarousel(
       .filter((index) => !suggestions.some((item) => item.slideIndex === index));
 
     if (available.length) {
+      const topicFallbackThreshold =
+        topicCategory === "real-estate" || topicCategory === "nature-food"
+          ? MIN_RELEVANCE_SCORE + 0.12
+          : MIN_RELEVANCE_SCORE + 0.16;
       const topicQuery = normalizeQuery(topic);
-      if (topicQuery) {
+      const translatedTopicQuery = normalizeQuery(translateSceneToEnglish(topic));
+      const categoryTopicQuery = normalizeQuery(
+        `${getCategoryHintTokens(topicCategory, "cover").join(" ")} ${translatedTopicQuery}`
+      );
+      const fallbackQueries = Array.from(
+        new Set([topicQuery, translatedTopicQuery, categoryTopicQuery].filter(Boolean))
+      );
+
+      if (fallbackQueries.length) {
         const topicBest = await findBestCandidateAcrossQueries(
-          [topicQuery],
+          fallbackQueries,
           topicTokens,
           {
             role: "cover",
             imageIntent: "subject-photo"
           },
           usedUrls,
-          MIN_RELEVANCE_SCORE + 0.2
+          topicFallbackThreshold
         );
 
         if (topicBest) {
@@ -338,6 +411,7 @@ async function findBestCandidateAcrossQueries(
     }
 
     const anchorTokens = extractAnchorTokens(queryTokens, topicTokens);
+    const criticalAnchors = extractCriticalAnchors(anchorTokens, topicTokens, queryTokens);
 
     const openverseResults = await searchOpenverse(query);
     const openverseRanked = rankCandidates(
@@ -345,6 +419,7 @@ async function findBestCandidateAcrossQueries(
       query,
       queryTokens,
       anchorTokens,
+      criticalAnchors,
       topicTokens,
       context
     ).filter((item) => !usedUrls.has(item.url) && item.finalScore >= minScore);
@@ -362,6 +437,7 @@ async function findBestCandidateAcrossQueries(
       query,
       queryTokens,
       anchorTokens,
+      criticalAnchors,
       topicTokens,
       context
     ).filter((item) => !usedUrls.has(item.url) && item.finalScore >= minScore + 0.02);
@@ -380,7 +456,7 @@ async function findBestCandidateAcrossQueries(
 function resolveMinScoreForSlide(role: CarouselSlideRole, intent: CarouselImageIntent) {
   const roleThreshold =
     role === "cover"
-      ? 0.5
+      ? 0.52
       : role === "case"
         ? 0.47
         : role === "problem"
@@ -885,6 +961,7 @@ function rankCandidates(
   query: string,
   queryTokens: string[],
   anchorTokens: string[],
+  criticalAnchors: string[],
   topicTokens: string[],
   context: {
     role: CarouselSlideRole;
@@ -892,7 +969,9 @@ function rankCandidates(
   }
 ) {
   return results
-    .map((result) => scoreCandidate(result, query, queryTokens, anchorTokens, topicTokens, context))
+    .map((result) =>
+      scoreCandidate(result, query, queryTokens, anchorTokens, criticalAnchors, topicTokens, context)
+    )
     .filter((item): item is SearchCandidate => Boolean(item))
     .sort((left, right) => right.finalScore - left.finalScore);
 }
@@ -902,6 +981,7 @@ function scoreCandidate(
   query: string,
   queryTokens: string[],
   anchorTokens: string[],
+  criticalAnchors: string[],
   topicTokens: string[],
   context: {
     role: CarouselSlideRole;
@@ -942,6 +1022,27 @@ function scoreCandidate(
     ? getOverlapScore(anchorTokens, candidateTokens)
     : queryOverlap;
   if (anchorTokens.length >= 2 && anchorOverlap < 0.26) {
+    return null;
+  }
+
+  if (criticalAnchors.length > 0) {
+    const hasStrictVisualAnchor = criticalAnchors.some((token) =>
+      STRICT_VISUAL_ANCHOR_TOKENS.has(token)
+    );
+    if (hasStrictVisualAnchor && getOverlapScore(criticalAnchors, candidateTokens) < 0.16) {
+      return null;
+    }
+  }
+
+  if (
+    hasOutOfContextNoise(
+      candidateTokens,
+      queryTokens,
+      topicTokens,
+      context.imageIntent,
+      anchorOverlap
+    )
+  ) {
     return null;
   }
 
@@ -992,6 +1093,33 @@ function scoreCandidate(
     finalScore,
     queryUsed: query
   };
+}
+
+function hasOutOfContextNoise(
+  candidateTokens: Set<string>,
+  queryTokens: string[],
+  topicTokens: string[],
+  imageIntent: CarouselImageIntent,
+  anchorOverlap: number
+) {
+  if (imageIntent === "conceptual-photo") {
+    return false;
+  }
+
+  const noisyTokens = Array.from(candidateTokens).filter((token) =>
+    OUT_OF_CONTEXT_NOISE_TOKENS.has(token)
+  );
+  if (!noisyTokens.length) {
+    return false;
+  }
+
+  const semanticTopic = new Set([...queryTokens, ...topicTokens]);
+  const hasTopicSupport = noisyTokens.some((token) => semanticTopic.has(token));
+  if (hasTopicSupport) {
+    return false;
+  }
+
+  return anchorOverlap < 0.42;
 }
 
 function getIntentAffinity(tokens: Set<string>, intent: CarouselImageIntent) {
@@ -1144,6 +1272,33 @@ function extractAnchorTokens(queryTokens: string[], topicTokens: string[]) {
   );
 
   return Array.from(new Set(filtered)).slice(0, 7);
+}
+
+function extractCriticalAnchors(
+  anchorTokens: string[],
+  topicTokens: string[],
+  queryTokens: string[]
+) {
+  const merged = Array.from(new Set([...anchorTokens, ...topicTokens, ...queryTokens]));
+  const strictFirst = merged.filter((token) => STRICT_VISUAL_ANCHOR_TOKENS.has(token));
+  if (strictFirst.length > 0) {
+    return strictFirst.slice(0, 3);
+  }
+
+  const critical = merged.filter((token) => CRITICAL_ANCHOR_TOKENS.has(token));
+
+  if (critical.length > 0) {
+    return critical.slice(0, 4);
+  }
+
+  const fallback = merged.filter(
+    (token) =>
+      token.length >= 5 &&
+      !GENERIC_QUERY_TOKENS.has(token) &&
+      !QUERY_NOISE_WORDS.has(token)
+  );
+
+  return fallback.slice(0, 3);
 }
 
 function getOverlapScore(tokens: string[], candidateTokens: Set<string>) {

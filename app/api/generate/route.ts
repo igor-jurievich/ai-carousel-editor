@@ -101,7 +101,7 @@ export async function POST(request: Request) {
       query?: string;
     }> = [];
     if (useInternetImages) {
-      internetImages = await findInternetImagesForCarousel(topic, slides, 3).catch(() => []);
+      internetImages = await findInternetImagesForCarousel(topic, slides, 2).catch(() => []);
     }
 
     return NextResponse.json({ slides, internetImages });
