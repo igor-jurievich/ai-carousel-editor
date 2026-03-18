@@ -9,6 +9,8 @@ type ToolbarProps = {
   status: string;
   onTopicChange: (value: string) => void;
   onSlidesCountChange: (value: number) => void;
+  useInternetImages: boolean;
+  onUseInternetImagesChange: (value: boolean) => void;
   onGenerate: () => void;
   isGenerating: boolean;
   disabled?: boolean;
@@ -21,6 +23,8 @@ export function Toolbar({
   status,
   onTopicChange,
   onSlidesCountChange,
+  useInternetImages,
+  onUseInternetImagesChange,
   onGenerate,
   isGenerating,
   disabled = false
@@ -55,6 +59,18 @@ export function Toolbar({
               </option>
             ))}
           </select>
+        </label>
+        <label className="prompt-toggle-field">
+          <input
+            type="checkbox"
+            checked={useInternetImages}
+            onChange={(event) => onUseInternetImagesChange(event.target.checked)}
+            disabled={disabled}
+          />
+          <span>
+            Картинки из интернета
+            <small>Автоподбор 1-3 фото по теме</small>
+          </span>
         </label>
         <button className="btn" type="button" onClick={onGenerate} disabled={isGenerating || disabled}>
           {isGenerating ? "Генерирую..." : "Сгенерировать"}

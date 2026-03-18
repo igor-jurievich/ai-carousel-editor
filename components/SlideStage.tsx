@@ -34,7 +34,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 const TEXT_SAFE_AREA = {
-  insetX: 84,
+  insetX: 56,
   insetTop: 84,
   insetBottom: 96
 };
@@ -251,10 +251,8 @@ function SlideTextNode({
       onDblTap={onDoubleClick}
       onDragEnd={(event) => onDragEnd?.(event.target.x(), event.target.y())}
       onTransformEnd={(event) => onTransformEnd?.(event.target as Konva.Text)}
-      stroke={selected ? "#72d6cb" : undefined}
-      strokeWidth={selected ? 2.2 : 0}
-      shadowColor={selected ? "rgba(114, 214, 203, 0.35)" : undefined}
-      shadowBlur={selected ? 12 : 0}
+      strokeEnabled={false}
+      shadowEnabled={false}
     />
   );
 }

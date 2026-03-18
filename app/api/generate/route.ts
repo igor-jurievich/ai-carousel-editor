@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { clampSlidesCount, generateCarouselFromTopic } from "@/lib/openai";
+import { findInternetImagesForCarousel } from "@/lib/internet-images";
 
 export const runtime = "nodejs";
 
@@ -36,10 +37,14 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { topic?: unknown; slidesCount?: unknown };
+  let body: { topic?: unknown; slidesCount?: unknown; useInternetImages?: unknown };
 
   try {
-    body = (await request.json()) as { topic?: unknown; slidesCount?: unknown };
+    body = (await request.json()) as {
+      topic?: unknown;
+      slidesCount?: unknown;
+      useInternetImages?: unknown;
+    };
   } catch {
     return NextResponse.json(
       { error: "Некорректный формат запроса. Обновите страницу и попробуйте снова." },
@@ -51,6 +56,8 @@ export async function POST(request: Request) {
   const slidesCount = clampSlidesCount(
     typeof body.slidesCount === "number" ? body.slidesCount : Number(body.slidesCount)
   );
+  const useInternetImages =
+    body.useInternetImages === true || body.useInternetImages === "true";
 
   if (!topic) {
     return NextResponse.json(
@@ -86,7 +93,12 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ slides });
+    let internetImages: Array<{ slideIndex: number; imageUrl: string }> = [];
+    if (useInternetImages) {
+      internetImages = await findInternetImagesForCarousel(topic, slides, 3).catch(() => []);
+    }
+
+    return NextResponse.json({ slides, internetImages });
   } catch (error) {
     if (error instanceof Error && error.name === "GenerateTimeoutError") {
       return NextResponse.json(

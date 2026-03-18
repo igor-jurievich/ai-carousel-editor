@@ -39,6 +39,7 @@ type CanvasEditorProps = {
   disabled?: boolean;
   previewMode?: boolean;
   showSlideBadge?: boolean;
+  fontsReady?: boolean;
 };
 
 export function CanvasEditor({
@@ -70,7 +71,8 @@ export function CanvasEditor({
   onDeleteSlide,
   disabled = false,
   previewMode = false,
-  showSlideBadge = true
+  showSlideBadge = true,
+  fontsReady = true
 }: CanvasEditorProps) {
   const scale = displayWidth / canvasWidth;
   const formatLabel = SLIDE_FORMAT_DIMENSIONS[activeFormat].label;
@@ -96,7 +98,11 @@ export function CanvasEditor({
               ) : null}
 
               <div className="canvas-stage canvas-stage-editor mobile-stage-editor">
-                <div className="canvas-stage-center mobile-stage-surface">
+                <div
+                  className={`canvas-stage-center mobile-stage-surface ${
+                    fontsReady ? "" : "is-loading-fonts"
+                  }`}
+                >
                   <SlideStage
                     slide={activeSlide}
                     width={displayWidth}
@@ -135,18 +141,7 @@ export function CanvasEditor({
                         onCancelTextEditing();
                       }
                     }}
-                    style={{
-                      left: editingTextElement.x * scale,
-                      top: editingTextElement.y * scale,
-                      width: editingTextElement.width * scale,
-                      height: Math.max(48, editingTextElement.height * scale),
-                      fontSize: editingTextElement.fontSize * scale,
-                      fontFamily: editingTextElement.fontFamily,
-                      color: editingTextElement.fill,
-                      textAlign: editingTextElement.align,
-                      lineHeight: String(editingTextElement.lineHeight ?? 1.1),
-                      transform: `rotate(${editingTextElement.rotation}deg)`
-                    }}
+                    style={resolveInlineTextEditorStyle(editingTextElement, scale)}
                   />
                 ) : null}
 
@@ -295,7 +290,7 @@ export function CanvasEditor({
                         }
                       }}
                     >
-                      <div className="canvas-stage-center">
+                      <div className={`canvas-stage-center ${fontsReady ? "" : "is-loading-fonts"}`}>
                         <SlideStage
                           slide={slide}
                           width={displayWidth}
@@ -336,18 +331,7 @@ export function CanvasEditor({
                               onCancelTextEditing();
                             }
                           }}
-                          style={{
-                            left: editingTextElement.x * scale,
-                            top: editingTextElement.y * scale,
-                            width: editingTextElement.width * scale,
-                            height: Math.max(48, editingTextElement.height * scale),
-                            fontSize: editingTextElement.fontSize * scale,
-                            fontFamily: editingTextElement.fontFamily,
-                            color: editingTextElement.fill,
-                            textAlign: editingTextElement.align,
-                            lineHeight: String(editingTextElement.lineHeight ?? 1.1),
-                            transform: `rotate(${editingTextElement.rotation}deg)`
-                          }}
+                          style={resolveInlineTextEditorStyle(editingTextElement, scale)}
                         />
                       ) : null}
 
@@ -422,6 +406,31 @@ export function CanvasEditor({
       </div>
     </section>
   );
+}
+
+function resolveInlineTextEditorStyle(element: TextElement, scale: number) {
+  const fontStyle = element.fontStyle ?? "normal";
+  const hasBold = fontStyle.includes("bold");
+  const hasItalic = fontStyle.includes("italic");
+
+  return {
+    left: element.x * scale,
+    top: element.y * scale,
+    width: element.width * scale,
+    height: Math.max(42, element.height * scale),
+    fontSize: element.fontSize * scale,
+    fontFamily: element.fontFamily,
+    fontWeight: hasBold ? 700 : 400,
+    fontStyle: hasItalic ? "italic" : "normal",
+    letterSpacing: `${(element.letterSpacing ?? 0) * scale}px`,
+    textDecoration: element.textDecoration || "none",
+    color: element.fill,
+    textAlign: element.align,
+    lineHeight: String(element.lineHeight ?? 1.1),
+    transform: `rotate(${element.rotation}deg)`,
+    whiteSpace: "pre-wrap",
+    overflow: "hidden"
+  } as const;
 }
 
 function getFloatingActionStyle(

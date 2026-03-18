@@ -50,10 +50,17 @@ const MIN_TOPIC_CHARS = 3;
 const EXPORT_LOCK_STATUS = "Дождитесь завершения экспорта и повторите действие.";
 const GENERATE_LOCK_STATUS = "Дождитесь завершения генерации и повторите действие.";
 const TEXT_SAFE_AREA = {
-  insetX: 84,
+  insetX: 56,
   insetTop: 84,
   insetBottom: 96
 };
+const DECOR_BACKGROUND_META_KEYS = new Set([
+  "decor-bg",
+  "decor-paper",
+  "decor-dots-bg",
+  "decor-lines-bg",
+  "decor-bolts-bg"
+]);
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
 const HISTORY_LIMIT = 40;
@@ -87,6 +94,8 @@ export function Editor() {
   const [pendingBackgroundSlideId, setPendingBackgroundSlideId] = useState<string | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [showSlideBadge, setShowSlideBadge] = useState(true);
+  const [useInternetImages, setUseInternetImages] = useState(false);
+  const [fontsReady, setFontsReady] = useState(false);
   const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([]);
   const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([]);
   const desktopCanvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -108,6 +117,39 @@ export function Editor() {
       current && slides.some((slide) => slide.id === current) ? current : slides[0].id
     );
   }, [slides]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      setFontsReady(true);
+      return;
+    }
+
+    if (!("fonts" in document) || !document.fonts?.ready) {
+      setFontsReady(true);
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (!cancelled) {
+        setFontsReady(true);
+      }
+    }, 2200);
+
+    document.fonts.ready
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) {
+          window.clearTimeout(timeoutId);
+          setFontsReady(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
 
   useEffect(() => {
     const { width: canvasWidth, height: canvasHeight } = SLIDE_FORMAT_DIMENSIONS[slideFormat];
@@ -452,7 +494,9 @@ export function Editor() {
     try {
       setIsGenerating(true);
       setStatus(
-        `Генерирую структуру через OpenAI (${requestedSlidesCount} слайдов, формат ${slideFormat})...`
+        useInternetImages
+          ? `Генерирую ${requestedSlidesCount} слайдов и подбираю интернет-фото...`
+          : `Генерирую структуру через OpenAI (${requestedSlidesCount} слайдов, формат ${slideFormat})...`
       );
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 70000);
@@ -462,7 +506,11 @@ export function Editor() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ topic: normalizedTopic, slidesCount: requestedSlidesCount }),
+        body: JSON.stringify({
+          topic: normalizedTopic,
+          slidesCount: requestedSlidesCount,
+          useInternetImages
+        }),
         signal: controller.signal
       }).finally(() => {
         window.clearTimeout(timeoutId);
@@ -470,11 +518,13 @@ export function Editor() {
 
       let data: {
         slides?: Array<{ title: string; text: string }>;
+        internetImages?: Array<{ slideIndex: number; imageUrl: string }>;
         error?: string;
       };
       try {
         data = (await response.json()) as {
           slides?: Array<{ title: string; text: string }>;
+          internetImages?: Array<{ slideIndex: number; imageUrl: string }>;
           error?: string;
         };
       } catch {
@@ -495,12 +545,22 @@ export function Editor() {
         slideFormat,
         requestedSlidesCount
       );
+      const withInternetImages = useInternetImages
+        ? applyInternetImagesToSlides(nextSlides, data.internetImages ?? [], slideFormat)
+        : nextSlides;
+      const addedInternetImages =
+        withInternetImages.filter((slide) => Boolean(slide.backgroundImage)).length -
+        nextSlides.filter((slide) => Boolean(slide.backgroundImage)).length;
       pushHistorySnapshot(true);
-      setSlides(nextSlides);
-      setActiveSlideId(nextSlides[0]?.id ?? null);
+      setSlides(withInternetImages);
+      setActiveSlideId(withInternetImages[0]?.id ?? null);
       setSelectedElementId(null);
       setEditingTextElementId(null);
-      setStatus(`Создано ${nextSlides.length} слайдов в формате ${slideFormat}.`);
+      setStatus(
+        addedInternetImages > 0
+          ? `Создано ${withInternetImages.length} слайдов, добавлено ${addedInternetImages} интернет-фото.`
+          : `Создано ${withInternetImages.length} слайдов в формате ${slideFormat}.`
+      );
     } catch (error) {
       if (requestId === generateRequestRef.current) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -524,7 +584,21 @@ export function Editor() {
 
     updateActiveSlide((slide) => ({
       ...slide,
-      background: color
+      background: color,
+      elements: slide.elements.map((element) => {
+        if (
+          element.type === "shape" &&
+          element.metaKey &&
+          DECOR_BACKGROUND_META_KEYS.has(element.metaKey)
+        ) {
+          return {
+            ...element,
+            fill: color
+          };
+        }
+
+        return element;
+      })
     }));
   };
 
@@ -951,6 +1025,7 @@ export function Editor() {
     setEditingValue("");
     setMobileToolTab(null);
     setExportMode("zip");
+    setUseInternetImages(false);
     setStatus(DEFAULT_STATUS);
   };
 
@@ -1148,6 +1223,8 @@ export function Editor() {
             status={status}
             onTopicChange={setTopic}
             onSlidesCountChange={(value) => setSlidesCount(clampSlidesCount(value))}
+            useInternetImages={useInternetImages}
+            onUseInternetImagesChange={setUseInternetImages}
             onGenerate={handleGenerate}
             isGenerating={isGenerating}
             disabled={generationLocked}
@@ -1223,6 +1300,7 @@ export function Editor() {
                 disabled={generationLocked}
                 previewMode={isPreviewMode}
                 showSlideBadge={showSlideBadge}
+                fontsReady={fontsReady}
               />
             </section>
 
@@ -1400,6 +1478,18 @@ export function Editor() {
                   {isGenerating ? "Генерирую..." : "Сгенерировать"}
                 </button>
               </div>
+              <label className="mobile-generate-toggle">
+                <input
+                  type="checkbox"
+                  checked={useInternetImages}
+                  onChange={(event) => setUseInternetImages(event.target.checked)}
+                  disabled={generationLocked}
+                />
+                <span>
+                  Использовать картинки из интернета
+                  <small>Автоподбор 1-3 релевантных фото по теме</small>
+                </span>
+              </label>
             </div>
           </details>
 
@@ -1436,6 +1526,7 @@ export function Editor() {
               disabled={generationLocked}
               previewMode={isPreviewMode}
               showSlideBadge={showSlideBadge}
+              fontsReady={fontsReady}
             />
           </section>
 
@@ -1517,6 +1608,47 @@ export function Editor() {
       ) : null}
     </main>
   );
+}
+
+function applyInternetImagesToSlides(
+  slides: Slide[],
+  suggestions: Array<{ slideIndex: number; imageUrl: string }>,
+  format: SlideFormat
+) {
+  if (!suggestions.length) {
+    return slides;
+  }
+
+  const nextSlides = cloneSlides(slides);
+  const maxSuggestions = Math.min(3, suggestions.length);
+
+  for (let index = 0; index < maxSuggestions; index += 1) {
+    const suggestion = suggestions[index];
+    if (!suggestion || !suggestion.imageUrl) {
+      continue;
+    }
+
+    const safeSlideIndex = clampValue(
+      Number.isFinite(suggestion.slideIndex) ? Math.round(suggestion.slideIndex) : 0,
+      0,
+      nextSlides.length - 1
+    );
+    const targetSlide = nextSlides[safeSlideIndex];
+
+    if (!targetSlide) {
+      continue;
+    }
+
+    nextSlides[safeSlideIndex] = setSlideBackgroundImage(
+      targetSlide,
+      suggestion.imageUrl,
+      safeSlideIndex,
+      nextSlides.length,
+      format
+    );
+  }
+
+  return nextSlides;
 }
 
 async function waitForNextFrame() {
@@ -1662,6 +1794,10 @@ function slugify(value: string) {
     .replace(/[^a-z0-9а-яё]+/gi, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+function clampValue(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 async function downscaleDataUrl(dataUrl: string, maxSide: number) {
