@@ -4,6 +4,35 @@ export type SlideFormat = "1:1" | "4:5" | "9:16";
 export type FooterVariantId = "v1" | "v2" | "v3" | "v4";
 export type TemplateCategoryId = "dark" | "light" | "color";
 export type ElementMetaKey = string;
+export type CarouselSlideRole =
+  | "cover"
+  | "problem"
+  | "myth"
+  | "mistake"
+  | "tip"
+  | "steps"
+  | "checklist"
+  | "case"
+  | "comparison"
+  | "summary"
+  | "cta";
+export type CarouselLayoutType =
+  | "cover-hero"
+  | "title-body"
+  | "bullets"
+  | "steps"
+  | "checklist"
+  | "case-split"
+  | "comparison"
+  | "summary"
+  | "cta"
+  | "image-top";
+export type CarouselImageIntent =
+  | "none"
+  | "subject-photo"
+  | "people-photo"
+  | "object-photo"
+  | "conceptual-photo";
 
 export type TextElement = {
   id: string;
@@ -72,11 +101,22 @@ export type Slide = {
   profileSubtitle?: string;
   backgroundImage?: string | null;
   imageLayoutMode?: "background" | "top";
+  generationRole?: CarouselSlideRole;
+  generationCoreIdea?: string;
+  layoutType?: CarouselLayoutType;
+  imageIntent?: CarouselImageIntent;
+  imageQueryDraft?: string;
 };
 
 export type CarouselOutlineSlide = {
   title: string;
   text: string;
+  role?: CarouselSlideRole;
+  coreIdea?: string;
+  layoutType?: CarouselLayoutType;
+  imageIntent?: CarouselImageIntent;
+  imageQueryDraft?: string;
+  templateId?: CarouselTemplateId;
 };
 
 export type CarouselProjectSummary = {

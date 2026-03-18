@@ -98,6 +98,7 @@ export async function POST(request: Request) {
       imageUrl: string;
       source?: string;
       relevanceScore?: number;
+      query?: string;
     }> = [];
     if (useInternetImages) {
       internetImages = await findInternetImagesForCarousel(topic, slides, 3).catch(() => []);

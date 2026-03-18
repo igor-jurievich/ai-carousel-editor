@@ -495,6 +495,16 @@ export function getTemplate(templateId: CarouselTemplateId) {
   return CAROUSEL_TEMPLATES.find((template) => template.id === templateId) ?? CAROUSEL_TEMPLATES[0];
 }
 
+function resolveTemplateId(candidate: CarouselTemplateId | undefined, fallback: CarouselTemplateId) {
+  if (!candidate) {
+    return fallback;
+  }
+
+  return CAROUSEL_TEMPLATES.some((template) => template.id === candidate)
+    ? candidate
+    : fallback;
+}
+
 export function getTemplatesByCategory(category: TemplateCategoryId) {
   return CAROUSEL_TEMPLATES.filter((template) => template.category === category);
 }
@@ -632,19 +642,19 @@ type ImageTopLayout = {
 
 function getImageTopLayout(format: SlideFormat): ImageTopLayout {
   const { height } = SLIDE_FORMAT_DIMENSIONS[format];
-  const cardX = 56;
-  const cardY = 56;
-  const cardWidth = 968;
+  const cardX = 52;
+  const cardY = 52;
+  const cardWidth = 976;
   const cardHeight = Math.max(360, height - cardY * 2);
-  const imageX = cardX + 24;
-  const imageY = cardY + 24;
-  const imageWidth = cardWidth - 48;
-  const imageHeight = format === "9:16" ? 612 : format === "4:5" ? 502 : 392;
-  const textPanelY = imageY + imageHeight - 4;
-  const textPanelHeight = Math.max(230, cardY + cardHeight - textPanelY - 20);
-  const textX = cardX + 56;
-  const textWidth = cardWidth - 112;
-  const titleY = textPanelY + 42;
+  const imageX = cardX + 20;
+  const imageY = cardY + 20;
+  const imageWidth = cardWidth - 40;
+  const imageHeight = format === "9:16" ? 708 : format === "4:5" ? 558 : 446;
+  const textPanelY = imageY + imageHeight - 2;
+  const textPanelHeight = Math.max(248, cardY + cardHeight - textPanelY - 16);
+  const textX = cardX + 52;
+  const textWidth = cardWidth - 104;
+  const titleY = textPanelY + 46;
   const textBottom =
     cardY + cardHeight - (format === "9:16" ? 170 : format === "4:5" ? 154 : 144);
 
@@ -1009,8 +1019,8 @@ function createImageTopFrame(
       width: layout.cardWidth,
       height: layout.cardHeight,
       fill: template.surface,
-      cornerRadius: 32,
-      opacity: 0.985
+      cornerRadius: 36,
+      opacity: 0.99
     }),
     createShapeElement({
       metaKey: "image-top-frame",
@@ -1018,9 +1028,9 @@ function createImageTopFrame(
       y: layout.imageY - 2,
       width: layout.imageWidth + 4,
       height: layout.imageHeight + 4,
-      fill: "rgba(255,255,255,0.9)",
+      fill: "rgba(255,255,255,0.82)",
       cornerRadius: 24,
-      opacity: 0.9
+      opacity: 0.92
     }),
     createImageElement(imageSrc, {
       metaKey: "internet-image-top",
@@ -1032,23 +1042,23 @@ function createImageTopFrame(
     }),
     createShapeElement({
       metaKey: "image-top-text-panel",
-      x: layout.cardX + 20,
+      x: layout.cardX + 18,
       y: layout.textPanelY,
-      width: layout.cardWidth - 40,
+      width: layout.cardWidth - 36,
       height: layout.textPanelHeight,
       fill: template.surface,
-      cornerRadius: 24,
+      cornerRadius: 28,
       opacity: 0.99
     }),
     createShapeElement({
       metaKey: "image-top-divider",
       x: layout.textX,
       y: layout.textPanelY + 20,
-      width: 144,
-      height: 5,
+      width: 132,
+      height: 4,
       fill: template.accent,
       cornerRadius: 999,
-      opacity: 0.62
+      opacity: 0.56
     })
   ];
 }
@@ -1324,7 +1334,7 @@ function createManagedTitleForImageTop(
   const fitted = fitTextBlock({
     text,
     width: layout.textWidth,
-    initialFontSize: format === "9:16" ? 54 : format === "4:5" ? 58 : 62,
+    initialFontSize: format === "9:16" ? 50 : format === "4:5" ? 54 : 58,
     minFontSize: format === "9:16" ? 16 : 18,
     maxHeight,
     lineHeight: 1.04,
@@ -1353,8 +1363,8 @@ function createManagedBodyForImageTop(
   startY: number
 ): TextElement {
   const layout = getImageTopLayout(format);
-  const bodyY = Math.max(layout.titleY + 82, startY);
-  const baseSize = format === "9:16" ? 24 : 29;
+  const bodyY = Math.max(layout.titleY + 76, startY);
+  const baseSize = format === "9:16" ? 23 : 27;
   const maxHeight = Math.max(140, layout.textBottom - bodyY);
   const fitted = fitTextBlock({
     text,
@@ -1362,7 +1372,7 @@ function createManagedBodyForImageTop(
     initialFontSize: baseSize,
     minFontSize: format === "9:16" ? 12 : 13,
     maxHeight,
-    lineHeight: 1.12,
+    lineHeight: 1.14,
     minLineHeight: 0.94
   });
   const overflowGuard = applyTextOverflowGuard(
@@ -1761,6 +1771,7 @@ export function createSlideFromOutline(
   format: SlideFormat = "1:1",
   totalSlides = 1
 ): Slide {
+  const resolvedTemplateId = resolveTemplateId(outline.templateId, templateId);
   const rawTitle = readOutlineTitle(outline);
   const rawBody = readOutlineBody(outline);
   const title = rawTitle || "Новый заголовок";
@@ -1770,19 +1781,32 @@ export function createSlideFromOutline(
   const slide: Slide = {
     id: crypto.randomUUID(),
     name: title,
-    background: getTemplate(templateId).background,
-    templateId,
+    background: getTemplate(resolvedTemplateId).background,
+    templateId: resolvedTemplateId,
     footerVariant: DEFAULT_FOOTER_VARIANT,
     profileHandle: DEFAULT_PROFILE_HANDLE,
     profileSubtitle: DEFAULT_PROFILE_SUBTITLE,
     backgroundImage: null,
     imageLayoutMode: undefined,
+    generationRole: outline.role,
+    generationCoreIdea: outline.coreIdea,
+    layoutType: outline.layoutType,
+    imageIntent: outline.imageIntent,
+    imageQueryDraft: outline.imageQueryDraft,
     elements: []
   };
 
   return {
     ...slide,
-    elements: buildManagedElements(slide, templateId, index, totalSlides, format, title, body)
+    elements: buildManagedElements(
+      slide,
+      resolvedTemplateId,
+      index,
+      totalSlides,
+      format,
+      title,
+      body
+    )
   };
 }
 
@@ -1819,7 +1843,13 @@ export function createSlidesFromOutline(
   const safeOutline = outline
     .map((item) => ({
       title: readOutlineTitle(item),
-      text: readOutlineBody(item)
+      text: readOutlineBody(item),
+      role: item.role,
+      coreIdea: item.coreIdea,
+      layoutType: item.layoutType,
+      imageIntent: item.imageIntent,
+      imageQueryDraft: item.imageQueryDraft,
+      templateId: item.templateId
     }))
     .filter((item) => item.title || item.text)
     .slice(0, targetCount);
@@ -1829,13 +1859,20 @@ export function createSlidesFromOutline(
     safeOutline.push({
       title: `Слайд ${index + 1}`,
       text:
-        "Добавьте конкретный тезис с примерами, последствиями и практическим действием, чтобы слайд не выглядел пустым."
+        "Добавьте конкретный тезис с примерами, последствиями и практическим действием, чтобы слайд не выглядел пустым.",
+      role: undefined,
+      coreIdea: undefined,
+      layoutType: undefined,
+      imageIntent: undefined,
+      imageQueryDraft: undefined,
+      templateId: undefined
     });
   }
 
-  return safeOutline.map((item, index) =>
-    createSlideFromOutline(item, index, templateId, format, safeOutline.length)
-  );
+  return safeOutline.map((item, index) => {
+    const resolvedTemplateId = resolveTemplateId(item.templateId, templateId);
+    return createSlideFromOutline(item, index, resolvedTemplateId, format, safeOutline.length);
+  });
 }
 
 export function createStarterSlides(

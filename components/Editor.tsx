@@ -35,6 +35,7 @@ import {
 } from "@/lib/slides";
 import type {
   CanvasElement,
+  CarouselOutlineSlide,
   CarouselTemplateId,
   FooterVariantId,
   Slide,
@@ -596,21 +597,25 @@ export function Editor() {
       });
 
       let data: {
-        slides?: Array<{ title: string; text: string }>;
+        slides?: CarouselOutlineSlide[];
         internetImages?: Array<{
           slideIndex: number;
           imageUrl: string;
           relevanceScore?: number;
+          source?: string;
+          query?: string;
         }>;
         error?: string;
       };
       try {
         data = (await response.json()) as {
-          slides?: Array<{ title: string; text: string }>;
+          slides?: CarouselOutlineSlide[];
           internetImages?: Array<{
             slideIndex: number;
             imageUrl: string;
             relevanceScore?: number;
+            source?: string;
+            query?: string;
           }>;
           error?: string;
         };
@@ -1701,7 +1706,13 @@ export function Editor() {
 
 function applyInternetImagesToSlides(
   slides: Slide[],
-  suggestions: Array<{ slideIndex: number; imageUrl: string; relevanceScore?: number }>,
+  suggestions: Array<{
+    slideIndex: number;
+    imageUrl: string;
+    relevanceScore?: number;
+    source?: string;
+    query?: string;
+  }>,
   format: SlideFormat
 ) {
   if (!suggestions.length) {
@@ -1717,7 +1728,7 @@ function applyInternetImagesToSlides(
     if (
       !suggestion ||
       !suggestion.imageUrl ||
-      (typeof suggestion.relevanceScore === "number" && suggestion.relevanceScore < 0.32)
+      (typeof suggestion.relevanceScore === "number" && suggestion.relevanceScore < 0.38)
     ) {
       continue;
     }
@@ -1736,7 +1747,11 @@ function applyInternetImagesToSlides(
       continue;
     }
 
-    const templateId = IMAGE_MODE_TEMPLATE_ROTATION[index % IMAGE_MODE_TEMPLATE_ROTATION.length];
+    const fallbackTemplateId = IMAGE_MODE_TEMPLATE_ROTATION[index % IMAGE_MODE_TEMPLATE_ROTATION.length];
+    const templateId =
+      typeof targetSlide.templateId === "string" && targetSlide.templateId.trim()
+        ? targetSlide.templateId
+        : fallbackTemplateId;
     const withImage = setSlideBackgroundImage(
       targetSlide,
       suggestion.imageUrl,
@@ -1745,13 +1760,10 @@ function applyInternetImagesToSlides(
       format,
       "top"
     );
-    nextSlides[safeSlideIndex] = applyTemplateToSlide(
-      withImage,
-      templateId,
-      safeSlideIndex,
-      nextSlides.length,
-      format
-    );
+    nextSlides[safeSlideIndex] =
+      withImage.templateId === templateId
+        ? withImage
+        : applyTemplateToSlide(withImage, templateId, safeSlideIndex, nextSlides.length, format);
     usedSlides.add(safeSlideIndex);
   }
 
