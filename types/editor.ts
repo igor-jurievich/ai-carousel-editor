@@ -71,6 +71,7 @@ export type Slide = {
   profileHandle?: string;
   profileSubtitle?: string;
   backgroundImage?: string | null;
+  imageLayoutMode?: "background" | "top";
 };
 
 export type CarouselOutlineSlide = {

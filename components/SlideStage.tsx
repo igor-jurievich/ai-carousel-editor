@@ -127,6 +127,41 @@ function SlideImageNode({
 }) {
   const [image] = useImage(element.src, "anonymous");
   const isBackground = element.metaKey === "background-image";
+  const coverCrop = useMemo(() => {
+    if (!image || element.metaKey !== "internet-image-top") {
+      return null;
+    }
+
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+
+    if (!sourceWidth || !sourceHeight || !element.width || !element.height) {
+      return null;
+    }
+
+    const sourceRatio = sourceWidth / sourceHeight;
+    const targetRatio = element.width / element.height;
+
+    if (sourceRatio > targetRatio) {
+      const cropHeight = sourceHeight;
+      const cropWidth = cropHeight * targetRatio;
+      return {
+        x: (sourceWidth - cropWidth) / 2,
+        y: 0,
+        width: cropWidth,
+        height: cropHeight
+      };
+    }
+
+    const cropWidth = sourceWidth;
+    const cropHeight = cropWidth / targetRatio;
+    return {
+      x: 0,
+      y: (sourceHeight - cropHeight) / 2,
+      width: cropWidth,
+      height: cropHeight
+    };
+  }, [image, element.height, element.metaKey, element.width]);
 
   return (
     <KonvaImage
@@ -139,6 +174,10 @@ function SlideImageNode({
       opacity={element.opacity}
       rotation={element.rotation}
       cornerRadius={element.cornerRadius}
+      cropX={coverCrop?.x}
+      cropY={coverCrop?.y}
+      cropWidth={coverCrop?.width}
+      cropHeight={coverCrop?.height}
       listening={!isBackground}
       draggable={interactive && selected && !isBackground}
       dragDistance={10}

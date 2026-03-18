@@ -613,6 +613,59 @@ function getFormatLayout(format: SlideFormat) {
   };
 }
 
+type ImageTopLayout = {
+  cardX: number;
+  cardY: number;
+  cardWidth: number;
+  cardHeight: number;
+  imageX: number;
+  imageY: number;
+  imageWidth: number;
+  imageHeight: number;
+  textPanelY: number;
+  textPanelHeight: number;
+  textX: number;
+  textWidth: number;
+  titleY: number;
+  textBottom: number;
+};
+
+function getImageTopLayout(format: SlideFormat): ImageTopLayout {
+  const { height } = SLIDE_FORMAT_DIMENSIONS[format];
+  const footerReserve = getFormatLayout(format).footerBottom + 76;
+  const cardX = 52;
+  const cardY = 52;
+  const cardWidth = 976;
+  const cardHeight = Math.max(360, height - cardY * 2);
+  const imageX = 74;
+  const imageY = 74;
+  const imageWidth = 932;
+  const imageHeight = format === "9:16" ? 740 : format === "4:5" ? 530 : 420;
+  const textPanelY = imageY + imageHeight - 10;
+  const textPanelHeight = Math.max(240, height - textPanelY - cardY);
+  const textX = 102;
+  const textWidth = 876;
+  const titleY = textPanelY + 54;
+  const textBottom = Math.max(titleY + 140, height - footerReserve);
+
+  return {
+    cardX,
+    cardY,
+    cardWidth,
+    cardHeight,
+    imageX,
+    imageY,
+    imageWidth,
+    imageHeight,
+    textPanelY,
+    textPanelHeight,
+    textX,
+    textWidth,
+    titleY,
+    textBottom
+  };
+}
+
 function createDecoration(template: CarouselTemplate, format: SlideFormat): CanvasElement[] {
   const { height } = SLIDE_FORMAT_DIMENSIONS[format];
 
@@ -931,6 +984,65 @@ function createChipText(template: CarouselTemplate, index: number, format: Slide
   });
 }
 
+function createImageTopFrame(
+  template: CarouselTemplate,
+  format: SlideFormat,
+  imageSrc: string
+): CanvasElement[] {
+  const { height } = SLIDE_FORMAT_DIMENSIONS[format];
+  const layout = getImageTopLayout(format);
+
+  return [
+    createShapeElement({
+      metaKey: "decor-bg",
+      x: 0,
+      y: 0,
+      width: SLIDE_SIZE,
+      height,
+      fill: template.background,
+      cornerRadius: 0
+    }),
+    createShapeElement({
+      metaKey: "image-top-card",
+      x: layout.cardX,
+      y: layout.cardY,
+      width: layout.cardWidth,
+      height: layout.cardHeight,
+      fill: template.surface,
+      cornerRadius: 34,
+      opacity: 0.98
+    }),
+    createImageElement(imageSrc, {
+      metaKey: "internet-image-top",
+      x: layout.imageX,
+      y: layout.imageY,
+      width: layout.imageWidth,
+      height: layout.imageHeight,
+      cornerRadius: 26
+    }),
+    createShapeElement({
+      metaKey: "image-top-text-panel",
+      x: layout.cardX + 2,
+      y: layout.textPanelY,
+      width: layout.cardWidth - 4,
+      height: layout.textPanelHeight,
+      fill: template.surface,
+      cornerRadius: 30,
+      opacity: 0.98
+    }),
+    createShapeElement({
+      metaKey: "image-top-divider",
+      x: layout.textX,
+      y: layout.textPanelY + 22,
+      width: 188,
+      height: 6,
+      fill: template.accent,
+      cornerRadius: 999,
+      opacity: 0.72
+    })
+  ];
+}
+
 function countWrappedLines(text: string, width: number, fontSize: number) {
   const paragraphs = text.replace(/\r/g, "").split("\n");
   const approxCharsPerLine = Math.max(6, Math.floor(width / Math.max(1, fontSize * 0.62)));
@@ -1124,16 +1236,20 @@ function createManagedBody(
 ): TextElement {
   const layout = getFormatLayout(format);
   const { height: canvasHeight } = SLIDE_FORMAT_DIMENSIONS[format];
-  const width = template.bodyWidth ?? 820;
+  const width = template.bodyWidth ?? 804;
   const x = clampValue(Math.round((SLIDE_SIZE - width) / 2), 72, 192);
-  const preferredBodyY = template.bodyOffsetY + layout.bodyYBoost;
+  const preferredBodyY = Math.max(startY + 18, template.bodyOffsetY + layout.bodyYBoost);
   const footerReserve = layout.footerBottom + 74;
   const minBodyHeight = format === "9:16" ? 242 : format === "4:5" ? 196 : 166;
-  const bodyY = clampValue(
-    Math.max(preferredBodyY, startY),
-    0,
-    Math.max(0, canvasHeight - footerReserve - minBodyHeight)
-  );
+  const maxBodyY = Math.max(0, canvasHeight - footerReserve - minBodyHeight);
+  const preferredMinBodyY =
+    format === "9:16"
+      ? Math.round(canvasHeight * 0.46)
+      : format === "4:5"
+        ? Math.round(canvasHeight * 0.43)
+        : Math.round(canvasHeight * 0.4);
+  const minBodyY = clampValue(preferredMinBodyY, 0, maxBodyY);
+  const bodyY = clampValue(preferredBodyY, minBodyY, maxBodyY);
   const baseSize = Math.round((format === "9:16" ? 29 : 34) * layout.bodyFactor);
   const availableHeight = canvasHeight - bodyY - footerReserve;
   const maxHeight = Math.max(minBodyHeight, availableHeight);
@@ -1143,7 +1259,7 @@ function createManagedBody(
     initialFontSize: baseSize,
     minFontSize: format === "9:16" ? 12 : 13,
     maxHeight,
-    lineHeight: 1.2,
+    lineHeight: 1.16,
     minLineHeight: 1
   });
 
@@ -1180,6 +1296,88 @@ function createManagedBody(
     x,
     y: bodyY,
     width,
+    height: overflowGuard.fitted.height,
+    fontSize: overflowGuard.fitted.fontSize,
+    fill: template.bodyColor,
+    fontFamily: template.bodyFont,
+    lineHeight: overflowGuard.fitted.lineHeight
+  });
+}
+
+function createManagedTitleForImageTop(
+  template: CarouselTemplate,
+  text: string,
+  format: SlideFormat
+): TextElement {
+  const layout = getImageTopLayout(format);
+  const baseSize = format === "9:16" ? 58 : format === "4:5" ? 62 : 66;
+  const maxHeight = format === "9:16" ? 208 : 186;
+  const fitted = fitTextBlock({
+    text,
+    width: layout.textWidth,
+    initialFontSize: baseSize,
+    minFontSize: format === "9:16" ? 18 : 20,
+    maxHeight,
+    lineHeight: 1.03,
+    minLineHeight: 0.94
+  });
+
+  return createTextElement({
+    metaKey: "managed-title",
+    role: "title",
+    text,
+    x: layout.textX,
+    y: layout.titleY,
+    width: layout.textWidth,
+    height: fitted.height,
+    fontSize: fitted.fontSize,
+    fill: template.titleColor,
+    fontFamily: template.titleFont,
+    fontStyle: "bold",
+    lineHeight: fitted.lineHeight
+  });
+}
+
+function createManagedBodyForImageTop(
+  template: CarouselTemplate,
+  text: string,
+  format: SlideFormat,
+  startY: number
+): TextElement {
+  const layout = getImageTopLayout(format);
+  const bodyY = Math.max(layout.titleY + 92, startY);
+  const baseSize = format === "9:16" ? 28 : 32;
+  const maxHeight = Math.max(148, layout.textBottom - bodyY);
+  const fitted = fitTextBlock({
+    text,
+    width: layout.textWidth,
+    initialFontSize: baseSize,
+    minFontSize: format === "9:16" ? 12 : 13,
+    maxHeight,
+    lineHeight: 1.14,
+    minLineHeight: 0.96
+  });
+  const overflowGuard = applyTextOverflowGuard(
+    text,
+    {
+      width: layout.textWidth,
+      initialFontSize: Math.max(11, fitted.fontSize),
+      minFontSize: 10,
+      maxHeight,
+      lineHeight: Math.max(0.96, fitted.lineHeight),
+      minLineHeight: 0.92
+    },
+    fitted
+  );
+
+  return createTextElement({
+    metaKey: "managed-body",
+    role: "body",
+    wasAutoTruncated: overflowGuard.text !== text,
+    text: overflowGuard.text,
+    x: layout.textX,
+    y: bodyY,
+    width: layout.textWidth,
     height: overflowGuard.fitted.height,
     fontSize: overflowGuard.fitted.fontSize,
     fill: template.bodyColor,
@@ -1420,17 +1618,25 @@ function buildManagedElements(
 ) {
   const template = getTemplate(templateId);
   const managed: CanvasElement[] = [];
-  managed.push(
-    ...createDecoration(template, format)
-  );
+  const imageTopMode = Boolean(slide.backgroundImage && slide.imageLayoutMode === "top");
 
-  if (slide.backgroundImage) {
-    managed.push(createBackgroundImageElement(slide.backgroundImage, format));
+  if (imageTopMode && slide.backgroundImage) {
+    managed.push(...createImageTopFrame(template, format, slide.backgroundImage));
+  } else {
+    managed.push(...createDecoration(template, format));
+
+    if (slide.backgroundImage) {
+      managed.push(createBackgroundImageElement(slide.backgroundImage, format));
+    }
   }
 
-  const managedTitle = createManagedTitle(template, titleText, format);
-  const bodyStart = managedTitle.y + managedTitle.height + 28;
-  const managedBody = createManagedBody(template, bodyText, format, bodyStart);
+  const managedTitle = imageTopMode
+    ? createManagedTitleForImageTop(template, titleText, format)
+    : createManagedTitle(template, titleText, format);
+  const bodyStart = managedTitle.y + managedTitle.height + (imageTopMode ? 24 : 28);
+  const managedBody = imageTopMode
+    ? createManagedBodyForImageTop(template, bodyText, format, bodyStart)
+    : createManagedBody(template, bodyText, format, bodyStart);
 
   managed.push(
     createChip(template, index, format),
@@ -1493,6 +1699,20 @@ function rebuildSlide(
   customElements: CanvasElement[]
 ): Slide {
   const content = extractManagedContent(slide);
+  const existingBackgroundImage = slide.elements.find(
+    (element): element is ImageElement =>
+      element.type === "image" &&
+      (element.metaKey === "background-image" || element.metaKey === "internet-image-top")
+  )?.src;
+  const resolvedBackgroundImage = slide.backgroundImage ?? existingBackgroundImage ?? null;
+  const resolvedImageLayoutMode = resolvedBackgroundImage
+    ? slide.imageLayoutMode ??
+      (slide.elements.some(
+        (element) => element.type === "image" && element.metaKey === "internet-image-top"
+      )
+        ? "top"
+        : "background")
+    : undefined;
 
   return {
     ...slide,
@@ -1502,19 +1722,17 @@ function rebuildSlide(
     footerVariant: slide.footerVariant ?? DEFAULT_FOOTER_VARIANT,
     profileHandle: content.handle,
     profileSubtitle: content.subtitle,
-    backgroundImage:
-      slide.backgroundImage ??
-      (slide.elements.find(
-        (element): element is ImageElement =>
-          element.type === "image" && element.metaKey === "background-image"
-      )?.src ?? null),
+    backgroundImage: resolvedBackgroundImage,
+    imageLayoutMode: resolvedImageLayoutMode,
     elements: [
       ...buildManagedElements(
         {
           ...slide,
           profileHandle: content.handle,
           profileSubtitle: content.subtitle,
-          footerVariant: slide.footerVariant ?? DEFAULT_FOOTER_VARIANT
+          footerVariant: slide.footerVariant ?? DEFAULT_FOOTER_VARIANT,
+          backgroundImage: resolvedBackgroundImage,
+          imageLayoutMode: resolvedImageLayoutMode
         },
         templateId,
         index,
@@ -1550,6 +1768,7 @@ export function createSlideFromOutline(
     profileHandle: DEFAULT_PROFILE_HANDLE,
     profileSubtitle: DEFAULT_PROFILE_SUBTITLE,
     backgroundImage: null,
+    imageLayoutMode: undefined,
     elements: []
   };
 
@@ -1726,13 +1945,15 @@ export function setSlideBackgroundImage(
   src: string | null,
   index: number,
   totalSlides: number,
-  format: SlideFormat
+  format: SlideFormat,
+  layoutMode: Slide["imageLayoutMode"] = "background"
 ) {
   const customElements = slide.elements.filter((element) => !isManagedElement(element));
   return rebuildSlide(
     {
       ...slide,
-      backgroundImage: src
+      backgroundImage: src,
+      imageLayoutMode: src ? layoutMode : undefined
     },
     index,
     totalSlides,

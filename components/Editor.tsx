@@ -54,6 +54,11 @@ const TEXT_SAFE_AREA = {
   insetTop: 84,
   insetBottom: 96
 };
+const IMAGE_MODE_TEMPLATE_ROTATION: CarouselTemplateId[] = [
+  "technology",
+  "editorial",
+  "business-light"
+];
 const DECOR_BACKGROUND_META_KEYS = new Set([
   "decor-bg",
   "decor-paper",
@@ -429,7 +434,16 @@ export function Editor() {
             ...element,
             x: next.x,
             y: next.y,
-            width: next.width
+            width: next.width,
+            height: next.height,
+            fontSize: next.fontSize,
+            fontFamily: next.fontFamily,
+            fontStyle: next.fontStyle,
+            fill: next.fill,
+            align: next.align,
+            lineHeight: next.lineHeight,
+            letterSpacing: next.letterSpacing,
+            textDecoration: next.textDecoration
           };
         });
 
@@ -1639,9 +1653,18 @@ function applyInternetImagesToSlides(
       continue;
     }
 
-    nextSlides[safeSlideIndex] = setSlideBackgroundImage(
+    const templateId = IMAGE_MODE_TEMPLATE_ROTATION[index % IMAGE_MODE_TEMPLATE_ROTATION.length];
+    const withImage = setSlideBackgroundImage(
       targetSlide,
       suggestion.imageUrl,
+      safeSlideIndex,
+      nextSlides.length,
+      format,
+      "top"
+    );
+    nextSlides[safeSlideIndex] = applyTemplateToSlide(
+      withImage,
+      templateId,
       safeSlideIndex,
       nextSlides.length,
       format
