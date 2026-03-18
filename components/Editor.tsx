@@ -537,13 +537,11 @@ export function Editor() {
             x: next.x,
             y: next.y,
             width: next.width,
-            height: next.height,
-            fontSize: next.fontSize,
+            // Keep visual style/position from edited element, but keep rebuilt auto-height.
             fontFamily: next.fontFamily,
             fontStyle: next.fontStyle,
             fill: next.fill,
             align: next.align,
-            lineHeight: next.lineHeight,
             letterSpacing: next.letterSpacing,
             textDecoration: next.textDecoration
           };

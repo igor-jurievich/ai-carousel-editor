@@ -59,9 +59,9 @@ function clamp(value: number, min: number, max: number) {
 
 function resolveSafeArea(canvasWidth: number, canvasHeight: number, stageWidth: number): SafeArea {
   const mobileLike = stageWidth <= 420;
-  const insetX = mobileLike ? 40 : 80;
-  const insetTop = mobileLike ? 40 : 80;
-  const insetBottom = mobileLike ? 52 : 88;
+  const insetX = mobileLike ? 26 : 58;
+  const insetTop = mobileLike ? 26 : 58;
+  const insetBottom = mobileLike ? 38 : 74;
   const right = Math.max(insetX, canvasWidth - insetX);
   const bottom = Math.max(insetTop, canvasHeight - insetBottom);
 
@@ -81,17 +81,23 @@ function resolveDragBounds(
   width = element.width,
   height = element.height
 ): DragBounds {
+  const measuredTextHeight =
+    element.type === "text" ? Math.max(height, estimateTextHeight(element, width) + 14) : height;
+  const effectiveHeight = measuredTextHeight;
   const safeWidth = Math.max(60, safeArea.right - safeArea.left);
   const safeHeight = Math.max(40, safeArea.bottom - safeArea.top);
   const forceCanvasBounds =
-    element.type === "image" && element.metaKey === "background-image";
+    element.type === "text" ||
+    (element.type === "image" && element.metaKey === "background-image");
   const useCanvasX = forceCanvasBounds || width > safeWidth;
-  const useCanvasY = forceCanvasBounds || height > safeHeight;
+  const useCanvasY = forceCanvasBounds || effectiveHeight > safeHeight;
 
   const minX = useCanvasX ? 0 : safeArea.left;
   const maxX = useCanvasX ? Math.max(0, canvasWidth - width) : Math.max(minX, safeArea.right - width);
   const minY = useCanvasY ? 0 : safeArea.top;
-  const maxY = useCanvasY ? Math.max(0, canvasHeight - height) : Math.max(minY, safeArea.bottom - height);
+  const maxY = useCanvasY
+    ? Math.max(0, canvasHeight - effectiveHeight)
+    : Math.max(minY, safeArea.bottom - effectiveHeight);
 
   return {
     minX,
@@ -257,17 +263,21 @@ function resolveSnap(
   canvasWidth: number,
   canvasHeight: number
 ) {
+  const minXGuide = bounds.minX <= 0 ? 0 : safeArea.left;
+  const maxXGuide = bounds.maxX >= canvasWidth - elementSize.width ? canvasWidth : safeArea.right;
+  const minYGuide = bounds.minY <= 0 ? 0 : safeArea.top;
+  const maxYGuide = bounds.maxY >= canvasHeight - elementSize.height ? canvasHeight : safeArea.bottom;
   const xCandidates = [
-    { target: bounds.minX, guide: safeArea.left },
-    { target: bounds.maxX, guide: safeArea.right },
+    { target: bounds.minX, guide: minXGuide },
+    { target: bounds.maxX, guide: maxXGuide },
     {
       target: clamp((canvasWidth - elementSize.width) / 2, bounds.minX, bounds.maxX),
       guide: canvasWidth / 2
     }
   ];
   const yCandidates = [
-    { target: bounds.minY, guide: safeArea.top },
-    { target: bounds.maxY, guide: safeArea.bottom },
+    { target: bounds.minY, guide: minYGuide },
+    { target: bounds.maxY, guide: maxYGuide },
     {
       target: clamp((canvasHeight - elementSize.height) / 2, bounds.minY, bounds.maxY),
       guide: canvasHeight / 2
@@ -487,13 +497,14 @@ function SlideTextNode({
       x={element.x}
       y={element.y}
       width={element.width}
-      height={element.height}
       fontSize={element.fontSize}
       fontFamily={element.fontFamily}
       fontStyle={element.fontStyle}
       fill={element.fill}
       align={element.align}
       lineHeight={element.lineHeight ?? 1.1}
+      wrap="word"
+      ellipsis={false}
       opacity={element.opacity}
       rotation={element.rotation}
       letterSpacing={element.letterSpacing}
@@ -608,8 +619,8 @@ export function SlideStage({
     const scaleY = node.scaleY();
     const safeWidth = Math.max(120, safeArea.right - safeArea.left);
     const safeHeight = Math.max(42, safeArea.bottom - safeArea.top);
-    const maxWidth = element.type === "text" ? safeWidth : canvasWidth;
-    const maxHeight = element.type === "text" ? safeHeight : canvasHeight;
+    const maxWidth = element.type === "text" ? canvasWidth - 12 : canvasWidth;
+    const maxHeight = element.type === "text" ? canvasHeight - 12 : canvasHeight;
     let nextWidth = clamp(
       element.width * scaleX,
       element.type === "text" ? 120 : 30,
@@ -637,7 +648,7 @@ export function SlideStage({
     }
 
     if (element.type === "text") {
-      nextHeight = clamp(estimateTextHeight(element, nextWidth), 42, maxHeight);
+      nextHeight = clamp(estimateTextHeight(element, nextWidth) + 14, 42, maxHeight);
     }
 
     const bounds = resolveDragBounds(
@@ -767,12 +778,26 @@ export function SlideStage({
           })
           .map((element) => {
             const selected = selectedElementId === element.id;
-            const dragBounds = resolveDragBounds(element, canvasWidth, canvasHeight, safeArea);
+            const elementSize = {
+              width: element.width,
+              height:
+                element.type === "text"
+                  ? Math.max(element.height, estimateTextHeight(element, element.width) + 14)
+                  : element.height
+            };
+            const dragBounds = resolveDragBounds(
+              element,
+              canvasWidth,
+              canvasHeight,
+              safeArea,
+              elementSize.width,
+              elementSize.height
+            );
 
             const handleDragEnd = (x: number, y: number) => {
               const snapped = resolveSnap(
                 clampPosition({ x, y }, dragBounds),
-                { width: element.width, height: element.height },
+                elementSize,
                 dragBounds,
                 safeArea,
                 canvasWidth,
@@ -786,7 +811,7 @@ export function SlideStage({
               const clamped = clampPosition(position, dragBounds);
               const snapped = resolveSnap(
                 clamped,
-                { width: element.width, height: element.height },
+                elementSize,
                 dragBounds,
                 safeArea,
                 canvasWidth,

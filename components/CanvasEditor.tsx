@@ -503,7 +503,8 @@ function resolveInlineTextEditorStyle(element: TextElement, scale: number) {
     lineHeight: String(element.lineHeight ?? 1.1),
     transform: `rotate(${element.rotation}deg)`,
     whiteSpace: "pre-wrap",
-    overflow: "hidden"
+    overflow: "auto",
+    overflowWrap: "break-word"
   } as const;
 }
 

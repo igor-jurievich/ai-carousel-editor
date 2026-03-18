@@ -1260,14 +1260,15 @@ function fitTextBlock(options: {
   lineHeight?: number;
   minLineHeight?: number;
 }) {
-  const minLineHeight = options.minLineHeight ?? options.lineHeight ?? 1.02;
+  const hardMinFontSize = Math.max(9, options.minFontSize - 2);
+  const minLineHeight = Math.max(0.86, options.minLineHeight ?? options.lineHeight ?? 1.02);
   let lineHeight = options.lineHeight ?? 1.1;
   const safetyLines = options.text.length > 60 ? 1 : 0.6;
   let fontSize = options.initialFontSize;
   let lines = countWrappedLines(options.text, options.width, fontSize);
   let requiredHeight = Math.ceil((lines + safetyLines) * fontSize * lineHeight + fontSize * 0.4);
 
-  while (fontSize > options.minFontSize && requiredHeight > options.maxHeight) {
+  while (fontSize > hardMinFontSize && requiredHeight > options.maxHeight) {
     fontSize -= 2;
     lines = countWrappedLines(options.text, options.width, fontSize);
     requiredHeight = Math.ceil((lines + safetyLines) * fontSize * lineHeight + fontSize * 0.4);
@@ -1275,6 +1276,16 @@ function fitTextBlock(options: {
 
   while (lineHeight > minLineHeight && requiredHeight > options.maxHeight) {
     lineHeight = Math.max(minLineHeight, Number((lineHeight - 0.03).toFixed(2)));
+    lines = countWrappedLines(options.text, options.width, fontSize);
+    requiredHeight = Math.ceil((lines + safetyLines) * fontSize * lineHeight + fontSize * 0.4);
+  }
+
+  // Final hard-fit pass: keep full text and shrink typography instead of truncating content.
+  while (requiredHeight > options.maxHeight && fontSize > 9) {
+    fontSize = Math.max(9, fontSize - 1);
+    if (lineHeight > 0.86) {
+      lineHeight = Math.max(0.86, Number((lineHeight - 0.01).toFixed(2)));
+    }
     lines = countWrappedLines(options.text, options.width, fontSize);
     requiredHeight = Math.ceil((lines + safetyLines) * fontSize * lineHeight + fontSize * 0.4);
   }
@@ -1298,45 +1309,16 @@ function applyTextOverflowGuard(
   options: Omit<Parameters<typeof fitTextBlock>[0], "text">,
   initialFit: ReturnType<typeof fitTextBlock>
 ) {
-  if (!initialFit.overflow) {
-    return {
-      text,
-      fitted: initialFit
-    };
-  }
-
-  const normalized = text.replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return {
-      text,
-      fitted: initialFit
-    };
-  }
-
-  const words = normalized.split(" ");
-  let keepCount = words.length;
-  let candidateText = text;
-  let candidateFit = initialFit;
-
-  while (keepCount > 6) {
-    keepCount = Math.max(6, keepCount - Math.max(2, Math.ceil(keepCount * 0.1)));
-    candidateText = words.slice(0, keepCount).join(" ").concat("...");
-    candidateFit = fitTextBlock({
-      ...options,
-      text: candidateText
-    });
-
-    if (!candidateFit.overflow) {
-      break;
-    }
-
-    if (keepCount === 6) {
-      break;
-    }
-  }
+  // Keep full text. Never trim content with ellipsis at this stage.
+  const candidateFit = initialFit.overflow
+    ? fitTextBlock({
+        ...options,
+        text
+      })
+    : initialFit;
 
   return {
-    text: candidateText,
+    text,
     fitted: candidateFit
   };
 }
@@ -1352,8 +1334,8 @@ function createManagedTitle(
 ): TextElement {
   const layout = getFormatLayout(format);
   const { height: canvasHeight } = SLIDE_FORMAT_DIMENSIONS[format];
-  const width = template.titleWidth ?? 860;
-  const x = clampValue(Math.round((SLIDE_SIZE - width) / 2), 68, 170);
+  const width = template.titleWidth ?? 900;
+  const x = clampValue(Math.round((SLIDE_SIZE - width) / 2), 48, 170);
   const titleY = clampValue(
     template.titleOffsetY + layout.titleYBoost,
     78,
@@ -1402,11 +1384,11 @@ function createManagedBody(
 ): TextElement {
   const layout = getFormatLayout(format);
   const { height: canvasHeight } = SLIDE_FORMAT_DIMENSIONS[format];
-  const width = template.bodyWidth ?? 804;
-  const x = clampValue(Math.round((SLIDE_SIZE - width) / 2), 72, 192);
+  const width = template.bodyWidth ?? 848;
+  const x = clampValue(Math.round((SLIDE_SIZE - width) / 2), 54, 192);
   const preferredBodyY = Math.max(startY + 18, template.bodyOffsetY + layout.bodyYBoost);
   const footerReserve = layout.footerBottom + 74;
-  const minBodyHeight = format === "9:16" ? 242 : format === "4:5" ? 196 : 166;
+  const minBodyHeight = format === "9:16" ? 220 : format === "4:5" ? 186 : 156;
   const maxBodyY = Math.max(0, canvasHeight - footerReserve - minBodyHeight);
   const preferredMinBodyY =
     format === "9:16"
@@ -1423,33 +1405,33 @@ function createManagedBody(
     text,
     width,
     initialFontSize: baseSize,
-    minFontSize: format === "9:16" ? 12 : 13,
+    minFontSize: format === "9:16" ? 11 : 12,
     maxHeight,
     lineHeight: 1.16,
-    minLineHeight: 1
+    minLineHeight: 0.9
   });
 
   const fallbackFitted =
-    fitted.overflow && fitted.fontSize <= (format === "9:16" ? 12 : 13)
+    fitted.overflow && fitted.fontSize <= (format === "9:16" ? 11 : 12)
       ? fitTextBlock({
           text,
           width,
-          initialFontSize: Math.max(12, fitted.fontSize - 2),
-          minFontSize: 10,
+          initialFontSize: Math.max(10, fitted.fontSize - 1),
+          minFontSize: 9,
           maxHeight,
-          lineHeight: 1.08,
-          minLineHeight: 0.92
+          lineHeight: 1.04,
+          minLineHeight: 0.86
         })
       : fitted;
   const overflowGuard = applyTextOverflowGuard(
     text,
     {
       width,
-      initialFontSize: Math.max(10, fallbackFitted.fontSize),
-      minFontSize: 10,
+      initialFontSize: Math.max(9, fallbackFitted.fontSize),
+      minFontSize: 9,
       maxHeight,
-      lineHeight: Math.max(0.96, fallbackFitted.lineHeight),
-      minLineHeight: 0.92
+      lineHeight: Math.max(0.9, fallbackFitted.lineHeight),
+      minLineHeight: 0.86
     },
     fallbackFitted
   );
@@ -1457,7 +1439,7 @@ function createManagedBody(
   return createTextElement({
     metaKey: "managed-body",
     role: "body",
-    wasAutoTruncated: overflowGuard.text !== text,
+    wasAutoTruncated: false,
     text: overflowGuard.text,
     x,
     y: bodyY,
@@ -1525,20 +1507,20 @@ function createManagedBodyForImageTop(
     text,
     width: layout.textWidth,
     initialFontSize: baseSize,
-    minFontSize: format === "9:16" ? 12 : 13,
+    minFontSize: format === "9:16" ? 11 : 12,
     maxHeight,
     lineHeight: 1.14,
-    minLineHeight: 0.94
+    minLineHeight: 0.88
   });
   const overflowGuard = applyTextOverflowGuard(
     text,
     {
       width: layout.textWidth,
-      initialFontSize: Math.max(11, fitted.fontSize),
-      minFontSize: 10,
+      initialFontSize: Math.max(10, fitted.fontSize),
+      minFontSize: 9,
       maxHeight,
-      lineHeight: Math.max(0.96, fitted.lineHeight),
-      minLineHeight: 0.92
+      lineHeight: Math.max(0.9, fitted.lineHeight),
+      minLineHeight: 0.86
     },
     fitted
   );
@@ -1546,7 +1528,7 @@ function createManagedBodyForImageTop(
   return createTextElement({
     metaKey: "managed-body",
     role: "body",
-    wasAutoTruncated: overflowGuard.text !== text,
+    wasAutoTruncated: false,
     text: overflowGuard.text,
     x: layout.textX,
     y: bodyY,
