@@ -783,6 +783,47 @@ button:disabled {
   gap: 8px;
 }
 
+.background-preview-card {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(187, 207, 203, 0.56);
+  background: rgba(247, 252, 251, 0.9);
+  padding: 8px 9px;
+}
+
+.background-preview-sample {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  border-radius: 10px;
+  border: 3px solid #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(145, 167, 163, 0.34);
+}
+
+.background-preview-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.background-preview-copy strong {
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #2f4e52;
+}
+
+.background-preview-copy span {
+  font-size: 11px;
+  line-height: 1.25;
+  color: #667b80;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .color-input {
   width: 44px;
   height: 44px;
@@ -1643,7 +1684,7 @@ button:disabled {
     bottom: calc(6px + env(safe-area-inset-bottom));
     z-index: 70;
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 3px;
     border-radius: 18px;
     border: 1px solid rgba(178, 211, 206, 0.92);

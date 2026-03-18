@@ -67,6 +67,10 @@ const DECOR_BACKGROUND_META_KEYS = new Set([
 ]);
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
+type GlobalTypography = {
+  titleFont: string | null;
+  bodyFont: string | null;
+};
 const HISTORY_LIMIT = 40;
 const MOBILE_PREVIEW_MAX_WIDTH: Record<SlideFormat, number> = {
   "1:1": 324,
@@ -105,6 +109,10 @@ export function Editor() {
   const [showSlideBadge, setShowSlideBadge] = useState(true);
   const [useInternetImages, setUseInternetImages] = useState(false);
   const [fontsReady, setFontsReady] = useState(false);
+  const [globalTypography, setGlobalTypography] = useState<GlobalTypography>({
+    titleFont: null,
+    bodyFont: null
+  });
   const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([]);
   const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([]);
   const desktopCanvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -792,12 +800,17 @@ export function Editor() {
       const withInternetImages = useInternetImages
         ? applyInternetImagesToSlides(nextSlides, data.internetImages ?? [], slideFormat)
         : nextSlides;
+      const withTypography = applyGlobalTypographyToSlides(
+        withInternetImages,
+        globalTypography.titleFont,
+        globalTypography.bodyFont
+      );
       const addedInternetImages =
         withInternetImages.filter((slide) => Boolean(slide.backgroundImage)).length -
         nextSlides.filter((slide) => Boolean(slide.backgroundImage)).length;
       pushHistorySnapshot(true);
-      setSlides(withInternetImages);
-      setActiveSlideId(withInternetImages[0]?.id ?? null);
+      setSlides(withTypography);
+      setActiveSlideId(withTypography[0]?.id ?? null);
       setSelectedElementId(null);
       setEditingTextElementId(null);
       setStatus(
@@ -846,6 +859,7 @@ export function Editor() {
         return element;
       })
     }));
+    setStatus("Фон слайда обновлён.");
   };
 
   const handleFrameColorChange = (color: string) => {
@@ -860,6 +874,7 @@ export function Editor() {
     updateSlide(activeSlide.id, (slide) =>
       setSlideFrameColor(slide, color, activeSlideIndex, slides.length, slideFormat)
     );
+    setStatus("Цвет рамки обновлён.");
   };
 
   const handleUpdateBackgroundImageStyle = (updates: {
@@ -887,38 +902,12 @@ export function Editor() {
       return;
     }
 
+    setGlobalTypography({
+      titleFont,
+      bodyFont
+    });
     pushHistorySnapshot(true);
-    setSlides((current) =>
-      current.map((slide) => ({
-        ...slide,
-        elements: slide.elements.map((element) => {
-          if (element.type !== "text") {
-            return element;
-          }
-
-          if (element.metaKey === "managed-title" || element.role === "title") {
-            return {
-              ...element,
-              fontFamily: titleFont
-            };
-          }
-
-          if (
-            element.metaKey === "managed-body" ||
-            element.role === "body" ||
-            element.metaKey === "profile-handle" ||
-            element.metaKey === "profile-subtitle"
-          ) {
-            return {
-              ...element,
-              fontFamily: bodyFont
-            };
-          }
-
-          return element;
-        })
-      }))
-    );
+    setSlides((current) => applyGlobalTypographyToSlides(current, titleFont, bodyFont));
     setStatus("Глобальная типографика применена ко всей карусели.");
   };
 
@@ -989,7 +978,11 @@ export function Editor() {
       return;
     }
 
-    const nextSlide = createBlankSlide(index, activeTemplateId, slideFormat, slides.length + 1);
+    const nextSlide = applyGlobalTypographyToSlide(
+      createBlankSlide(index, activeTemplateId, slideFormat, slides.length + 1),
+      globalTypography.titleFont,
+      globalTypography.bodyFont
+    );
     pushHistorySnapshot(true);
     setSlides((current) => {
       const next = [...current];
@@ -1061,7 +1054,8 @@ export function Editor() {
       width: 760,
       height: 140,
       fontSize: slideFormat === "9:16" ? 34 : 36,
-      fill: "#1f2a2d"
+      fill: "#1f2a2d",
+      fontFamily: globalTypography.bodyFont ?? "Inter"
     });
 
     updateSlide(slideId, (slide) => ({
@@ -1196,7 +1190,13 @@ export function Editor() {
 
     pushHistorySnapshot(true);
     if (templateScope === "all") {
-      setSlides((current) => applyTemplateToSlides(current, templateId, slideFormat));
+      setSlides((current) =>
+        applyGlobalTypographyToSlides(
+          applyTemplateToSlides(current, templateId, slideFormat),
+          globalTypography.titleFont,
+          globalTypography.bodyFont
+        )
+      );
       setStatus("Шаблон применён ко всей карусели.");
     } else {
       if (!activeSlide || activeSlideIndex === -1) {
@@ -1204,7 +1204,11 @@ export function Editor() {
       }
 
       updateSlide(activeSlide.id, (slide) =>
-        applyTemplateToSlide(slide, templateId, activeSlideIndex, slides.length, slideFormat)
+        applyGlobalTypographyToSlide(
+          applyTemplateToSlide(slide, templateId, activeSlideIndex, slides.length, slideFormat),
+          globalTypography.titleFont,
+          globalTypography.bodyFont
+        )
       );
       setStatus("Шаблон применён к текущему слайду.");
     }
@@ -1224,7 +1228,13 @@ export function Editor() {
     }
 
     pushHistorySnapshot(true);
-    setSlides((current) => relayoutSlidesForFormat(current, slideFormat, format));
+    setSlides((current) =>
+      applyGlobalTypographyToSlides(
+        relayoutSlidesForFormat(current, slideFormat, format),
+        globalTypography.titleFont,
+        globalTypography.bodyFont
+      )
+    );
     setSlideFormat(format);
     setSelectedElementId(null);
     setEditingTextElementId(null);
@@ -1360,6 +1370,10 @@ export function Editor() {
     setMobileToolTab(null);
     setExportMode("zip");
     setUseInternetImages(false);
+    setGlobalTypography({
+      titleFont: null,
+      bodyFont: null
+    });
     setStatus(DEFAULT_STATUS);
   };
 
@@ -1973,7 +1987,7 @@ export function Editor() {
               height={slideDimensions.height}
               canvasWidth={slideDimensions.width}
               canvasHeight={slideDimensions.height}
-              showSlideBadge={showSlideBadge}
+              showSlideBadge={false}
               stageRef={(node) => {
                 exportStageRefs.current[slide.id] = node;
               }}
@@ -2085,6 +2099,59 @@ function cloneSlides(slides: Slide[]) {
     ...slide,
     elements: slide.elements.map((element) => ({ ...element }))
   }));
+}
+
+function applyGlobalTypographyToSlide(
+  slide: Slide,
+  titleFont: string | null,
+  bodyFont: string | null
+) {
+  if (!titleFont && !bodyFont) {
+    return slide;
+  }
+
+  return {
+    ...slide,
+    elements: slide.elements.map((element) => {
+      if (element.type !== "text") {
+        return element;
+      }
+
+      if ((element.metaKey === "managed-title" || element.role === "title") && titleFont) {
+        return {
+          ...element,
+          fontFamily: titleFont
+        };
+      }
+
+      if (
+        bodyFont &&
+        (element.metaKey === "managed-body" ||
+          element.role === "body" ||
+          element.metaKey === "profile-handle" ||
+          element.metaKey === "profile-subtitle")
+      ) {
+        return {
+          ...element,
+          fontFamily: bodyFont
+        };
+      }
+
+      return element;
+    })
+  };
+}
+
+function applyGlobalTypographyToSlides(
+  slides: Slide[],
+  titleFont: string | null,
+  bodyFont: string | null
+) {
+  if (!titleFont && !bodyFont) {
+    return slides;
+  }
+
+  return slides.map((slide) => applyGlobalTypographyToSlide(slide, titleFont, bodyFont));
 }
 
 function areStageImagesReady(stage: Konva.Stage) {

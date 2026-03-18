@@ -20,7 +20,6 @@ import type {
 
 export type MobileToolTab =
   | "templates"
-  | "color"
   | "background"
   | "style"
   | "text"
@@ -80,7 +79,6 @@ type MobileToolsProps = {
 
 const TOOLBAR_ITEMS: Array<{ id: MobileToolTab; icon: AppIconName; label: string }> = [
   { id: "templates", icon: "templates", label: "Шаблоны" },
-  { id: "color", icon: "palette", label: "Цвет" },
   { id: "background", icon: "background", label: "Фон" },
   { id: "style", icon: "style", label: "Стиль" },
   { id: "text", icon: "text", label: "Текст" },
@@ -450,9 +448,23 @@ export function MobileTools({
               </div>
             ) : null}
 
-            {activeTab === "color" ? (
+            {activeTab === "background" ? (
               <div className="settings-block">
-                <span className="settings-label">Цвет фона</span>
+                <span className="settings-label">Фон слайда</span>
+                <div className="background-preview-card" aria-hidden="true">
+                  <div
+                    className="background-preview-sample"
+                    style={{
+                      background: slide.background,
+                      borderColor: frameColor
+                    }}
+                  />
+                  <div className="background-preview-copy">
+                    <strong>Предпросмотр</strong>
+                    <span>Фон: {slide.background}</span>
+                    <span>Рамка: {frameColor}</span>
+                  </div>
+                </div>
                 <label className="color-row">
                   <input
                     className="color-input"
@@ -461,7 +473,7 @@ export function MobileTools({
                     onChange={(event) => onBackgroundChange(event.target.value)}
                     disabled={disabled}
                   />
-                  <span>{slide.background}</span>
+                  <span>Фон карточки • {slide.background}</span>
                 </label>
                 <label className="color-row">
                   <input
@@ -471,48 +483,7 @@ export function MobileTools({
                     onChange={(event) => onFrameColorChange(event.target.value)}
                     disabled={disabled}
                   />
-                  <span>Frame {frameColor}</span>
-                </label>
-
-                {selectedTextElement ? (
-                  <>
-                    <span className="settings-label">Цвет текста</span>
-                    <label className="color-row">
-                      <input
-                        className="color-input"
-                        type="color"
-                        value={selectedTextElement.fill}
-                        onChange={(event) =>
-                          updateTextElement((element) => ({
-                            ...element,
-                            fill: event.target.value
-                          }))
-                        }
-                        disabled={disabled}
-                      />
-                      <span>{selectedTextElement.fill}</span>
-                    </label>
-                  </>
-                ) : (
-                  <div className="settings-empty">
-                    Выберите текстовый элемент, чтобы менять цвет текста.
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            {activeTab === "background" ? (
-              <div className="settings-block">
-                <span className="settings-label">Фон слайда</span>
-                <label className="color-row">
-                  <input
-                    className="color-input"
-                    type="color"
-                    value={slide.background}
-                    onChange={(event) => onBackgroundChange(event.target.value)}
-                    disabled={disabled}
-                  />
-                  <span>{slide.background}</span>
+                  <span>Цвет рамки • {frameColor}</span>
                 </label>
 
                 <div className="field-row">
@@ -862,6 +833,22 @@ export function MobileTools({
                       </div>
                     </div>
 
+                    <label className="color-row">
+                      <input
+                        className="color-input"
+                        type="color"
+                        value={selectedTextElement.fill}
+                        onChange={(event) =>
+                          updateTextElement((element) => ({
+                            ...element,
+                            fill: event.target.value
+                          }))
+                        }
+                        disabled={disabled}
+                      />
+                      <span>Цвет текста • {selectedTextElement.fill}</span>
+                    </label>
+
                     <div className="field-row">
                       <label className="field-label">
                         Межстрочный
@@ -945,7 +932,11 @@ export function MobileTools({
                     <select
                       className="select"
                       value={globalTitleFont || firstTitleFont}
-                      onChange={(event) => setGlobalTitleFont(event.target.value)}
+                      onChange={(event) => {
+                        const nextTitleFont = event.target.value;
+                        setGlobalTitleFont(nextTitleFont);
+                        onApplyGlobalTypography(nextTitleFont, globalBodyFont || firstBodyFont);
+                      }}
                       disabled={disabled}
                     >
                       {FONT_OPTIONS.map((font) => (
@@ -960,7 +951,11 @@ export function MobileTools({
                     <select
                       className="select"
                       value={globalBodyFont || firstBodyFont}
-                      onChange={(event) => setGlobalBodyFont(event.target.value)}
+                      onChange={(event) => {
+                        const nextBodyFont = event.target.value;
+                        setGlobalBodyFont(nextBodyFont);
+                        onApplyGlobalTypography(globalTitleFont || firstTitleFont, nextBodyFont);
+                      }}
                       disabled={disabled}
                     >
                       {FONT_OPTIONS.map((font) => (
@@ -984,6 +979,7 @@ export function MobileTools({
                 >
                   Применить ко всем слайдам
                 </button>
+                <span className="settings-hint">Шрифты применяются мгновенно ко всей серии.</span>
 
                 {selectedTextElement ? (
                   <>
@@ -1234,9 +1230,6 @@ function applyImageFitMode(
 function getTabTitle(tab: MobileToolTab) {
   if (tab === "templates") {
     return "Шаблоны";
-  }
-  if (tab === "color") {
-    return "Цвет";
   }
   if (tab === "background") {
     return "Фон";

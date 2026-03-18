@@ -458,6 +458,20 @@ export function SettingsPanel({
 
         <div className="settings-block">
           <span className="settings-label">Фон слайда</span>
+          <div className="background-preview-card" aria-hidden="true">
+            <div
+              className="background-preview-sample"
+              style={{
+                background: slide.background,
+                borderColor: frameColor
+              }}
+            />
+            <div className="background-preview-copy">
+              <strong>Предпросмотр</strong>
+              <span>Фон: {slide.background}</span>
+              <span>Рамка: {frameColor}</span>
+            </div>
+          </div>
           <label className="color-row">
             <input
               className="color-input"
@@ -466,7 +480,7 @@ export function SettingsPanel({
               onChange={(event) => onBackgroundChange(event.target.value)}
               disabled={disabled}
             />
-            <span>Background: {slide.background}</span>
+            <span>Фон карточки • {slide.background}</span>
           </label>
           <label className="color-row">
             <input
@@ -476,7 +490,7 @@ export function SettingsPanel({
               onChange={(event) => onFrameColorChange(event.target.value)}
               disabled={disabled}
             />
-            <span>Frame: {frameColor}</span>
+            <span>Цвет рамки • {frameColor}</span>
           </label>
           <span className="settings-label">Стили фона</span>
           <div className="mobile-style-grid">
@@ -642,7 +656,11 @@ export function SettingsPanel({
               <select
                 className="select"
                 value={globalTitleFont || firstTitleFont}
-                onChange={(event) => setGlobalTitleFont(event.target.value)}
+                onChange={(event) => {
+                  const nextTitleFont = event.target.value;
+                  setGlobalTitleFont(nextTitleFont);
+                  onApplyGlobalTypography(nextTitleFont, globalBodyFont || firstBodyFont);
+                }}
                 disabled={disabled}
               >
                 {FONT_OPTIONS.map((font) => (
@@ -657,7 +675,11 @@ export function SettingsPanel({
               <select
                 className="select"
                 value={globalBodyFont || firstBodyFont}
-                onChange={(event) => setGlobalBodyFont(event.target.value)}
+                onChange={(event) => {
+                  const nextBodyFont = event.target.value;
+                  setGlobalBodyFont(nextBodyFont);
+                  onApplyGlobalTypography(globalTitleFont || firstTitleFont, nextBodyFont);
+                }}
                 disabled={disabled}
               >
                 {FONT_OPTIONS.map((font) => (
@@ -681,6 +703,7 @@ export function SettingsPanel({
           >
             Применить ко всем слайдам
           </button>
+          <span className="settings-hint">Шрифты применяются мгновенно ко всей серии.</span>
         </div>
 
         <div className="settings-block">
