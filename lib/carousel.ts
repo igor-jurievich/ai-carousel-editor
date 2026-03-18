@@ -1,5 +1,6 @@
 import type {
   CanvasElement,
+  CarouselLayoutType,
   CarouselOutlineSlide,
   CarouselTemplate,
   CarouselTemplateId,
@@ -71,6 +72,15 @@ export const BACKGROUND_STYLE_PRESETS = [
   { id: "bolts", label: "Молнии", templateId: "cyberpunk" },
   { id: "lines", label: "Линии", templateId: "founder-dark" }
 ] as const;
+
+export type StylePresetId = "minimal" | "contrast" | "insta" | "dark";
+
+export const STYLE_PRESETS: Array<{ id: StylePresetId; label: string; hint: string }> = [
+  { id: "minimal", label: "Минимал", hint: "Чистые светлые карточки" },
+  { id: "contrast", label: "Контраст", hint: "Светлые + тёмные акценты" },
+  { id: "insta", label: "Инста стиль", hint: "Яркая creator-подача" },
+  { id: "dark", label: "Тёмный", hint: "Премиум dark-серия" }
+];
 
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   {
@@ -770,6 +780,257 @@ function getImageBottomLayout(format: SlideFormat): ImageTopLayout {
     titleY,
     textBottom
   };
+}
+
+type SlideCompositionLayout =
+  | "hero"
+  | "statement"
+  | "list"
+  | "split"
+  | "card"
+  | "dark-slide"
+  | "cta"
+  | "image-top";
+
+function resolveCompositionLayout(layoutType?: CarouselLayoutType): SlideCompositionLayout {
+  if (layoutType === "image-top") {
+    return "image-top";
+  }
+
+  if (layoutType === "hero" || layoutType === "cover-hero") {
+    return "hero";
+  }
+
+  if (layoutType === "statement") {
+    return "statement";
+  }
+
+  if (
+    layoutType === "list" ||
+    layoutType === "bullets" ||
+    layoutType === "steps" ||
+    layoutType === "checklist"
+  ) {
+    return "list";
+  }
+
+  if (layoutType === "split" || layoutType === "case-split" || layoutType === "comparison") {
+    return "split";
+  }
+
+  if (layoutType === "dark-slide") {
+    return "dark-slide";
+  }
+
+  if (layoutType === "cta") {
+    return "cta";
+  }
+
+  return "card";
+}
+
+function composeManagedTextLayout(options: {
+  layoutType?: CarouselLayoutType;
+  template: CarouselTemplate;
+  format: SlideFormat;
+  title: TextElement;
+  body: TextElement;
+}): CanvasElement[] {
+  const composition = resolveCompositionLayout(options.layoutType);
+  if (composition === "image-top") {
+    return [options.title, options.body];
+  }
+
+  const { template, format } = options;
+  const { height } = SLIDE_FORMAT_DIMENSIONS[format];
+  const title: TextElement = { ...options.title };
+  const body: TextElement = { ...options.body };
+  const extras: CanvasElement[] = [];
+
+  if (composition === "hero") {
+    title.align = "center";
+    title.width = clampValue(Math.round(title.width * 0.88), 620, 910);
+    title.x = Math.round((SLIDE_SIZE - title.width) / 2);
+    title.y = clampValue(Math.round(height * 0.2), 150, Math.round(height * 0.38));
+    title.fontSize = clampValue(Math.round(title.fontSize * 1.14), 62, 156);
+    body.align = "center";
+    body.width = clampValue(Math.round(title.width * 0.88), 520, 820);
+    body.x = Math.round((SLIDE_SIZE - body.width) / 2);
+    body.y = title.y + title.height + 34;
+    body.fontSize = clampValue(Math.round(body.fontSize * 0.84), 20, 54);
+    body.lineHeight = Math.max(1.05, body.lineHeight ?? 1.1);
+
+    extras.push(
+      createShapeElement({
+        metaKey: "layout-hero-line",
+        x: Math.round((SLIDE_SIZE - 176) / 2),
+        y: title.y - 36,
+        width: 176,
+        height: 6,
+        fill: template.accent,
+        cornerRadius: 999,
+        opacity: 0.72
+      })
+    );
+  } else if (composition === "statement") {
+    title.width = clampValue(Math.round(title.width * 0.8), 560, 840);
+    title.x = clampValue(120, 88, SLIDE_SIZE - title.width - 88);
+    title.y = clampValue(Math.round(height * 0.32), 220, Math.round(height * 0.48));
+    title.fontSize = clampValue(Math.round(title.fontSize * 1.3), 72, 176);
+    title.lineHeight = 0.98;
+    body.width = clampValue(Math.round(title.width * 0.92), 500, 790);
+    body.x = title.x;
+    body.y = title.y + title.height + 26;
+    body.fontSize = clampValue(Math.round(body.fontSize * 0.78), 18, 44);
+    body.lineHeight = 1.05;
+
+    extras.push(
+      createShapeElement({
+        metaKey: "layout-statement-tag",
+        x: title.x,
+        y: title.y - 34,
+        width: 132,
+        height: 10,
+        fill: template.accent,
+        cornerRadius: 999,
+        opacity: 0.66
+      })
+    );
+  } else if (composition === "list") {
+    title.width = clampValue(Math.round(title.width * 0.88), 620, 900);
+    title.x = Math.round((SLIDE_SIZE - title.width) / 2);
+    title.y = clampValue(title.y - 20, 180, Math.round(height * 0.42));
+    body.width = clampValue(Math.round(title.width * 0.88), 560, 820);
+    body.x = Math.round((SLIDE_SIZE - body.width) / 2);
+    body.y = title.y + title.height + 30;
+    body.fontSize = clampValue(Math.round(body.fontSize * 0.92), 18, 42);
+    body.lineHeight = Math.max(1.2, body.lineHeight ?? 1.14);
+
+    extras.push(
+      createShapeElement({
+        metaKey: "layout-list-card",
+        x: body.x - 28,
+        y: title.y - 24,
+        width: body.width + 56,
+        height: clampValue(body.height + title.height + 72, 320, Math.round(height * 0.58)),
+        fill: "rgba(255,255,255,0.22)",
+        cornerRadius: 26,
+        opacity: 0.62
+      })
+    );
+  } else if (composition === "split") {
+    const panelWidth = format === "9:16" ? 306 : 282;
+    const panelX = SLIDE_SIZE - panelWidth - 72;
+    const panelY = format === "9:16" ? 178 : 152;
+    const panelHeight = Math.max(360, height - panelY * 2);
+    const textWidth = panelX - 142;
+
+    title.x = 104;
+    title.y = clampValue(title.y - 26, 176, Math.round(height * 0.42));
+    title.width = clampValue(textWidth, 460, 620);
+    title.fontSize = clampValue(Math.round(title.fontSize * 0.95), 34, 102);
+    body.x = title.x;
+    body.y = title.y + title.height + 28;
+    body.width = title.width;
+    body.fontSize = clampValue(Math.round(body.fontSize * 0.9), 18, 40);
+
+    extras.push(
+      createShapeElement({
+        metaKey: "layout-split-panel",
+        x: panelX,
+        y: panelY,
+        width: panelWidth,
+        height: panelHeight,
+        fill: template.accentAlt ?? template.accent,
+        cornerRadius: 30,
+        opacity: 0.2
+      }),
+      createShapeElement({
+        metaKey: "layout-split-panel-line",
+        x: panelX + 24,
+        y: panelY + 28,
+        width: panelWidth - 48,
+        height: 4,
+        fill: template.accent,
+        cornerRadius: 999,
+        opacity: 0.62
+      })
+    );
+  } else if (composition === "dark-slide") {
+    title.align = "center";
+    title.width = clampValue(Math.round(title.width * 0.84), 560, 860);
+    title.x = Math.round((SLIDE_SIZE - title.width) / 2);
+    title.y = clampValue(Math.round(height * 0.28), 188, Math.round(height * 0.46));
+    title.fill = "#f5f9ff";
+    title.fontSize = clampValue(Math.round(title.fontSize * 1.08), 40, 128);
+    body.align = "center";
+    body.width = clampValue(Math.round(title.width * 0.9), 540, 790);
+    body.x = Math.round((SLIDE_SIZE - body.width) / 2);
+    body.y = title.y + title.height + 28;
+    body.fill = "#d6e2f0";
+    body.fontSize = clampValue(Math.round(body.fontSize * 0.88), 18, 40);
+
+    extras.push(
+      createShapeElement({
+        metaKey: "layout-dark-overlay",
+        x: 54,
+        y: 54,
+        width: 972,
+        height: Math.max(320, height - 108),
+        fill: "rgba(12,14,18,0.32)",
+        cornerRadius: 34,
+        opacity: 0.96
+      })
+    );
+  } else if (composition === "cta") {
+    title.align = "center";
+    title.width = clampValue(Math.round(title.width * 0.82), 540, 820);
+    title.x = Math.round((SLIDE_SIZE - title.width) / 2);
+    title.y = clampValue(Math.round(height * 0.34), 210, Math.round(height * 0.52));
+    title.fontSize = clampValue(Math.round(title.fontSize * 1.04), 40, 120);
+    body.align = "center";
+    body.width = clampValue(Math.round(title.width * 0.9), 500, 760);
+    body.x = Math.round((SLIDE_SIZE - body.width) / 2);
+    body.y = title.y + title.height + 24;
+    body.fontSize = clampValue(Math.round(body.fontSize * 0.86), 18, 38);
+
+    extras.push(
+      createShapeElement({
+        metaKey: "layout-cta-chip",
+        x: Math.round((SLIDE_SIZE - 438) / 2),
+        y: clampValue(height - 208, 780, height - 148),
+        width: 438,
+        height: 68,
+        fill: template.accent,
+        cornerRadius: 999,
+        opacity: 0.2
+      })
+    );
+  } else {
+    title.width = clampValue(Math.round(title.width * 0.9), 600, 870);
+    title.x = Math.round((SLIDE_SIZE - title.width) / 2);
+    body.width = clampValue(Math.round(title.width * 0.9), 560, 790);
+    body.x = Math.round((SLIDE_SIZE - body.width) / 2);
+    body.y = title.y + title.height + 30;
+
+    extras.push(
+      createShapeElement({
+        metaKey: "layout-card-panel",
+        x: body.x - 26,
+        y: title.y - 26,
+        width: body.width + 52,
+        height: clampValue(title.height + body.height + 78, 280, Math.round(height * 0.5)),
+        fill: "rgba(255,255,255,0.16)",
+        cornerRadius: 28,
+        opacity: 0.62
+      })
+    );
+  }
+
+  const cappedBodyHeight = Math.max(42, height - body.y - (format === "9:16" ? 180 : 140));
+  body.height = clampValue(body.height, 42, cappedBodyHeight);
+
+  return [...extras, title, body];
 }
 
 function createDecoration(template: CarouselTemplate, format: SlideFormat): CanvasElement[] {
@@ -1879,12 +2140,18 @@ function buildManagedElements(
   const managedBody = imageBlockMode
     ? createManagedBodyForImageTop(template, bodyText, format, bodyStart, imageMode)
     : createManagedBody(template, bodyText, format, bodyStart);
+  const composedManagedText = composeManagedTextLayout({
+    layoutType: imageBlockMode ? "image-top" : slide.layoutType,
+    template,
+    format,
+    title: managedTitle,
+    body: managedBody
+  });
 
   managed.push(
     createChip(template, index, format),
     createChipText(template, index, format),
-    managedTitle,
-    managedBody
+    ...composedManagedText
   );
   managed.push(...createFooterElements(slide, template, index, totalSlides, format));
 
@@ -2045,6 +2312,9 @@ export function createSlideFromOutline(
   const body =
     rawBody ||
     "Добавьте текст, загрузите изображение или поставьте своё фото в фон. В этом блоке стоит раскрыть главную мысль и дать конкретику, чтобы карточка выглядела законченной.";
+  const resolvedLayoutType =
+    outline.layoutType ??
+    (index === 0 ? "hero" : index === totalSlides - 1 ? "cta" : "card");
   const slide: Slide = {
     id: crypto.randomUUID(),
     name: title,
@@ -2057,7 +2327,7 @@ export function createSlideFromOutline(
     imageLayoutMode: undefined,
     generationRole: outline.role,
     generationCoreIdea: outline.coreIdea,
-    layoutType: outline.layoutType,
+    layoutType: resolvedLayoutType,
     imageIntent: outline.imageIntent,
     imageQueryDraft: outline.imageQueryDraft,
     elements: []
@@ -2096,6 +2366,50 @@ export function applyTemplateToSlides(
   return slides.map((slide, index) =>
     applyTemplateToSlide(slide, templateId, index, slides.length, format)
   );
+}
+
+const STYLE_PRESET_ROTATIONS: Record<StylePresetId, CarouselTemplateId[]> = {
+  minimal: ["minimal", "notes", "technology", "editorial", "business-light"],
+  contrast: ["minimal", "netflix", "technology", "premium", "atlas"],
+  insta: ["charge", "mandarin", "aurora", "coral", "atlas"],
+  dark: ["netflix", "matrix", "premium", "midnight", "founder-dark"]
+};
+
+export function applyStylePresetToSlides(
+  slides: Slide[],
+  presetId: StylePresetId,
+  format: SlideFormat
+) {
+  const rotation = STYLE_PRESET_ROTATIONS[presetId] ?? STYLE_PRESET_ROTATIONS.minimal;
+
+  return slides.map((slide, index) => {
+    const isFirst = index === 0;
+    const isLast = index === slides.length - 1;
+    let templateId = rotation[index % rotation.length];
+
+    if (isFirst && presetId === "contrast") {
+      templateId = "netflix";
+    } else if (isFirst && presetId === "insta") {
+      templateId = "mandarin";
+    } else if (isFirst && presetId === "minimal") {
+      templateId = "minimal";
+    } else if (isFirst && presetId === "dark") {
+      templateId = "premium";
+    }
+
+    if (isLast) {
+      templateId =
+        presetId === "dark"
+          ? "netflix"
+          : presetId === "insta"
+            ? "charge"
+            : presetId === "contrast"
+              ? "atlas"
+              : "business-light";
+    }
+
+    return applyTemplateToSlide(slide, templateId, index, slides.length, format);
+  });
 }
 
 export function createSlidesFromOutline(
@@ -2160,6 +2474,7 @@ export function createStarterSlides(
       templateId: "minimal",
       titleFont: "Manrope",
       bodyFont: "Inter",
+      layoutType: "hero",
       title: "AI Carousel Editor",
       text: "Соберите карусель за несколько минут: идея, генерация, правки и экспорт в одном редакторе."
     },
@@ -2167,6 +2482,7 @@ export function createStarterSlides(
       templateId: "atlas",
       titleFont: "Oswald",
       bodyFont: "DM Sans",
+      layoutType: "list",
       title: "1. Введите тему и создайте карусель",
       text: "Напишите тему или вставьте набросок. AI соберёт структуру слайдов и сразу даст рабочий черновик под публикацию."
     },
@@ -2174,6 +2490,7 @@ export function createStarterSlides(
       templateId: "technology",
       titleFont: "Space Grotesk",
       bodyFont: "Inter",
+      layoutType: "split",
       title: "2. Редактируйте текст как в привычном editor-flow",
       text: "Тап по блоку выбирает элемент, двойной тап включает редактирование. Заголовок и описание правятся прямо на canvas."
     },
@@ -2181,6 +2498,7 @@ export function createStarterSlides(
       titleFont: "El Messiri",
       bodyFont: "Roboto Condensed",
       templateId: "premium",
+      layoutType: "dark-slide",
       title: "3. Управляйте шрифтами и ритмом",
       text: "Выберите пару «заголовок + описание» для всей серии или меняйте отдельные блоки. Стиль обновляется сразу."
     },
@@ -2188,6 +2506,7 @@ export function createStarterSlides(
       templateId: "aurora",
       titleFont: "Space Grotesk",
       bodyFont: "Inter",
+      layoutType: "card",
       title: "4. Настраивайте фон и характер подачи",
       text: "Светлая, тёмная или акцентная карточка — переключайте шаблоны, фон и рамку без пересборки контента."
     },
@@ -2195,6 +2514,7 @@ export function createStarterSlides(
       templateId: "founder-dark",
       titleFont: "Manrope",
       bodyFont: "Inter",
+      layoutType: "image-top",
       includeDemoImage: true,
       title: "5. Добавляйте изображения без хаоса",
       text: "Фото встраиваются в композицию с safe-зонами: текст остаётся читаемым, а карточка выглядит аккуратной."
@@ -2203,6 +2523,7 @@ export function createStarterSlides(
       templateId: "netflix",
       titleFont: "Fira Code",
       bodyFont: "Inter",
+      layoutType: "statement",
       title: "6. Экспортируйте в нужном формате",
       text: "Когда всё готово — скачайте ZIP, PNG, JPG или PDF. Эта инструкция — демо, удалите её и создайте свою серию."
     },
@@ -2210,6 +2531,7 @@ export function createStarterSlides(
       templateId: "mandarin",
       titleFont: "Russo One",
       bodyFont: "Inter",
+      layoutType: "cta",
       title: "7. Создайте свою первую карусель",
       text: "Очистите демо-серию, введите тему и нажмите «Сгенерировать». Через пару минут у вас будет готовая карусель под публикацию."
     }

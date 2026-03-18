@@ -12,6 +12,7 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import { SlideStage } from "@/components/SlideStage";
 import { Toolbar } from "@/components/Toolbar";
 import {
+  applyStylePresetToSlides,
   applyTemplateToSlide,
   applyTemplateToSlides,
   createBlankSlide,
@@ -28,6 +29,7 @@ import {
   SLIDE_FORMAT_DIMENSIONS,
   setSlideBackgroundImage,
   syncSlideOrderMeta,
+  type StylePresetId,
   updateSlideFooter
 } from "@/lib/carousel";
 import {
@@ -72,6 +74,8 @@ type GlobalTypography = {
   bodyFont: string | null;
 };
 const HISTORY_LIMIT = 40;
+const EXPORT_ATTEMPTS_MAX = 3;
+const EXPORT_CAPTURE_ATTEMPTS = 3;
 const MOBILE_PREVIEW_MAX_WIDTH: Record<SlideFormat, number> = {
   "1:1": 324,
   "4:5": 338,
@@ -1222,6 +1226,25 @@ export function Editor() {
     setEditingTextElementId(null);
   };
 
+  const handleApplyStylePreset = (presetId: StylePresetId) => {
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
+      return;
+    }
+
+    pushHistorySnapshot(true);
+    setSlides((current) =>
+      applyGlobalTypographyToSlides(
+        applyStylePresetToSlides(current, presetId, slideFormat),
+        globalTypography.titleFont,
+        globalTypography.bodyFont
+      )
+    );
+    setSelectedElementId(null);
+    setEditingTextElementId(null);
+    setStatus(`Пресет «${presetId}» применён ко всей серии.`);
+  };
+
   const handleFormatChange = (format: SlideFormat) => {
     if (generationLocked) {
       setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
@@ -1421,16 +1444,36 @@ export function Editor() {
     }));
   };
 
-  const getSlideDataUrl = (slideId: string) => {
-    const stage = exportStageRefs.current[slideId];
+  const getSlideDataUrl = async (slideId: string) => {
+    let lastError: Error | null = null;
 
-    if (!stage) {
-      throw new Error("Экспортируемый слайд ещё не готов.");
+    for (let attempt = 1; attempt <= EXPORT_CAPTURE_ATTEMPTS; attempt += 1) {
+      const stage = exportStageRefs.current[slideId];
+
+      if (!stage) {
+        lastError = new Error("Экспортируемый слайд ещё не готов.");
+        await waitForNextFrame();
+        continue;
+      }
+
+      stage.draw();
+
+      if (!areStageImagesReady(stage)) {
+        lastError = new Error("Изображения ещё догружаются для экспорта.");
+        await waitForNextFrame();
+        continue;
+      }
+
+      const dataUrl = stage.toDataURL({ pixelRatio: 2 });
+      if (dataUrl.startsWith("data:image/") && dataUrl.length > 1400) {
+        return dataUrl;
+      }
+
+      lastError = new Error("Слайд экспортировался некорректно, пробую повторно.");
+      await waitForNextFrame();
     }
 
-    stage.draw();
-
-    return stage.toDataURL({ pixelRatio: 2 });
+    throw lastError ?? new Error("Не удалось подготовить слайд к экспорту.");
   };
 
   const ensureExportStagesReady = async () => {
@@ -1481,7 +1524,7 @@ export function Editor() {
     const zip = new JSZip();
 
     for (let index = 0; index < slides.length; index += 1) {
-      const rawDataUrl = getSlideDataUrl(slides[index].id);
+      const rawDataUrl = await getSlideDataUrl(slides[index].id);
       const exportDataUrl =
         imageType === "jpg" ? await convertDataUrlToJpeg(rawDataUrl) : rawDataUrl;
       const base64 = exportDataUrl.replace(/^data:image\/(?:png|jpeg);base64,/, "");
@@ -1507,60 +1550,79 @@ export function Editor() {
       if (!slides.length) {
         return;
       }
+      let lastAttemptError: unknown = null;
 
-      setStatus(`Подготавливаю экспорт: ${exportModeLabel}.`);
-      const imagesReady = await ensureExportStagesReady();
-      if (!imagesReady) {
-        throw new Error(
-          "Не удалось дождаться загрузки всех изображений для экспорта. Повторите попытку через несколько секунд."
-        );
-      }
+      for (let attempt = 1; attempt <= EXPORT_ATTEMPTS_MAX; attempt += 1) {
+        try {
+          setStatus(
+            `Подготавливаю экспорт: ${exportModeLabel} (${attempt}/${EXPORT_ATTEMPTS_MAX}).`
+          );
 
-      if (exportMode === "png" || exportMode === "jpg") {
-        const imageType = exportMode === "jpg" ? "jpg" : "png";
-
-        if (slides.length === 1) {
-          const rawDataUrl = getSlideDataUrl(slides[0].id);
-          const exportDataUrl =
-            imageType === "jpg" ? await convertDataUrlToJpeg(rawDataUrl) : rawDataUrl;
-          const blob = await dataUrlToBlob(exportDataUrl);
-          saveAs(blob, `${slugify(projectTitleFromTopic(topic))}-slide1.${imageType}`);
-          setStatus(`${imageType.toUpperCase()} скачан.`);
-          return;
-        }
-
-        await exportSlidesAsZip(
-          imageType === "jpg" ? "slides-jpg" : "slides-png",
-          imageType
-        );
-        setStatus(`${imageType.toUpperCase()} всех слайдов скачаны одним архивом.`);
-        return;
-      }
-
-      if (exportMode === "pdf") {
-        const pdf = new jsPDF({
-          orientation: "portrait",
-          unit: "px",
-          format: [slideDimensions.width, slideDimensions.height]
-        });
-
-        slides.forEach((slide, index) => {
-          const dataUrl = getSlideDataUrl(slide.id);
-
-          if (index > 0) {
-            pdf.addPage([slideDimensions.width, slideDimensions.height], "portrait");
+          const imagesReady = await ensureExportStagesReady();
+          if (!imagesReady) {
+            throw new Error(
+              "Не удалось дождаться загрузки всех изображений для экспорта. Повторите попытку через несколько секунд."
+            );
           }
 
-          pdf.addImage(dataUrl, "PNG", 0, 0, slideDimensions.width, slideDimensions.height);
-        });
+          if (exportMode === "png" || exportMode === "jpg") {
+            const imageType = exportMode === "jpg" ? "jpg" : "png";
 
-        pdf.save(`${slugify(projectTitleFromTopic(topic))}.pdf`);
-        setStatus("PDF экспортирован.");
-        return;
+            if (slides.length === 1) {
+              const rawDataUrl = await getSlideDataUrl(slides[0].id);
+              const exportDataUrl =
+                imageType === "jpg" ? await convertDataUrlToJpeg(rawDataUrl) : rawDataUrl;
+              const blob = await dataUrlToBlob(exportDataUrl);
+              saveAs(blob, `${slugify(projectTitleFromTopic(topic))}-slide1.${imageType}`);
+              setStatus(`${imageType.toUpperCase()} скачан.`);
+              return;
+            }
+
+            await exportSlidesAsZip(
+              imageType === "jpg" ? "slides-jpg" : "slides-png",
+              imageType
+            );
+            setStatus(`${imageType.toUpperCase()} всех слайдов скачаны одним архивом.`);
+            return;
+          }
+
+          if (exportMode === "pdf") {
+            const pdf = new jsPDF({
+              orientation: "portrait",
+              unit: "px",
+              format: [slideDimensions.width, slideDimensions.height]
+            });
+
+            for (let index = 0; index < slides.length; index += 1) {
+              const dataUrl = await getSlideDataUrl(slides[index].id);
+
+              if (index > 0) {
+                pdf.addPage([slideDimensions.width, slideDimensions.height], "portrait");
+              }
+
+              pdf.addImage(dataUrl, "PNG", 0, 0, slideDimensions.width, slideDimensions.height);
+            }
+
+            pdf.save(`${slugify(projectTitleFromTopic(topic))}.pdf`);
+            setStatus("PDF экспортирован.");
+            return;
+          }
+
+          await exportSlidesAsZip("slides", "png");
+          setStatus("Архив со слайдами скачан.");
+          return;
+        } catch (attemptError) {
+          lastAttemptError = attemptError;
+          if (attempt >= EXPORT_ATTEMPTS_MAX) {
+            break;
+          }
+
+          await waitForNextFrame();
+          await waitForNextFrame();
+        }
       }
 
-      await exportSlidesAsZip("slides", "png");
-      setStatus("Архив со слайдами скачан.");
+      throw lastAttemptError ?? new Error("Экспорт не удалось завершить.");
     } catch (error) {
       setStatus(resolveUserFacingError(error, "Ошибка экспорта. Попробуйте снова."));
     } finally {
@@ -1718,6 +1780,7 @@ export function Editor() {
                   onTemplateCategoryChange={setActiveTemplateCategory}
                   onTemplateScopeChange={setTemplateScope}
                   onApplyTemplate={handleApplyTemplate}
+                  onApplyStylePreset={handleApplyStylePreset}
                   onSelectSlide={handleSelectSlide}
                   onInsertSlideAt={handleInsertSlideAt}
                   onDeleteSlide={handleDeleteSlide}
@@ -1950,6 +2013,7 @@ export function Editor() {
               onTemplateCategoryChange={setActiveTemplateCategory}
               onTemplateScopeChange={setTemplateScope}
               onApplyTemplate={handleApplyTemplate}
+              onApplyStylePreset={handleApplyStylePreset}
               onProfileHandleChange={(value) => handleUpdateFooter({ profileHandle: value })}
               onProfileSubtitleChange={(value) => handleUpdateFooter({ profileSubtitle: value })}
               onFooterVariantChange={(value) => handleUpdateFooter({ footerVariant: value })}

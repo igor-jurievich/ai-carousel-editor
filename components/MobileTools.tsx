@@ -6,7 +6,9 @@ import {
   FOOTER_VARIANTS,
   FONT_OPTIONS,
   getPrimaryTemplates,
+  STYLE_PRESETS,
   getTemplatesByCategory,
+  type StylePresetId,
   TEMPLATE_CATEGORY_LABELS
 } from "@/lib/carousel";
 import { AppIcon, type AppIconName } from "@/components/icons";
@@ -44,6 +46,7 @@ type MobileToolsProps = {
   onTemplateCategoryChange: (category: TemplateCategoryId) => void;
   onTemplateScopeChange: (scope: "slide" | "all") => void;
   onApplyTemplate: (templateId: CarouselTemplateId) => void;
+  onApplyStylePreset: (presetId: StylePresetId) => void;
   onProfileHandleChange: (value: string) => void;
   onProfileSubtitleChange: (value: string) => void;
   onFooterVariantChange: (value: FooterVariantId) => void;
@@ -104,6 +107,7 @@ export function MobileTools({
   onTemplateCategoryChange,
   onTemplateScopeChange,
   onApplyTemplate,
+  onApplyStylePreset,
   onProfileHandleChange,
   onProfileSubtitleChange,
   onFooterVariantChange,
@@ -349,6 +353,22 @@ export function MobileTools({
                       <span className="mobile-template-caption">
                         {getTemplatePreviewCaption(template)}
                       </span>
+                    </button>
+                  ))}
+                </div>
+
+                <span className="settings-label">Пресеты серии</span>
+                <div className="mobile-style-grid">
+                  {STYLE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className="mobile-style-chip"
+                      onClick={() => onApplyStylePreset(preset.id)}
+                      disabled={disabled}
+                      title={preset.hint}
+                    >
+                      {preset.label}
                     </button>
                   ))}
                 </div>

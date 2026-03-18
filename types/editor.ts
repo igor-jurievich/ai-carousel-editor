@@ -18,6 +18,12 @@ export type CarouselSlideRole =
   | "summary"
   | "cta";
 export type CarouselLayoutType =
+  | "hero"
+  | "statement"
+  | "list"
+  | "split"
+  | "card"
+  | "dark-slide"
   | "cover-hero"
   | "title-body"
   | "bullets"

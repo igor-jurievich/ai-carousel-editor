@@ -30,6 +30,12 @@ const ROLE_VALUES = [
 ] as const satisfies readonly CarouselSlideRole[];
 
 const LAYOUT_VALUES = [
+  "hero",
+  "statement",
+  "list",
+  "split",
+  "card",
+  "dark-slide",
   "cover-hero",
   "title-body",
   "bullets",
@@ -189,89 +195,168 @@ const TEMPLATE_FAMILY_POOLS: Record<
 };
 
 const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
-  "cover-hero": {
-    titleMin: 16,
-    titleMax: 68,
-    bodyMin: 42,
+  hero: {
+    titleMin: 14,
+    titleMax: 72,
+    bodyMin: 18,
+    bodyMax: 120,
+    preferredLinesMin: 1,
+    preferredLinesMax: 2
+  },
+  statement: {
+    titleMin: 14,
+    titleMax: 64,
+    bodyMin: 18,
+    bodyMax: 110,
+    preferredLinesMin: 1,
+    preferredLinesMax: 2
+  },
+  list: {
+    titleMin: 14,
+    titleMax: 64,
+    bodyMin: 36,
     bodyMax: 190,
+    preferredLinesMin: 3,
+    preferredLinesMax: 5
+  },
+  split: {
+    titleMin: 14,
+    titleMax: 66,
+    bodyMin: 32,
+    bodyMax: 170,
     preferredLinesMin: 2,
-    preferredLinesMax: 4
+    preferredLinesMax: 3
+  },
+  card: {
+    titleMin: 14,
+    titleMax: 68,
+    bodyMin: 34,
+    bodyMax: 170,
+    preferredLinesMin: 2,
+    preferredLinesMax: 3
+  },
+  "dark-slide": {
+    titleMin: 14,
+    titleMax: 66,
+    bodyMin: 22,
+    bodyMax: 120,
+    preferredLinesMin: 1,
+    preferredLinesMax: 2
+  },
+  "cover-hero": {
+    titleMin: 14,
+    titleMax: 72,
+    bodyMin: 18,
+    bodyMax: 120,
+    preferredLinesMin: 1,
+    preferredLinesMax: 2
   },
   "title-body": {
-    titleMin: 16,
-    titleMax: 72,
-    bodyMin: 110,
-    bodyMax: 285,
-    preferredLinesMin: 3,
-    preferredLinesMax: 6
+    titleMin: 14,
+    titleMax: 68,
+    bodyMin: 34,
+    bodyMax: 170,
+    preferredLinesMin: 2,
+    preferredLinesMax: 3
   },
   bullets: {
-    titleMin: 16,
-    titleMax: 68,
-    bodyMin: 90,
-    bodyMax: 250,
+    titleMin: 14,
+    titleMax: 64,
+    bodyMin: 36,
+    bodyMax: 190,
     preferredLinesMin: 3,
     preferredLinesMax: 5
   },
   steps: {
-    titleMin: 16,
-    titleMax: 66,
-    bodyMin: 90,
-    bodyMax: 240,
+    titleMin: 14,
+    titleMax: 64,
+    bodyMin: 36,
+    bodyMax: 190,
     preferredLinesMin: 3,
     preferredLinesMax: 5
   },
   checklist: {
-    titleMin: 16,
-    titleMax: 66,
-    bodyMin: 92,
-    bodyMax: 240,
+    titleMin: 14,
+    titleMax: 64,
+    bodyMin: 36,
+    bodyMax: 190,
     preferredLinesMin: 3,
     preferredLinesMax: 5
   },
   "case-split": {
-    titleMin: 16,
-    titleMax: 68,
-    bodyMin: 110,
-    bodyMax: 270,
-    preferredLinesMin: 3,
-    preferredLinesMax: 6
+    titleMin: 14,
+    titleMax: 66,
+    bodyMin: 32,
+    bodyMax: 170,
+    preferredLinesMin: 2,
+    preferredLinesMax: 3
   },
   comparison: {
-    titleMin: 16,
-    titleMax: 68,
-    bodyMin: 100,
-    bodyMax: 260,
-    preferredLinesMin: 3,
-    preferredLinesMax: 6
+    titleMin: 14,
+    titleMax: 66,
+    bodyMin: 32,
+    bodyMax: 170,
+    preferredLinesMin: 2,
+    preferredLinesMax: 3
   },
   summary: {
-    titleMin: 16,
-    titleMax: 68,
-    bodyMin: 90,
-    bodyMax: 230,
+    titleMin: 14,
+    titleMax: 66,
+    bodyMin: 28,
+    bodyMax: 150,
     preferredLinesMin: 2,
-    preferredLinesMax: 4
+    preferredLinesMax: 3
   },
   cta: {
-    titleMin: 16,
-    titleMax: 64,
-    bodyMin: 72,
-    bodyMax: 200,
-    preferredLinesMin: 2,
-    preferredLinesMax: 4
+    titleMin: 14,
+    titleMax: 62,
+    bodyMin: 22,
+    bodyMax: 120,
+    preferredLinesMin: 1,
+    preferredLinesMax: 2
   },
   "image-top": {
-    titleMin: 16,
-    titleMax: 70,
-    bodyMin: 90,
-    bodyMax: 250,
+    titleMin: 14,
+    titleMax: 68,
+    bodyMin: 30,
+    bodyMax: 150,
     preferredLinesMin: 2,
-    preferredLinesMax: 5
+    preferredLinesMax: 3
   }
 };
 
-const STRUCTURED_LAYOUTS = new Set<CarouselLayoutType>(["bullets", "steps", "checklist"]);
+const LAYOUT_WORD_LIMITS: Record<
+  CarouselLayoutType,
+  {
+    titleWords: number;
+    bodyWords: number;
+    lineWords: number;
+  }
+> = {
+  hero: { titleWords: 8, bodyWords: 12, lineWords: 6 },
+  statement: { titleWords: 8, bodyWords: 11, lineWords: 6 },
+  list: { titleWords: 8, bodyWords: 24, lineWords: 6 },
+  split: { titleWords: 8, bodyWords: 14, lineWords: 7 },
+  card: { titleWords: 9, bodyWords: 16, lineWords: 7 },
+  "dark-slide": { titleWords: 8, bodyWords: 12, lineWords: 6 },
+  "cover-hero": { titleWords: 8, bodyWords: 12, lineWords: 6 },
+  "title-body": { titleWords: 9, bodyWords: 16, lineWords: 7 },
+  bullets: { titleWords: 8, bodyWords: 24, lineWords: 6 },
+  steps: { titleWords: 8, bodyWords: 24, lineWords: 6 },
+  checklist: { titleWords: 8, bodyWords: 24, lineWords: 6 },
+  "case-split": { titleWords: 8, bodyWords: 14, lineWords: 7 },
+  comparison: { titleWords: 8, bodyWords: 14, lineWords: 7 },
+  summary: { titleWords: 8, bodyWords: 13, lineWords: 6 },
+  cta: { titleWords: 8, bodyWords: 12, lineWords: 6 },
+  "image-top": { titleWords: 8, bodyWords: 14, lineWords: 6 }
+};
+
+const STRUCTURED_LAYOUTS = new Set<CarouselLayoutType>([
+  "list",
+  "bullets",
+  "steps",
+  "checklist"
+]);
 
 const META_PATTERNS = [
   /сделай\s+карусель/i,
@@ -625,7 +710,9 @@ async function requestCarouselPlan(
               "First create narrative flow and unique slide roles, then details.",
               "No duplicate core ideas between slides.",
               "First slide must be cover. Last slide must be cta.",
+              "Carousel flow must be: hook -> tension/problem -> insight -> practice -> close/cta.",
               "Assign each slide one role, one core idea, one layout type, image intent, optional image query.",
+              "Use visually varied layouts: hero, statement, list, split, card, dark-slide, cta, image-top when image is needed.",
               "imageQueryDraft must be concise and suitable for stock photo search (English keywords preferred).",
               "If image is not needed, set imageIntent='none' and imageQueryDraft=''.",
               `Use exactly ${targetCount} slides.`
@@ -683,6 +770,8 @@ async function requestCarouselSlides(
               "No meta phrases, no brief echo, no filler.",
               "Write practical, human, concise copy with clear hierarchy.",
               "Each slide should deliver a unique idea and advance the narrative.",
+              "One slide = one thought. No mixed ideas on one slide.",
+              "Keep copy short: up to 2-3 lines per slide, 8-12 words for regular lines.",
               "Keep text within provided layout limits. Do not overflow.",
               "Do not repeat same advice in different words.",
               `Use exactly ${targetCount} slides in the same order as the plan.`
@@ -844,7 +933,7 @@ function buildSlidesSchema(targetCount: number) {
           additionalProperties: false,
           properties: {
             title: { type: "string", minLength: 4, maxLength: 120 },
-            text: { type: "string", minLength: 18, maxLength: 380 }
+            text: { type: "string", minLength: 14, maxLength: 260 }
           },
           required: ["title", "text"]
         }
@@ -873,7 +962,7 @@ function buildRepairsSchema(targetCount: number, maxItems: number) {
               maximum: Math.max(0, targetCount - 1)
             },
             title: { type: "string", minLength: 4, maxLength: 120 },
-            text: { type: "string", minLength: 18, maxLength: 380 }
+            text: { type: "string", minLength: 14, maxLength: 260 }
           },
           required: ["slideIndex", "title", "text"]
         }
@@ -912,9 +1001,11 @@ function buildPlanPrompt(
     "",
     "Требования:",
     "- Не дублируй coreIdea между слайдами.",
-    "- Cover должен открывать тему резко и ясно.",
+    "- Cover должен быть хуком через боль/конфликт/триггер, без слов «обзор», «сравнение», «гайд».",
     "- CTA должен завершать карусель и давать следующее действие.",
-    "- templateId держи в одном визуальном семействе внутри всей карусели (без случайного микса).",
+    "- Держи композиционный ритм: hero/statement/list/split/card/dark-slide/cta.",
+    "- Внутри серии не ставь один и тот же layout подряд больше 2 раз.",
+    "- templateId держи в одном визуальном семействе внутри всей карусели.",
     "- imageIntent = none, если фото не усиливает смысл.",
     "- imageQueryDraft делай коротким поисковым запросом (лучше на английском)."
   ].join("\n");
@@ -944,7 +1035,10 @@ function buildContentPrompt(topic: string, brief: ParsedBrief, plan: CarouselPla
     "- Пиши живым русским языком, без воды и канцелярита.",
     "- Не повторяй мысли между слайдами.",
     "- Заголовок короткий и сильный.",
-    "- Для layout bullets/checklist/steps делай структурированный список строками.",
+    "- 1 слайд = 1 мысль. Не склеивай несколько идей на одном слайде.",
+    "- Для обычных layout делай 2-3 короткие строки (8-12 слов).",
+    "- Для layout list/bullets/checklist/steps делай 3-5 пунктов по одной короткой строке.",
+    "- На каждом 2-3 слайде добавляй один акцентный формулировочный крючок.",
     "- Не включай служебные слова типа 'слайд 1', 'логика', 'ТЗ'."
   ].join("\n");
 }
@@ -971,7 +1065,7 @@ function buildRepairPrompt(
       if (!planSlide) {
         return `- index ${index}: восстановить содержательный слайд без повторов`;
       }
-      const limits = LAYOUT_LIMITS[planSlide.layoutType];
+      const limits = LAYOUT_LIMITS[normalizeLayoutType(planSlide.layoutType)];
       return [
         `- index ${index}`,
         `  role: ${planSlide.role}`,
@@ -1013,9 +1107,11 @@ function normalizePlan(
     const rawSlide = rawSlides[index] as Partial<CarouselPlanSlide> | undefined;
     const fallback = fallbackPlan.slides[index];
     const role = isCarouselRole(rawSlide?.role) ? rawSlide.role : fallback.role;
-    const layoutType = isCarouselLayout(rawSlide?.layoutType)
-      ? rawSlide.layoutType
-      : fallback.layoutType;
+    const layoutType = normalizeLayoutType(
+      isCarouselLayout(rawSlide?.layoutType)
+        ? rawSlide.layoutType
+        : fallback.layoutType
+    );
     const imageIntent = isImageIntent(rawSlide?.imageIntent) ? rawSlide.imageIntent : fallback.imageIntent;
     const templateId = isTemplateId(rawSlide?.templateId) ? rawSlide.templateId : fallback.templateId;
     const coreIdea = clean(String(rawSlide?.coreIdea ?? fallback.coreIdea)).slice(0, 220) || fallback.coreIdea;
@@ -1033,7 +1129,7 @@ function normalizePlan(
 
   if (normalizedSlides[0]) {
     normalizedSlides[0].role = "cover";
-    normalizedSlides[0].layoutType = normalizedSlides[0].imageIntent !== "none" ? "image-top" : "cover-hero";
+    normalizedSlides[0].layoutType = normalizedSlides[0].imageIntent !== "none" ? "image-top" : "hero";
   }
 
   const last = normalizedSlides[normalizedSlides.length - 1];
@@ -1045,6 +1141,7 @@ function normalizePlan(
   }
 
   dedupeCoreIdeas(normalizedSlides, fallbackPlan.slides);
+  enforceLayoutRhythm(normalizedSlides);
 
   const maxImages = resolveImageBudget(lens, targetCount);
   limitImageUsage(normalizedSlides, maxImages, isTopicCategory(rawPlan.category) ? rawPlan.category : lens.category);
@@ -1087,7 +1184,9 @@ function dedupeCoreIdeas(slides: CarouselPlanSlide[], fallbackSlides: CarouselPl
 
       const fallback = fallbackSlides[right];
       slides[right].coreIdea = fallback?.coreIdea || `${slides[right].role}: дополнительный полезный ракурс`;
-      slides[right].layoutType = fallback?.layoutType || chooseLayoutForRole(slides[right].role, "none");
+      slides[right].layoutType = normalizeLayoutType(
+        fallback?.layoutType || chooseLayoutForRole(slides[right].role, "none")
+      );
       slides[right].imageIntent = fallback?.imageIntent || "none";
       slides[right].imageQueryDraft = fallback?.imageQueryDraft || "";
       fingerprints.set(right, toSimilaritySet(slides[right].coreIdea));
@@ -1121,7 +1220,7 @@ function limitImageUsage(
       slide.imageIntent = "none";
       slide.imageQueryDraft = "";
       if (slide.layoutType === "image-top") {
-        slide.layoutType = chooseLayoutForRole(slide.role, "none");
+        slide.layoutType = normalizeLayoutType(chooseLayoutForRole(slide.role, "none"));
       }
     });
     return;
@@ -1150,7 +1249,7 @@ function limitImageUsage(
       slide.imageIntent = "none";
       slide.imageQueryDraft = "";
       if (slide.layoutType === "image-top") {
-        slide.layoutType = chooseLayoutForRole(slide.role, "none");
+        slide.layoutType = normalizeLayoutType(chooseLayoutForRole(slide.role, "none"));
       }
       return;
     }
@@ -1169,6 +1268,133 @@ function limitImageUsage(
       slide.layoutType = "image-top";
     }
   });
+}
+
+function normalizeLayoutType(layoutType: CarouselLayoutType): CarouselLayoutType {
+  if (layoutType === "cover-hero") {
+    return "hero";
+  }
+
+  if (layoutType === "title-body" || layoutType === "summary") {
+    return "card";
+  }
+
+  if (
+    layoutType === "bullets" ||
+    layoutType === "steps" ||
+    layoutType === "checklist"
+  ) {
+    return "list";
+  }
+
+  if (layoutType === "case-split" || layoutType === "comparison") {
+    return "split";
+  }
+
+  return layoutType;
+}
+
+function getLayoutAlternatives(
+  role: CarouselSlideRole,
+  imageIntent: CarouselImageIntent
+): CarouselLayoutType[] {
+  if (imageIntent !== "none" && (role === "cover" || role === "problem" || role === "case" || role === "comparison")) {
+    return ["image-top", "hero", "statement"];
+  }
+
+  if (role === "cover") {
+    return ["hero", "statement", "dark-slide"];
+  }
+
+  if (role === "problem") {
+    return ["statement", "dark-slide", "split"];
+  }
+
+  if (role === "myth") {
+    return ["split", "statement", "card"];
+  }
+
+  if (role === "mistake") {
+    return ["card", "statement", "split"];
+  }
+
+  if (role === "tip") {
+    return ["list", "card", "statement"];
+  }
+
+  if (role === "steps" || role === "checklist") {
+    return ["list", "split", "card"];
+  }
+
+  if (role === "case" || role === "comparison") {
+    return ["split", "card", "dark-slide"];
+  }
+
+  if (role === "summary") {
+    return ["card", "statement", "dark-slide"];
+  }
+
+  if (role === "cta") {
+    return ["cta"];
+  }
+
+  return ["card"];
+}
+
+function enforceLayoutRhythm(slides: CarouselPlanSlide[]) {
+  if (!slides.length) {
+    return;
+  }
+
+  slides.forEach((slide, index) => {
+    slide.layoutType = normalizeLayoutType(slide.layoutType);
+    if (index === 0 && slide.imageIntent === "none") {
+      slide.layoutType = "hero";
+    }
+    if (index === slides.length - 1) {
+      slide.layoutType = "cta";
+    }
+  });
+
+  for (let index = 2; index < slides.length - 1; index += 1) {
+    const current = slides[index];
+    const prev = slides[index - 1];
+    const prevPrev = slides[index - 2];
+    if (
+      current.layoutType === prev.layoutType &&
+      current.layoutType === prevPrev.layoutType &&
+      current.layoutType !== "image-top"
+    ) {
+      const alternatives = getLayoutAlternatives(current.role, current.imageIntent)
+        .map((layout) => normalizeLayoutType(layout))
+        .filter((layout) => layout !== prev.layoutType && layout !== "cta");
+      if (alternatives[0]) {
+        current.layoutType = alternatives[0];
+      }
+    }
+  }
+
+  const distinctLayouts = new Set(
+    slides
+      .slice(0, -1)
+      .map((slide) => normalizeLayoutType(slide.layoutType))
+      .filter((layout) => layout !== "image-top")
+  );
+
+  if (slides.length >= 5 && distinctLayouts.size < 3) {
+    for (let index = 1; index < slides.length - 1 && distinctLayouts.size < 3; index += 1) {
+      const slide = slides[index];
+      const alternatives = getLayoutAlternatives(slide.role, slide.imageIntent)
+        .map((layout) => normalizeLayoutType(layout))
+        .filter((layout) => layout !== "image-top" && layout !== "cta");
+
+      const next = alternatives.find((layout) => !distinctLayouts.has(layout));
+      if (next) {
+        slide.layoutType = next;
+        distinctLayouts.add(next);
+      }
+    }
+  }
 }
 
 function rankImagePriority(role: CarouselSlideRole, imageIntent: CarouselImageIntent) {
@@ -1204,7 +1430,7 @@ function normalizeSlides(
 ): CarouselOutlineSlide[] {
   const safeDrafts = ensureDraftCount(draftedSlides, plan, brief, targetCount);
 
-  return safeDrafts.map((draft, index) => {
+  const normalized = safeDrafts.map((draft, index) => {
     const planSlide = plan.slides[index] ?? plan.slides[plan.slides.length - 1] ?? buildFallbackPlanSlide(topic, "tip", index, targetCount, inferTopicLens(topic, brief.sourceIdeas), brief.sourceIdeas);
     const rawTitle = removeMetaLines(String(draft.title ?? ""));
     const rawText = removeMetaLines(String(draft.text ?? ""));
@@ -1221,12 +1447,56 @@ function normalizeSlides(
       text: fitted.body,
       role: planSlide.role,
       coreIdea: planSlide.coreIdea,
-      layoutType: planSlide.layoutType,
+      layoutType: normalizeLayoutType(planSlide.layoutType),
       imageIntent: planSlide.imageIntent,
       imageQueryDraft: planSlide.imageQueryDraft,
       templateId: planSlide.templateId
     };
   });
+
+  if (normalized[0]) {
+    if (/^(сравнение|обзор|гайд|guide|summary)\b/i.test(normalized[0].title)) {
+      normalized[0].title = buildHookTitle(topic);
+    }
+    normalized[0].role = "cover";
+    normalized[0].layoutType = normalized[0].imageIntent !== "none" ? "image-top" : "hero";
+    normalized[0].text = fitSlideTextToLayout(
+      normalized[0].title,
+      normalized[0].text,
+      normalized[0].layoutType ?? "hero",
+      "cover",
+      normalized[0].coreIdea ?? topic
+    ).body;
+  }
+
+  const lastSlide = normalized[normalized.length - 1];
+  if (lastSlide) {
+    lastSlide.role = "cta";
+    lastSlide.layoutType = "cta";
+    lastSlide.imageIntent = "none";
+    lastSlide.imageQueryDraft = "";
+    if (!/(сделай|сохрани|подпиш|проверь|запусти|внедри|начни|попробуй)/i.test(lastSlide.text)) {
+      lastSlide.text = fitSlideTextToLayout(
+        lastSlide.title,
+        `${lastSlide.text}\nСохраните карусель и примените первый шаг сегодня.`,
+        "cta",
+        "cta",
+        lastSlide.coreIdea ?? topic
+      ).body;
+    }
+  }
+
+  return normalized;
+}
+
+function buildHookTitle(topic: string) {
+  const basis = clean(topic).replace(/\s+/g, " ").trim();
+  if (!basis) {
+    return "Вы теряете результат и даже не замечаете";
+  }
+
+  const short = clampSentenceByWords(basis.replace(/^как\s+/i, ""), 7);
+  return clampTitle(`Почему у вас не работает: ${short}`, 72);
 }
 
 function ensureDraftCount(
@@ -1269,8 +1539,9 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
     const title = clean(slide.title || "");
     const text = clean(slide.text || "");
     const merged = `${title}\n${text}`;
-    const layout = planSlide?.layoutType ?? slide.layoutType ?? "title-body";
+    const layout = normalizeLayoutType(planSlide?.layoutType ?? slide.layoutType ?? "card");
     const limits = LAYOUT_LIMITS[layout];
+    const wordLimits = LAYOUT_WORD_LIMITS[layout];
 
     if (!title || !text) {
       problematic.add(index);
@@ -1297,8 +1568,20 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
       score += 3;
     }
 
+    const titleWords = countWords(title);
+    const bodyWords = countWords(text);
+    if (titleWords > wordLimits.titleWords + 1) {
+      problematic.add(index);
+      score -= 5;
+    }
+
+    if (bodyWords > wordLimits.bodyWords + 2) {
+      problematic.add(index);
+      score -= 6;
+    }
+
     const lineCount = text.split(/\n+/).filter(Boolean).length;
-    if (lineCount > limits.preferredLinesMax + 2) {
+    if (lineCount > limits.preferredLinesMax + 1) {
       problematic.add(index);
       score -= 4;
     }
@@ -1409,7 +1692,7 @@ function applyRepairs(
       text: fitted.body,
       role: planSlide.role,
       coreIdea: planSlide.coreIdea,
-      layoutType: planSlide.layoutType,
+      layoutType: normalizeLayoutType(planSlide.layoutType),
       imageIntent: planSlide.imageIntent,
       imageQueryDraft: planSlide.imageQueryDraft,
       templateId: planSlide.templateId
@@ -1453,6 +1736,7 @@ function buildDeterministicPlan(
 
   const maxImages = resolveImageBudget(lens, targetCount);
   limitImageUsage(slides, maxImages, lens.category);
+  enforceLayoutRhythm(slides);
 
   return {
     topic,
@@ -1500,42 +1784,44 @@ function buildRoleSequence(targetCount: number): CarouselSlideRole[] {
   }
 
   if (targetCount === 6) {
-    return ["cover", "problem", "myth", "tip", "case", "cta"];
+    return ["cover", "problem", "myth", "tip", "summary", "cta"];
   }
 
   if (targetCount === 7) {
     return ["cover", "problem", "mistake", "tip", "tip", "case", "cta"];
   }
 
+  if (targetCount === 8) {
+    return ["cover", "problem", "myth", "steps", "tip", "case", "summary", "cta"];
+  }
+
+  if (targetCount === 9) {
+    return ["cover", "problem", "myth", "steps", "tip", "comparison", "case", "summary", "cta"];
+  }
+
   const base: CarouselSlideRole[] = [
     "cover",
     "problem",
     "myth",
-    "tip",
+    "mistake",
     "steps",
-    "case",
+    "tip",
     "comparison",
+    "case",
     "checklist",
-    "summary",
     "cta"
   ];
 
-  if (targetCount <= base.length) {
-    const trimmed = base.slice(0, targetCount);
-    trimmed[0] = "cover";
-    trimmed[trimmed.length - 1] = "cta";
-    return trimmed;
-  }
-
-  const extras: CarouselSlideRole[] = ["tip", "mistake", "case", "checklist", "summary"];
   const result = [...base];
+  const extras: CarouselSlideRole[] = ["tip", "summary", "case", "checklist", "mistake"];
+
   while (result.length < targetCount) {
-    result.splice(result.length - 2, 0, extras[(result.length - base.length) % extras.length]);
+    result.splice(result.length - 1, 0, extras[(result.length - base.length) % extras.length]);
   }
 
   result[0] = "cover";
   result[result.length - 1] = "cta";
-  return result;
+  return result.slice(0, targetCount);
 }
 
 function chooseLayoutForRole(role: CarouselSlideRole, imageIntent: CarouselImageIntent): CarouselLayoutType {
@@ -1544,31 +1830,43 @@ function chooseLayoutForRole(role: CarouselSlideRole, imageIntent: CarouselImage
   }
 
   if (role === "cover") {
-    return "cover-hero";
+    return "hero";
+  }
+
+  if (role === "problem") {
+    return "statement";
+  }
+
+  if (role === "myth") {
+    return "split";
+  }
+
+  if (role === "mistake") {
+    return "card";
   }
 
   if (role === "tip") {
-    return "bullets";
+    return "list";
   }
 
   if (role === "steps") {
-    return "steps";
+    return "list";
   }
 
   if (role === "checklist") {
-    return "checklist";
+    return "list";
   }
 
   if (role === "case") {
-    return "case-split";
+    return "split";
   }
 
   if (role === "comparison") {
-    return "comparison";
+    return "split";
   }
 
   if (role === "summary") {
-    return "summary";
+    return "card";
   }
 
   if (role === "cta") {
@@ -1622,6 +1920,12 @@ function enforceTemplateFamily(
   const family = forcedFamily ?? chooseTemplateFamily(lens, topic);
 
   slides.forEach((slide, index) => {
+    if (slide.layoutType === "dark-slide") {
+      const darkPool = TEMPLATE_FAMILY_POOLS["dark-premium"][slide.role] ?? TEMPLATE_FAMILY_POOLS["dark-premium"].tip;
+      slide.templateId = darkPool[index % darkPool.length];
+      return;
+    }
+
     slide.templateId = chooseTemplateForRole(slide.role, lens, index, topic, family);
   });
 
@@ -1785,7 +2089,7 @@ function buildFallbackTitle(
   };
 
   const basis = idea || fallbackByRole[planSlide.role] || fallbackByRole.tip;
-  return clampTitle(basis, LAYOUT_LIMITS[planSlide.layoutType].titleMax);
+  return clampTitle(basis, LAYOUT_LIMITS[normalizeLayoutType(planSlide.layoutType)].titleMax);
 }
 
 function buildFallbackBody(
@@ -1797,92 +2101,85 @@ function buildFallbackBody(
 ) {
   const role = planSlide?.role ?? (index === 0 ? "cover" : index === totalSlides - 1 ? "cta" : "tip");
   const coreIdea = planSlide?.coreIdea ?? pickSeedLine(brief.sourceIdeas, index, topic);
+  const shortIdea = clampSentenceByWords(clean(coreIdea).replace(/^[^:]+:\s*/, ""), 8);
 
   if (role === "cover") {
     return [
-      `Разбираем тему «${topic}» без воды и общих фраз.`,
-      "Покажем, где теряется результат и какие шаги дают эффект на практике.",
-      "Листайте: внутри конкретика и рабочие формулировки."
+      "Где вы теряете результат прямо сейчас.",
+      "Листайте: дальше только рабочие шаги."
     ].join("\n");
   }
 
   if (role === "problem") {
     return [
-      `Главная проблема: ${coreIdea}.`,
-      "Пока её игнорируют, усилия распадаются на хаотичные действия.",
-      "Нужно сначала устранить причину, а потом масштабировать тактику."
+      `Проблема: ${shortIdea}.`,
+      "Из-за этого действия есть, а роста нет."
     ].join("\n");
   }
 
   if (role === "myth") {
     return [
-      `Миф: ${coreIdea}.`,
-      "На практике это создаёт ложные ожидания и тянет вниз результат.",
-      "Опирайтесь на проверяемые шаги, а не на популярные упрощения."
+      `Миф: ${shortIdea}.`,
+      "Звучит логично, но на практике тормозит."
     ].join("\n");
   }
 
   if (role === "mistake") {
     return [
-      `Ошибка: ${coreIdea}.`,
-      "Она кажется мелкой, но съедает конверсию, время и внимание аудитории.",
-      "Исправьте её первой: это даст быстрый прирост качества."
+      `Ошибка: ${shortIdea}.`,
+      "Уберите её первой и получите быстрый прирост."
     ].join("\n");
   }
 
   if (role === "tip") {
     return [
-      `• Фокус: ${coreIdea}.`,
-      "• Сформулируйте действие в одном предложении.",
-      "• Проверьте результат на реальном кейсе в течение недели."
+      `• Фокус: ${shortIdea}.`,
+      "• Сделайте один шаг сегодня.",
+      "• Проверьте эффект через 3-7 дней."
     ].join("\n");
   }
 
   if (role === "steps") {
     return [
-      "1. Определите исходную точку и цель.",
-      `2. Внедрите один конкретный шаг: ${coreIdea}.`,
-      "3. Зафиксируйте результат и повторите цикл улучшений."
+      "1. Определите текущую точку.",
+      `2. Запустите шаг: ${shortIdea}.`,
+      "3. Измерьте результат и закрепите."
     ].join("\n");
   }
 
   if (role === "checklist") {
     return [
-      "• Есть чёткий критерий результата.",
-      "• Понятно, кто и когда делает шаг.",
-      "• Подготовлен скрипт/шаблон для запуска.",
-      "• Запланирована проверка через 3-7 дней."
+      "• Цель формулируется в 1 строку.",
+      "• Ответственный назначен заранее.",
+      "• Действие можно сделать сегодня.",
+      "• Проверка результата в календаре."
     ].join("\n");
   }
 
   if (role === "case") {
     return [
-      `Кейс: ${coreIdea}.`,
-      "После исправления одного узкого места метрика начала расти уже на первом цикле.",
-      "Сработало не чудо, а дисциплина: шаг, проверка, корректировка."
+      `Кейс: ${shortIdea}.`,
+      "Один узкий фикс дал заметный рост уже в первый цикл."
     ].join("\n");
   }
 
   if (role === "comparison") {
     return [
-      "Делать: фиксировать гипотезу и проверять цифрами.",
-      "Не делать: гнаться за хаотичными действиями без критериев.",
-      "Разница в подходе быстро становится разницей в результате."
+      "Делать: один чёткий сценарий и метрика.",
+      "Не делать: хаотичные действия без проверки."
     ].join("\n");
   }
 
   if (role === "summary") {
     return [
-      `Итог: ${coreIdea}.`,
-      "Сильный результат собирается из ясной логики и регулярной практики.",
-      "Дальше важно превратить это в устойчивую систему."
+      `Итог: ${shortIdea}.`,
+      "Лучшая стратегия: меньше шума, больше точных шагов."
     ].join("\n");
   }
 
   return [
-    `Вывод по теме «${topic}»: ${coreIdea}.`,
-    "Выберите один шаг из карусели и выполните его сегодня.",
-    "После первого результата масштабируйте рабочий сценарий."
+    "Сохраните эту карусель, чтобы не потерять.",
+    "Сделайте первый шаг сегодня."
   ].join("\n");
 }
 
@@ -1893,26 +2190,37 @@ function fitSlideTextToLayout(
   role: CarouselSlideRole,
   coreIdea: string
 ) {
-  const limits = LAYOUT_LIMITS[layoutType];
-  const fittedTitle = clampTitle(title, limits.titleMax);
+  const resolvedLayout = normalizeLayoutType(layoutType);
+  const limits = LAYOUT_LIMITS[resolvedLayout];
+  const wordLimits = LAYOUT_WORD_LIMITS[resolvedLayout];
+  const fittedTitle = clampSentenceByWords(
+    clampTitle(title, limits.titleMax),
+    wordLimits.titleWords
+  );
 
   let preparedBody = body;
-  if (STRUCTURED_LAYOUTS.has(layoutType)) {
-    preparedBody = toStructuredBody(preparedBody, layoutType, coreIdea);
+  if (STRUCTURED_LAYOUTS.has(resolvedLayout)) {
+    preparedBody = toStructuredBody(preparedBody, resolvedLayout, coreIdea, wordLimits.lineWords);
+  } else {
+    preparedBody = toCompactBody(preparedBody, wordLimits.bodyWords, wordLimits.lineWords, limits.preferredLinesMax);
   }
 
   preparedBody = clampBody(preparedBody, limits.bodyMax);
 
   if (preparedBody.length < limits.bodyMin) {
     const expanded = `${preparedBody}\n${buildBodyPadding(role, coreIdea)}`.trim();
-    preparedBody = clampBody(expanded, limits.bodyMax);
+    const compactExpanded = STRUCTURED_LAYOUTS.has(resolvedLayout)
+      ? toStructuredBody(expanded, resolvedLayout, coreIdea, wordLimits.lineWords)
+      : toCompactBody(expanded, wordLimits.bodyWords, wordLimits.lineWords, limits.preferredLinesMax);
+    preparedBody = clampBody(compactExpanded, limits.bodyMax);
   }
 
   const normalizedLines = preparedBody
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .slice(0, limits.preferredLinesMax + 1)
+    .slice(0, limits.preferredLinesMax)
+    .map((line) => clampSentenceByWords(line, wordLimits.lineWords))
     .join("\n");
 
   return {
@@ -1921,17 +2229,56 @@ function fitSlideTextToLayout(
   };
 }
 
-function toStructuredBody(body: string, layoutType: CarouselLayoutType, coreIdea: string) {
+function toStructuredBody(
+  body: string,
+  layoutType: CarouselLayoutType,
+  coreIdea: string,
+  lineWords: number
+) {
   const lines = extractBodyLines(body);
   const safeLines = lines.length ? lines : extractBodyLines(coreIdea);
   const targetLines = Math.max(3, Math.min(5, safeLines.length || 3));
-  const compact = safeLines.slice(0, targetLines).map((line) => clampSentence(line, 82));
+  const compact = safeLines
+    .slice(0, targetLines)
+    .map((line) => clampSentenceByWords(clampSentence(line, 78), lineWords));
 
   if (layoutType === "steps") {
     return compact.map((line, index) => `${index + 1}. ${line}`).join("\n");
   }
 
   return compact.map((line) => `• ${line}`).join("\n");
+}
+
+function toCompactBody(
+  body: string,
+  bodyWords: number,
+  lineWords: number,
+  maxLines: number
+) {
+  const normalized = clean(body).replace(/\n+/g, " ").trim();
+  if (!normalized) {
+    return normalized;
+  }
+
+  const words = normalized.split(/\s+/).filter(Boolean).slice(0, bodyWords);
+  if (!words.length) {
+    return "";
+  }
+
+  const lines: string[] = [];
+  let cursor = 0;
+
+  while (cursor < words.length && lines.length < maxLines) {
+    const chunk = words.slice(cursor, cursor + lineWords).join(" ");
+    lines.push(chunk);
+    cursor += lineWords;
+  }
+
+  const trimmedLines = lines.map((line, index) =>
+    index === lines.length - 1 ? clampSentence(line, 84) : line
+  );
+
+  return trimmedLines.join("\n");
 }
 
 function extractBodyLines(value: string) {
@@ -1953,14 +2300,28 @@ function extractBodyLines(value: string) {
 
 function buildBodyPadding(role: CarouselSlideRole, coreIdea: string) {
   if (role === "cta") {
-    return "Сделайте первый шаг сегодня и зафиксируйте результат.";
+    return "Сохраните и примените это сегодня.";
   }
 
   if (role === "tip" || role === "checklist" || role === "steps") {
-    return "Проверьте это действие на реальном кейсе и измерьте эффект.";
+    return "Проверьте шаг на практике и замерьте результат.";
   }
 
-  return `${coreIdea}. Добавьте конкретный пример применения.`;
+  return `${coreIdea}. Дайте один конкретный пример.`;
+}
+
+function clampSentenceByWords(value: string, maxWords: number) {
+  const words = value
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+
+  if (words.length <= maxWords) {
+    return value;
+  }
+
+  return clampSentence(words.slice(0, maxWords).join(" "), value.length);
 }
 
 function clampTitle(value: string, maxLength: number) {
@@ -2022,7 +2383,18 @@ function normalizeTitle(
 
   const fallback = buildFallbackTitle(planSlide, topic, index, total);
   const basis = cleaned || fallback;
-  return capitalizeTitle(clampTitle(basis, LAYOUT_LIMITS[planSlide.layoutType].titleMax));
+  const normalized = capitalizeTitle(
+    clampTitle(basis, LAYOUT_LIMITS[normalizeLayoutType(planSlide.layoutType)].titleMax)
+  );
+
+  if (
+    planSlide.role === "cover" &&
+    /^(сравнение|обзор|гайд|guide|summary)\b/i.test(normalized)
+  ) {
+    return "Вы теряете результат и даже не замечаете";
+  }
+
+  return normalized;
 }
 
 function normalizeBody(rawBody: string, title: string) {
@@ -2051,10 +2423,10 @@ function isWeakBodyText(text: string, isMiddleSlide: boolean) {
 
   const words = countWords(text);
   if (isMiddleSlide) {
-    return text.length < 88 || words < 14;
+    return text.length < 26 || words < 5;
   }
 
-  return text.length < 44 || words < 8;
+  return text.length < 16 || words < 3;
 }
 
 function countWords(text: string) {

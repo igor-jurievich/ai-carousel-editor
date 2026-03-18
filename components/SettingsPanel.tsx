@@ -6,7 +6,9 @@ import {
   FOOTER_VARIANTS,
   FONT_OPTIONS,
   getPrimaryTemplates,
+  STYLE_PRESETS,
   getTemplatesByCategory,
+  type StylePresetId,
   TEMPLATE_CATEGORY_LABELS
 } from "@/lib/carousel";
 import { AppIcon } from "@/components/icons";
@@ -49,6 +51,7 @@ type SettingsPanelProps = {
   onTemplateCategoryChange: (category: TemplateCategoryId) => void;
   onTemplateScopeChange: (scope: "slide" | "all") => void;
   onApplyTemplate: (templateId: CarouselTemplateId) => void;
+  onApplyStylePreset: (presetId: StylePresetId) => void;
   onSelectSlide: (slideId: string) => void;
   onInsertSlideAt: (index: number) => void;
   onDeleteSlide: (slideId: string) => void;
@@ -110,6 +113,7 @@ export function SettingsPanel({
   onTemplateCategoryChange,
   onTemplateScopeChange,
   onApplyTemplate,
+  onApplyStylePreset,
   onSelectSlide,
   onInsertSlideAt,
   onDeleteSlide,
@@ -352,6 +356,22 @@ export function SettingsPanel({
                   <strong>{template.name}</strong>
                   <span>{getTemplatePreviewCaption(template)}</span>
                 </span>
+              </button>
+            ))}
+          </div>
+
+          <span className="settings-label">Быстрые пресеты серии</span>
+          <div className="mobile-style-grid">
+            {STYLE_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="mobile-style-chip"
+                onClick={() => onApplyStylePreset(preset.id)}
+                disabled={disabled}
+                title={preset.hint}
+              >
+                {preset.label}
               </button>
             ))}
           </div>
