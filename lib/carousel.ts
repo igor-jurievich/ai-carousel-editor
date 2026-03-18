@@ -959,7 +959,7 @@ function createDecoration(template: CarouselTemplate, format: SlideFormat): Canv
   ];
 }
 
-function createChip(template: CarouselTemplate, index: number, format: SlideFormat) {
+function createChip(_template: CarouselTemplate, index: number, format: SlideFormat) {
   const y = format === "9:16" ? 86 : 70;
   const x = 74;
   return createShapeElement({
@@ -968,15 +968,15 @@ function createChip(template: CarouselTemplate, index: number, format: SlideForm
     y,
     width: 168,
     height: 44,
-    fill: template.chipStyle === "solid" ? template.accent : "#ffffff",
+    fill: "rgba(246, 255, 253, 0.92)",
     cornerRadius: 16,
     opacity: 1,
-    stroke: template.chipStyle === "outline" ? template.accent : "rgba(0,0,0,0.1)",
-    strokeWidth: template.chipStyle === "outline" ? 2 : 1
+    stroke: "rgba(93, 176, 164, 0.44)",
+    strokeWidth: 1
   });
 }
 
-function createChipText(template: CarouselTemplate, index: number, format: SlideFormat) {
+function createChipText(_template: CarouselTemplate, index: number, format: SlideFormat) {
   const y = format === "9:16" ? 99 : 84;
   return createTextElement({
     metaKey: "slide-chip-text",
@@ -986,11 +986,11 @@ function createChipText(template: CarouselTemplate, index: number, format: Slide
     y,
     width: 130,
     height: 24,
-    fontSize: 16,
-    fill: template.chipStyle === "solid" ? "#ffffff" : template.accent,
+    fontSize: 15,
+    fill: "#2f6f66",
     fontFamily: "Inter",
     fontStyle: "bold",
-    letterSpacing: 1.4
+    letterSpacing: 1.2
   });
 }
 

@@ -81,6 +81,8 @@ type TopicCategory =
   | "business"
   | "expert-education";
 
+type TemplateFamilyId = "dark-premium" | "light-clean" | "accent-business";
+
 type ParsedBrief = {
   coreTopic: string;
   sourceIdeas: string[];
@@ -138,6 +140,51 @@ type LayoutLimit = {
   bodyMax: number;
   preferredLinesMin: number;
   preferredLinesMax: number;
+};
+
+const TEMPLATE_FAMILY_POOLS: Record<
+  TemplateFamilyId,
+  Record<CarouselSlideRole, CarouselTemplateId[]>
+> = {
+  "dark-premium": {
+    cover: ["netflix", "premium", "noir"],
+    problem: ["noir", "founder-dark", "matrix"],
+    myth: ["matrix", "midnight", "founder-dark"],
+    mistake: ["founder-dark", "noir", "matrix"],
+    tip: ["midnight", "founder-dark", "matrix"],
+    steps: ["matrix", "founder-dark", "midnight"],
+    checklist: ["midnight", "matrix", "founder-dark"],
+    case: ["premium", "founder-dark", "netflix"],
+    comparison: ["matrix", "noir", "founder-dark"],
+    summary: ["midnight", "premium", "founder-dark"],
+    cta: ["netflix", "founder-dark", "premium"]
+  },
+  "light-clean": {
+    cover: ["minimal", "editorial", "technology"],
+    problem: ["technology", "minimal", "editorial"],
+    myth: ["notes", "technology", "minimal"],
+    mistake: ["notes", "minimal", "technology"],
+    tip: ["minimal", "technology", "business-light"],
+    steps: ["technology", "business-light", "minimal"],
+    checklist: ["minimal", "notes", "technology"],
+    case: ["editorial", "business-light", "technology"],
+    comparison: ["technology", "minimal", "business-light"],
+    summary: ["notes", "minimal", "editorial"],
+    cta: ["business-light", "minimal", "technology"]
+  },
+  "accent-business": {
+    cover: ["atlas", "aurora", "mandarin"],
+    problem: ["atlas", "aurora", "coral"],
+    myth: ["aurora", "coral", "mandarin"],
+    mistake: ["coral", "mandarin", "atlas"],
+    tip: ["atlas", "mandarin", "coral"],
+    steps: ["atlas", "mandarin", "aurora"],
+    checklist: ["mandarin", "atlas", "coral"],
+    case: ["atlas", "coral", "aurora"],
+    comparison: ["atlas", "aurora", "mandarin"],
+    summary: ["aurora", "mandarin", "atlas"],
+    cta: ["atlas", "mandarin", "coral"]
+  }
 };
 
 const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
@@ -866,6 +913,7 @@ function buildPlanPrompt(
     "- Не дублируй coreIdea между слайдами.",
     "- Cover должен открывать тему резко и ясно.",
     "- CTA должен завершать карусель и давать следующее действие.",
+    "- templateId держи в одном визуальном семействе внутри всей карусели (без случайного микса).",
     "- imageIntent = none, если фото не усиливает смысл.",
     "- imageQueryDraft делай коротким поисковым запросом (лучше на английском)."
   ].join("\n");
@@ -999,9 +1047,14 @@ function normalizePlan(
 
   const maxImages = resolveImageBudget(lens, targetCount);
   limitImageUsage(normalizedSlides, maxImages, isTopicCategory(rawPlan.category) ? rawPlan.category : lens.category);
+  const planTopic =
+    clean(rawPlan.topic || fallbackPlan.topic || "").slice(0, 180) ||
+    clean(fallbackPlan.topic || "").slice(0, 180);
+  const family = chooseTemplateFamily(lens, planTopic || fallbackPlan.topic || "");
+  enforceTemplateFamily(normalizedSlides, lens, planTopic || fallbackPlan.topic || "", family);
 
   return {
-    topic: clean(rawPlan.topic || fallbackPlan.topic || fallbackPlan.topic).slice(0, 180),
+    topic: planTopic,
     audience: clean(rawPlan.audience || fallbackPlan.audience).slice(0, 180),
     goal: clean(rawPlan.goal || fallbackPlan.goal).slice(0, 180),
     tone: clean(rawPlan.tone || fallbackPlan.tone).slice(0, 120),
@@ -1390,9 +1443,10 @@ function buildDeterministicPlan(
 ): CarouselPlan {
   const roles = buildRoleSequence(targetCount);
   const seeds = brief.sourceIdeas.length ? brief.sourceIdeas : [topic];
+  const family = chooseTemplateFamily(lens, topic);
 
   const slides = roles.map((role, index) => {
-    const planSlide = buildFallbackPlanSlide(topic, role, index, targetCount, lens, seeds);
+    const planSlide = buildFallbackPlanSlide(topic, role, index, targetCount, lens, seeds, family);
     return planSlide;
   });
 
@@ -1415,13 +1469,14 @@ function buildFallbackPlanSlide(
   index: number,
   totalSlides: number,
   lens: TopicLens,
-  seeds: string[]
+  seeds: string[],
+  family?: TemplateFamilyId
 ): CarouselPlanSlide {
   const seed = pickSeedLine(seeds, index, topic);
   const coreIdea = buildCoreIdea(role, seed, topic, index, totalSlides);
   const imageIntent = chooseImageIntent(role, lens, index, totalSlides);
   const layoutType = chooseLayoutForRole(role, imageIntent);
-  const templateId = chooseTemplateForRole(role, lens, index);
+  const templateId = chooseTemplateForRole(role, lens, index, topic, family);
   const imageQueryDraft =
     imageIntent === "none"
       ? ""
@@ -1522,25 +1577,54 @@ function chooseLayoutForRole(role: CarouselSlideRole, imageIntent: CarouselImage
   return "title-body";
 }
 
-function chooseTemplateForRole(role: CarouselSlideRole, lens: TopicLens, index: number): CarouselTemplateId {
-  const darkFirst = lens.category === "marketing-sales" || lens.category === "business";
-
-  const pools: Record<CarouselSlideRole, CarouselTemplateId[]> = {
-    cover: darkFirst ? ["netflix", "noir", "atlas"] : ["minimal", "aurora", "atlas"],
-    problem: darkFirst ? ["noir", "founder-dark", "matrix"] : ["technology", "editorial", "minimal"],
-    myth: ["technology", "editorial", "minimal"],
-    mistake: darkFirst ? ["founder-dark", "noir", "business-light"] : ["notes", "technology", "minimal"],
-    tip: ["minimal", "technology", "business-light"],
-    steps: ["technology", "atlas", "business-light"],
-    checklist: ["minimal", "notes", "atlas"],
-    case: ["editorial", "business-light", "atlas"],
-    comparison: ["atlas", "technology", "minimal"],
-    summary: ["notes", "minimal", "atlas"],
-    cta: ["charge", "atlas", "mandarin"]
-  };
-
-  const pool = pools[role] ?? ["technology"];
+function chooseTemplateForRole(
+  role: CarouselSlideRole,
+  lens: TopicLens,
+  index: number,
+  topic: string,
+  family?: TemplateFamilyId
+): CarouselTemplateId {
+  const activeFamily = family ?? chooseTemplateFamily(lens, topic);
+  const familyPool = TEMPLATE_FAMILY_POOLS[activeFamily];
+  const pool = familyPool[role] ?? familyPool.tip;
   return pool[index % pool.length];
+}
+
+function chooseTemplateFamily(lens: TopicLens, topic: string): TemplateFamilyId {
+  const candidates: TemplateFamilyId[] =
+    lens.category === "marketing-sales" || lens.category === "business"
+      ? ["dark-premium", "accent-business"]
+      : lens.category === "real-estate"
+        ? ["light-clean", "dark-premium"]
+        : lens.category === "personal-brand"
+          ? ["accent-business", "light-clean"]
+          : ["light-clean", "accent-business"];
+
+  const hash = Math.abs(stableHash(`${lens.category}|${topic}`));
+  return candidates[hash % candidates.length];
+}
+
+function stableHash(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+  return hash;
+}
+
+function enforceTemplateFamily(
+  slides: CarouselPlanSlide[],
+  lens: TopicLens,
+  topic: string,
+  forcedFamily?: TemplateFamilyId
+) {
+  const family = forcedFamily ?? chooseTemplateFamily(lens, topic);
+
+  slides.forEach((slide, index) => {
+    slide.templateId = chooseTemplateForRole(slide.role, lens, index, topic, family);
+  });
+
+  return family;
 }
 
 function chooseImageIntent(
