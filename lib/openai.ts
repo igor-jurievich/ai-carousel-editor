@@ -90,6 +90,14 @@ type TopicCategory =
 
 type TemplateFamilyId = "dark-premium" | "light-clean" | "accent-business";
 type ScenarioId = "expert" | "educational" | "commercial" | "case-driven";
+type NarrativeAngle =
+  | "loss-risk"
+  | "mistake-breakdown"
+  | "process-playbook"
+  | "case-proof"
+  | "opportunity-shift";
+type CommercialIntensity = "low" | "medium" | "high";
+type InputShape = "topic-only" | "idea-list" | "case-driven" | "directive";
 type GenerationOptions = {
   useInternetImages?: boolean;
 };
@@ -125,6 +133,9 @@ type CarouselPlan = {
   tone: string;
   category: TopicCategory;
   scenario?: ScenarioId;
+  angle: NarrativeAngle;
+  commercialIntensity: CommercialIntensity;
+  inputShape: InputShape;
   slides: CarouselPlanSlide[];
 };
 
@@ -362,23 +373,23 @@ const SCENARIO_ROLE_TEMPLATES: Record<ScenarioId, CarouselSlideRole[]> = {
     "problem",
     "problem",
     "mistake",
-    "tip",
+    "comparison",
     "tip",
     "steps",
     "case",
-    "comparison",
+    "summary",
     "cta"
   ],
   educational: [
     "cover",
     "myth",
     "mistake",
-    "mistake",
-    "steps",
+    "problem",
+    "tip",
     "steps",
     "checklist",
-    "summary",
     "case",
+    "summary",
     "cta"
   ],
   commercial: [
@@ -386,32 +397,31 @@ const SCENARIO_ROLE_TEMPLATES: Record<ScenarioId, CarouselSlideRole[]> = {
     "problem",
     "problem",
     "mistake",
-    "tip",
     "comparison",
-    "case",
     "tip",
+    "steps",
+    "case",
     "summary",
     "cta"
   ],
   "case-driven": [
     "cover",
     "problem",
-    "tip",
-    "case",
     "case",
     "comparison",
-    "steps",
-    "summary",
     "tip",
+    "steps",
+    "case",
+    "summary",
     "cta"
   ]
 };
 
 const SCENARIO_EXTRA_ROLES: Record<ScenarioId, CarouselSlideRole[]> = {
-  expert: ["tip", "summary", "case", "checklist", "comparison"],
-  educational: ["steps", "checklist", "tip", "summary", "case"],
-  commercial: ["tip", "comparison", "summary", "case", "steps"],
-  "case-driven": ["case", "tip", "comparison", "summary", "steps"]
+  expert: ["tip", "comparison", "case", "checklist", "summary"],
+  educational: ["steps", "checklist", "tip", "case", "summary"],
+  commercial: ["tip", "comparison", "steps", "case", "summary"],
+  "case-driven": ["case", "comparison", "tip", "steps", "summary"]
 };
 
 const STRUCTURED_LAYOUTS = new Set<CarouselLayoutType>([
@@ -523,20 +533,29 @@ const CTA_ACTION_PATTERN =
   /(сделайт|сдела(й|ть)|запусти|проверь|примени|выбери|внедри|сохран|начни|попробуй|поделись|подпиш|напиш|получ|забер|save|start|try|share|follow|apply|check|write|get|send)/i;
 
 const HOOK_TITLE_PREFIXES = [
-  "Почему «%topic%» не даёт результата",
-  "Где в теме «%topic%» теряются клиенты",
-  "Ошибка в теме «%topic%», из-за которой сливаются заявки",
-  "Что в теме «%topic%» тормозит рост прямо сейчас",
-  "Почему «%topic%» выглядит активно, но не приносит продажи"
+  "Вы теряете результат в теме «%topic%» ещё до ключевого шага",
+  "Ошибка в теме «%topic%», из-за которой сливаются тёплые клиенты",
+  "В теме «%topic%» есть скрытый сбой, который ломает конверсию",
+  "Пока вы делаете «%topic%», клиенты уходят к тем, кто объясняет лучше",
+  "Главная причина провала в теме «%topic%» — не то, что вы думаете"
 ];
 
 const HOOK_TITLE_PREFIXES_EN = [
-  "Why \"%topic%\" still fails to convert",
-  "Where \"%topic%\" leaks results",
-  "The costly mistake inside \"%topic%\"",
-  "Why \"%topic%\" looks active but brings weak sales",
-  "What's blocking growth in \"%topic%\" right now"
+  "You're losing results in %topic% before the key move",
+  "The hidden failure in %topic% is killing conversion",
+  "One costly mistake in %topic% keeps warm leads away",
+  "Users still leave before value appears — your core flow is broken",
+  "The real reason %topic% underperforms is not what you think"
 ];
+
+const COMMERCIAL_HIGH_SIGNAL_PATTERN =
+  /(лид|лиды|заявк|продаж|конверси|воронк|директ|чек|оффер|доход|выручк|прибыл|клиент|риелтор|недвиж|sales|leads|conversion|revenue|pipeline|deal|closing)/i;
+const COMMERCIAL_MID_SIGNAL_PATTERN =
+  /(контент|блог|маркетинг|аудитори|эксперт|бренд|стратег|рост|client|marketing|audience|brand|growth)/i;
+const CASE_SIGNAL_PATTERN = /(кейс|пример|разбор|история|случай|case|example|proof)/i;
+const DIRECTIVE_SIGNAL_PATTERN =
+  /(сделай|нужно|должно|обязательно|запретить|добавь|fix|must|should|required|enforce)/i;
+const LIST_SIGNAL_PATTERN = /(^|\n)\s*(\d+\s*[\)\.]|[-*•])|чеклист|список|пункты|bullet|checklist/i;
 
 const KEYWORD_TRANSLATIONS: Record<string, string> = {
   грибы: "mushrooms",
@@ -618,46 +637,115 @@ export async function generateCarouselFromTopic(
   }
 
   const model = resolvePrimaryGenerationModel();
-  let draftedSlides: SlideDraft[] = [];
+  const modelFallbackChain = [model];
+  let activePlan = deterministicPlan;
   try {
-    draftedSlides = await requestCarouselSlides(
+    activePlan = await generatePlanWithFallback(
       openai,
-      model,
+      modelFallbackChain,
       topic,
       brief,
+      lens,
       deterministicPlan,
+      targetCount
+    );
+  } catch (error) {
+    console.error("OpenAI carousel planning failed, deterministic plan engaged:", error);
+    activePlan = deterministicPlan;
+  }
+
+  let draftedSlides: SlideDraft[] = [];
+  try {
+    draftedSlides = await generateSlidesFromPlanWithFallback(
+      openai,
+      modelFallbackChain,
+      topic,
+      brief,
+      activePlan,
       targetCount,
       options
     );
   } catch (error) {
-    console.error("OpenAI carousel generation failed, fallback engaged:", error);
-    draftedSlides = buildDraftSlidesFromPlan(deterministicPlan, brief, targetCount);
+    console.error("OpenAI carousel generation failed, deterministic drafts engaged:", error);
+    draftedSlides = buildDraftSlidesFromPlan(activePlan, brief, targetCount);
   }
 
-  let slides = normalizeSlides(coreTopic, draftedSlides, deterministicPlan, targetCount, brief);
-  slides = polishSlidesForPublishability(coreTopic, slides, deterministicPlan, brief, targetCount);
-  const quality = assessSlidesQuality(coreTopic, slides, deterministicPlan);
+  let slides = normalizeSlides(coreTopic, draftedSlides, activePlan, targetCount, brief);
+  slides = polishSlidesForPublishability(coreTopic, slides, activePlan, brief, targetCount);
+  const quality = assessSlidesQuality(coreTopic, slides, activePlan);
   const criticalRepairIndexes = pickCriticalRepairIndexes(slides, quality.problematicIndexes);
 
   if (criticalRepairIndexes.length) {
-    const deterministicRepairs = buildDeterministicRepairs(
-      coreTopic,
-      deterministicPlan,
-      brief,
-      criticalRepairIndexes,
-      targetCount
-    );
-    slides = applyRepairs(
-      slides,
-      deterministicRepairs,
-      deterministicPlan,
-      coreTopic,
-      brief,
-      targetCount
-    );
+    let repairedSlides = slides;
+    let appliedModelRepairs = false;
+
+    try {
+      const modelRepairs = await repairSlidesWithFallback(
+        openai,
+        modelFallbackChain,
+        topic,
+        brief,
+        activePlan,
+        slides,
+        criticalRepairIndexes,
+        targetCount
+      );
+      if (modelRepairs?.length) {
+        repairedSlides = applyRepairs(
+          slides,
+          modelRepairs,
+          activePlan,
+          coreTopic,
+          brief,
+          targetCount
+        );
+        appliedModelRepairs = true;
+      }
+    } catch (error) {
+      console.error("OpenAI slide repairs failed, deterministic repairs engaged:", error);
+    }
+
+    if (!appliedModelRepairs) {
+      const deterministicRepairs = buildDeterministicRepairs(
+        coreTopic,
+        activePlan,
+        brief,
+        criticalRepairIndexes,
+        targetCount
+      );
+      repairedSlides = applyRepairs(
+        slides,
+        deterministicRepairs,
+        activePlan,
+        coreTopic,
+        brief,
+        targetCount
+      );
+    }
+
+    slides = repairedSlides;
+    const secondPassQuality = assessSlidesQuality(coreTopic, slides, activePlan);
+    const followUpIndexes = pickCriticalRepairIndexes(slides, secondPassQuality.problematicIndexes);
+    if (followUpIndexes.length) {
+      const deterministicRepairs = buildDeterministicRepairs(
+        coreTopic,
+        activePlan,
+        brief,
+        followUpIndexes,
+        targetCount
+      );
+      slides = applyRepairs(
+        slides,
+        deterministicRepairs,
+        activePlan,
+        coreTopic,
+        brief,
+        targetCount
+      );
+    }
   }
 
-  return polishSlidesForPublishability(coreTopic, slides, deterministicPlan, brief, targetCount);
+  return polishSlidesForPublishability(coreTopic, slides, activePlan, brief, targetCount);
 }
 
 async function generatePlanWithFallback(
@@ -699,7 +787,8 @@ async function generateSlidesFromPlanWithFallback(
   topic: string,
   brief: ParsedBrief,
   plan: CarouselPlan,
-  targetCount: number
+  targetCount: number,
+  options?: GenerationOptions
 ): Promise<SlideDraft[]> {
   let lastError: unknown = null;
 
@@ -707,7 +796,7 @@ async function generateSlidesFromPlanWithFallback(
     const model = models[index];
 
     try {
-      return await requestCarouselSlides(openai, model, topic, brief, plan, targetCount);
+      return await requestCarouselSlides(openai, model, topic, brief, plan, targetCount, options);
     } catch (error) {
       lastError = error;
       const isLast = index === models.length - 1;
@@ -802,7 +891,7 @@ async function requestCarouselPlan(
               "First create narrative flow and unique slide roles, then details.",
               "No duplicate core ideas between slides.",
               "First slide must be cover. Last slide must be cta.",
-              "Carousel flow must be: hook -> tension/problem -> insight -> practice -> close/cta.",
+              "Carousel flow must be: hook -> problem -> pain consequence -> shift -> solution -> proof -> close/cta.",
               "Assign each slide one role, one core idea, one layout type, image intent, optional image query.",
               "Use visually varied layouts: hero, statement, list, split, card, dark-slide, cta, image-top when image is needed.",
               "imageQueryDraft must be concise and suitable for stock photo search (English keywords preferred).",
@@ -935,7 +1024,9 @@ async function requestCarouselSlideRepairs(
               "Return only JSON that matches schema.",
               "Rewrite only requested indexes.",
               "Preserve each slide role and core idea, but make copy unique and useful.",
+              "Increase commercial clarity and narrative pressure where needed.",
               "No duplication with existing strong slides.",
+              "Each repaired slide must move the story forward (tension, shift, proof, or action).",
               "Do not output technical commentary."
             ].join(" ")
           }
@@ -1095,6 +1186,9 @@ function buildPlanPrompt(
     `Тон: ${lens.tone}`,
     `Категория: ${lens.category}`,
     `Сценарий серии: ${deterministicPlan.scenario ?? "expert"}`,
+    `Угол подачи: ${deterministicPlan.angle}`,
+    `Коммерческая интенсивность: ${deterministicPlan.commercialIntensity}`,
+    `Тип входа: ${deterministicPlan.inputShape}`,
     `Рекомендуемая роль-сетка: ${deterministicPlan.slides.map((slide) => slide.role).join(" -> ")}`,
     "",
     "Смысловые вводные:",
@@ -1109,6 +1203,7 @@ function buildPlanPrompt(
     "Требования:",
     "- Не дублируй coreIdea между слайдами.",
     "- Cover должен быть хуком через боль/конфликт/триггер, без слов «обзор», «сравнение», «гайд».",
+    "- Минимум один слайд в первой половине должен выполнять роль consequence/pain (что теряет читатель).",
     "- CTA должен завершать карусель и давать следующее действие.",
     "- Держи композиционный ритм: hero/statement/list/split/card/dark-slide/cta.",
     "- Внутри серии не ставь один и тот же layout подряд больше 2 раз.",
@@ -1116,6 +1211,51 @@ function buildPlanPrompt(
     "- imageIntent = none, если фото не усиливает смысл.",
     "- imageQueryDraft делай коротким поисковым запросом (лучше на английском)."
   ].join("\n");
+}
+
+function resolveSlideFunction(plan: CarouselPlan, index: number) {
+  const slide = plan.slides[index];
+  if (!slide) {
+    return "value";
+  }
+
+  if (index === 0 || slide.role === "cover") {
+    return "hook";
+  }
+
+  if (index === plan.slides.length - 1 || slide.role === "cta") {
+    return "cta";
+  }
+
+  if (slide.role === "problem" && index > 1) {
+    return "pain-consequence";
+  }
+
+  if (slide.role === "problem") {
+    return "problem";
+  }
+
+  if (slide.role === "myth" || slide.role === "mistake") {
+    return "mistake-break";
+  }
+
+  if (slide.role === "comparison") {
+    return "reframing";
+  }
+
+  if (slide.role === "steps" || slide.role === "checklist") {
+    return "steps";
+  }
+
+  if (slide.role === "case") {
+    return "proof-case";
+  }
+
+  if (slide.role === "summary") {
+    return "summary";
+  }
+
+  return "solution";
 }
 
 function buildContentPrompt(
@@ -1138,6 +1278,7 @@ function buildContentPrompt(
       [
         `#${index + 1}`,
         `role=${slide.role}`,
+        `function=${resolveSlideFunction(plan, index)}`,
         `layout=${normalizeLayoutType(slide.layoutType)}`,
         `idea=${slide.coreIdea}`,
         `imageIntent=${slide.imageIntent}`,
@@ -1154,8 +1295,9 @@ function buildContentPrompt(
     : "Internet image mode is OFF. Keep all slides text-first and set image intent to none.";
   const rolePlaybook = [
     "cover: резкий хук через боль/конфликт, без нейтральных слов вроде «обзор/гайд».",
-    "problem: где и почему теряется результат, с конкретным последствием.",
+    "problem: сначала точка сбоя, затем consequence-подача (что теряет читатель, если ничего не менять).",
     "myth/mistake: что именно делают не так и чем это бьёт по метрике.",
+    "comparison: разворот мышления — что выглядит логично, но срывает результат, и что реально работает.",
     "tip/steps/checklist: прикладные шаги, которые можно сделать сегодня.",
     "case/comparison: короткий пример и вывод «что работает vs что тормозит».",
     "summary: собрать суть в одну рабочую формулу.",
@@ -1180,6 +1322,9 @@ function buildContentPrompt(
     `Goal: ${plan.goal}`,
     `Tone: ${plan.tone}`,
     `Scenario: ${plan.scenario ?? "expert"}`,
+    `Narrative angle: ${plan.angle}`,
+    `Commercial intensity: ${plan.commercialIntensity}`,
+    `Input shape: ${plan.inputShape}`,
     "",
     "Fixed slide sequence (strict order, do not reorder):",
     slideSequence,
@@ -1213,6 +1358,9 @@ function buildContentPrompt(
     "- Avoid repeating the same advice with different wording.",
     "- Keep Instagram rhythm: short hook, dense value, readable bullets, strong close.",
     "- Hook slide must create tension (pain, conflict, sharp question or costly mistake).",
+    "- Early series must include consequence framing: what exactly the reader loses if nothing changes.",
+    "- Middle series should include at least one reframing slide that changes reader perspective.",
+    "- Keep momentum: each slide must either raise tension, shift perspective, add proof, or push action.",
     "- Final slide must close narrative with clear CTA action and one concrete next step.",
     "- For list/steps/checklist layouts, each bullet should be useful and concrete.",
     internetImagesEnabled
@@ -1248,6 +1396,7 @@ function buildRepairPrompt(
       return [
         `- index ${index}`,
         `  role: ${planSlide.role}`,
+        `  function: ${resolveSlideFunction(plan, index)}`,
         `  coreIdea: ${planSlide.coreIdea}`,
         `  layout: ${planSlide.layoutType}`,
         `  limits: title <= ${limits.titleMax}, body <= ${limits.bodyMax}`
@@ -1257,6 +1406,9 @@ function buildRepairPrompt(
 
   return [
     `Тема: ${brief.coreTopic || topic}`,
+    `Сценарий: ${plan.scenario ?? "expert"}`,
+    `Угол: ${plan.angle}`,
+    `Интенсивность: ${plan.commercialIntensity}`,
     "",
     "Текущий каркас карусели:",
     JSON.stringify(existingSlides, null, 2),
@@ -1345,6 +1497,9 @@ function normalizePlan(
     tone: clean(rawPlan.tone || fallbackPlan.tone).slice(0, 120),
     category: isTopicCategory(rawPlan.category) ? rawPlan.category : fallbackPlan.category,
     scenario,
+    angle: fallbackPlan.angle,
+    commercialIntensity: fallbackPlan.commercialIntensity,
+    inputShape: fallbackPlan.inputShape,
     slides: normalizedSlides
   };
 }
@@ -1730,12 +1885,12 @@ function normalizeSlides(
     lastSlide.layoutType = "cta";
     lastSlide.imageIntent = "none";
     lastSlide.imageQueryDraft = "";
-    if (!CTA_ACTION_PATTERN.test(lastSlide.text)) {
+    if (assessCtaStrength(lastSlide.title, lastSlide.text) < 3) {
       const useEnglish = isMostlyEnglish(topic);
       const keyword = buildActionKeyword(topic, useEnglish);
       const ctaPadding = useEnglish
-        ? `Write "${keyword}" in DM to get the ready template.\nSave this carousel and apply one step today.`
-        : `Напишите в директ «${keyword}» — отправлю готовый шаблон.\nСохраните карусель и внедрите один шаг сегодня.`;
+        ? `${buildCtaBody(topic, keyword, useEnglish)}\nSave this carousel and apply one step today.`
+        : `${buildCtaBody(topic, keyword, useEnglish)}\nСохраните карусель и внедрите один шаг сегодня.`;
       lastSlide.text = fitSlideTextToLayout(
         lastSlide.title,
         ctaPadding,
@@ -1750,7 +1905,9 @@ function normalizeSlides(
 }
 
 function isWeakHookTitle(value: string) {
-  return /^(сравнение|обзор|гайд|guide|summary|чек-?лист|подборка|как\b)/i.test(value.trim());
+  return /^(сравнение|обзор|гайд|guide|summary|чек-?лист|подборка|как\b|почему\b|что\b|где\b|what\b|why\b|how\b)/i.test(
+    value.trim()
+  );
 }
 
 function buildHookTitle(topic: string) {
@@ -1768,14 +1925,27 @@ function buildHookTitle(topic: string) {
     .replace(/[,:;!?]+/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
-  let compactTopic = clampSentenceByWords(topicNucleus, 6)
+  const topicWordLimit = useEnglish ? 4 : 5;
+  let compactTopic = clampSentenceByWords(topicNucleus, topicWordLimit)
     .replace(/[.!?…]+$/g, "")
     .trim();
+
+  if (useEnglish) {
+    compactTopic = compactTopic
+      .replace(/\b(?:that|which)\b.*$/i, "")
+      .trim();
+  } else {
+    compactTopic = compactTopic
+      .replace(/\bкотор[а-яё]*\b.*$/i, "")
+      .trim();
+  }
+
   compactTopic = stripHangingEnding(compactTopic) || compactTopic;
   compactTopic = compactTopic
-    .replace(/(?:^|\s)(вам|тебе|мне|нам|you|your|which|that|котор[а-яё]*)\s*$/i, "")
+    .replace(/(?:^|\s)(вам|тебе|мне|нам|you|your|котор[а-яё]*)\s*$/i, "")
     .trim();
-  if (/(котор[а-яё]*|which|that)/i.test(compactTopic) || /(?:^|\s)(не|without)\s*$/i.test(compactTopic)) {
+
+  if (/(?:^|\s)(which|that)\s*$/i.test(compactTopic) || /(?:^|\s)(не|without)\s*$/i.test(compactTopic)) {
     compactTopic = useEnglish ? "your content system" : "ваш контент";
   }
   if (countWords(compactTopic) < 2) {
@@ -1796,6 +1966,25 @@ function isMostlyEnglish(value: string) {
   const latin = (value.match(/[a-z]/gi) ?? []).length;
   const cyrillic = (value.match(/[а-яё]/gi) ?? []).length;
   return latin > 0 && latin >= cyrillic;
+}
+
+function countLatinLetters(value: string) {
+  return (value.match(/[a-z]/gi) ?? []).length;
+}
+
+function countCyrillicLetters(value: string) {
+  return (value.match(/[а-яё]/gi) ?? []).length;
+}
+
+function hasLanguageDriftForTopic(title: string, topic: string) {
+  const topicIsEnglish = isMostlyEnglish(topic);
+  if (!topicIsEnglish) {
+    return false;
+  }
+
+  const latin = countLatinLetters(title);
+  const cyrillic = countCyrillicLetters(title);
+  return cyrillic >= 3 && cyrillic > latin;
 }
 
 function isHookLikeTitle(value: string) {
@@ -1844,6 +2033,23 @@ function isIncompleteTitle(value: string) {
   );
 }
 
+function hasMalformedTitle(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  if (/^%/.test(normalized)) {
+    return true;
+  }
+
+  if (/%\s*(пользовател|users|клиент|clients)/i.test(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
 function ensureDraftCount(
   drafts: SlideDraft[],
   plan: CarouselPlan,
@@ -1878,6 +2084,7 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
   let score = 0;
   const problematic = new Set<number>();
   const topicIsEnglish = isMostlyEnglish(topic);
+  const progressionFunctions: string[] = [];
 
   for (let index = 0; index < slides.length; index += 1) {
     const slide = slides[index];
@@ -1888,6 +2095,9 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
     const layout = normalizeLayoutType(planSlide?.layoutType ?? slide.layoutType ?? "card");
     const limits = LAYOUT_LIMITS[layout];
     const wordLimits = LAYOUT_WORD_LIMITS[layout];
+    const role = planSlide?.role ?? slide.role ?? "tip";
+    const functionTag = resolveSlideFunction(plan, index);
+    progressionFunctions.push(functionTag);
 
     if (!title || !text) {
       problematic.add(index);
@@ -1903,6 +2113,11 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
     if (hasWeakCopy(merged)) {
       problematic.add(index);
       score -= 5;
+    }
+
+    if (hasTemplateArtifactTitle(title)) {
+      problematic.add(index);
+      score -= 7;
     }
 
     if (title.length < limits.titleMin || title.length > limits.titleMax + 6) {
@@ -2006,6 +2221,36 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
       score -= 4;
     }
 
+    if (index === 0) {
+      const hookStrength = assessHookStrength(title, text);
+      if (hookStrength < 2) {
+        problematic.add(index);
+        score -= 10;
+      } else {
+        score += hookStrength;
+      }
+    }
+
+    if (functionTag === "pain-consequence" && !hasConsequenceSignal(merged)) {
+      problematic.add(index);
+      score -= 8;
+    }
+
+    if (
+      index > 0 &&
+      index < slides.length - 1 &&
+      functionTag !== "pain-consequence" &&
+      !hasConcreteSpecificity(merged)
+    ) {
+      problematic.add(index);
+      score -= 4;
+    }
+
+    if (functionTag === "proof-case" && !hasProofSignal(merged)) {
+      problematic.add(index);
+      score -= 4;
+    }
+
     if (
       !topicIsEnglish &&
       /\b[a-z]{4,}\b/i.test(merged) &&
@@ -2013,6 +2258,21 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
     ) {
       problematic.add(index);
       score -= 2;
+    }
+
+    if (topicIsEnglish && /[а-яё]{3,}/i.test(merged)) {
+      problematic.add(index);
+      score -= 5;
+    }
+
+    if (role === "cta") {
+      const ctaStrength = assessCtaStrength(title, text);
+      if (ctaStrength < 3) {
+        problematic.add(index);
+        score -= 8;
+      } else {
+        score += ctaStrength;
+      }
     }
   }
 
@@ -2031,12 +2291,111 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
     }
   }
 
+  const uniqueFunctions = new Set(progressionFunctions);
+  if (!uniqueFunctions.has("hook")) {
+    problematic.add(0);
+    score -= 12;
+  }
+  const hasProblemRole = plan.slides.some((slide) => slide.role === "problem");
+  const hasComparisonRole = plan.slides.some((slide) => slide.role === "comparison");
+  const hasCaseRole = plan.slides.some((slide) => slide.role === "case");
+
+  if (slides.length >= 6 && hasProblemRole && !uniqueFunctions.has("pain-consequence")) {
+    const firstProblem = plan.slides.findIndex((slide, index) => index > 0 && slide.role === "problem");
+    if (firstProblem >= 0) {
+      problematic.add(firstProblem);
+    }
+    score -= 8;
+  }
+  if (hasComparisonRole && !uniqueFunctions.has("reframing")) {
+    const comparisonIndex = plan.slides.findIndex((slide) => slide.role === "comparison");
+    if (comparisonIndex >= 0) {
+      problematic.add(comparisonIndex);
+    }
+    score -= 5;
+  }
+  if (hasCaseRole && !uniqueFunctions.has("proof-case")) {
+    const caseIndex = plan.slides.findIndex((slide) => slide.role === "case");
+    if (caseIndex >= 0) {
+      problematic.add(caseIndex);
+    }
+    score -= 5;
+  }
+  if (!uniqueFunctions.has("cta")) {
+    problematic.add(slides.length - 1);
+    score -= 14;
+  }
+
   const problematicIndexes = Array.from(problematic).sort((left, right) => left - right);
   return {
     needsRepair: problematicIndexes.length > 0,
     score,
     problematicIndexes
   };
+}
+
+function assessHookStrength(title: string, text: string) {
+  const merged = `${title}\n${text}`.toLowerCase();
+  let score = 0;
+
+  if (/(теря|слива|провал|ошиб|срыв|утечк|боль|потер|не\s+работ|дорого|loss|leak|costly|fail|mistake|pain|risk)/i.test(merged)) {
+    score += 2;
+  }
+  if (/[!?]/.test(title) || /(главн|hidden|real reason|пока вы|you keep)/i.test(title)) {
+    score += 1;
+  }
+  if (countWords(title) <= 12 && countWords(title) >= 4) {
+    score += 1;
+  }
+  if (/(обзор|гайд|guide|summary|что такое|что работает)/i.test(title)) {
+    score -= 2;
+  }
+
+  return score;
+}
+
+function hasConsequenceSignal(value: string) {
+  return /(теря|потер|утечк|срыв|дорог|риски|уходят|падает|просед|выгора|loss|leak|drop|risk|waste|stall|leads?\s+lost)/i.test(
+    value
+  );
+}
+
+function hasConcreteSpecificity(value: string) {
+  if (/\d/.test(value)) {
+    return true;
+  }
+  if (/(чеклист|шаг|пример|кейс|формула|план|сценар|script|step|checklist|case|framework|example)/i.test(value)) {
+    return true;
+  }
+
+  const words = countWords(value);
+  return words >= 16 && !hasWeakCopy(value);
+}
+
+function hasProofSignal(value: string) {
+  return /(кейс|пример|результат|получили|вырос|снизил|за\s+\d+|case|example|result|grew|reduced|within|after)/i.test(
+    value
+  );
+}
+
+function assessCtaStrength(title: string, text: string) {
+  const merged = `${title}\n${text}`;
+  let score = 0;
+
+  if (CTA_ACTION_PATTERN.test(merged)) {
+    score += 1;
+  }
+  if (/(получ|отправ|чеклист|шаблон|разбор|план|template|checklist|framework|audit|guide|dm)/i.test(merged)) {
+    score += 1;
+  }
+  if (/(директ|direct|dm|comment|коммент|save|сохран)/i.test(merged)) {
+    score += 1;
+  }
+  if (/(сейчас|сегодня|today|now)/i.test(merged)) {
+    score += 1;
+  }
+
+  return score;
 }
 
 function pickCriticalRepairIndexes(
@@ -2047,7 +2406,7 @@ function pickCriticalRepairIndexes(
     return [];
   }
 
-  const maxRepairs = Math.max(2, Math.min(4, Math.ceil(slides.length * 0.4)));
+  const maxRepairs = Math.max(2, Math.min(5, Math.ceil(slides.length * 0.55)));
   const scored = problematicIndexes
     .map((index) => {
       const slide = slides[index];
@@ -2078,9 +2437,23 @@ function pickCriticalRepairIndexes(
       if (index === 0 && !isHookLikeTitle(title)) {
         severity += 7;
       }
+      if (index === 0 && assessHookStrength(title, text) < 2) {
+        severity += 8;
+      }
 
       if (index === slides.length - 1 && !CTA_ACTION_PATTERN.test(text)) {
         severity += 7;
+      }
+      if (index === slides.length - 1 && assessCtaStrength(title, text) < 3) {
+        severity += 8;
+      }
+
+      if (hasTemplateArtifactTitle(title)) {
+        severity += 6;
+      }
+
+      if (index > 0 && index < slides.length - 1 && !hasConcreteSpecificity(`${title}\n${text}`)) {
+        severity += 4;
       }
 
       const prev = slides[index - 1];
@@ -2281,12 +2654,12 @@ function polishSlidesForPublishability(
 
   const lastIndex = polished.length - 1;
   const last = polished[lastIndex];
-  if (last && !CTA_ACTION_PATTERN.test(last.text)) {
+  if (last && assessCtaStrength(last.title, last.text) < 3) {
     const useEnglish = isMostlyEnglish(topic);
     const keyword = buildActionKeyword(topic, useEnglish);
     const ctaPadding = useEnglish
-      ? `Write "${keyword}" in DM to get the ready framework.\nSave this carousel and apply one step today.`
-      : `Напишите в директ «${keyword}» — отправлю готовую структуру.\nСохраните карусель и внедрите один шаг сегодня.`;
+      ? `${buildCtaBody(topic, keyword, useEnglish)}\nSave this carousel and apply one step today.`
+      : `${buildCtaBody(topic, keyword, useEnglish)}\nСохраните карусель и внедрите один шаг сегодня.`;
     const planSlide = plan.slides[lastIndex];
     if (planSlide) {
       const fitted = fitSlideTextToLayout(
@@ -2338,8 +2711,11 @@ function buildDeterministicPlan(
   brief: ParsedBrief,
   options?: GenerationOptions
 ): CarouselPlan {
-  const scenario = chooseScenarioId(topic, lens, brief);
-  const roles = buildRoleSequence(targetCount, scenario);
+  const inputShape = deriveInputShape(topic, brief);
+  const scenario = chooseScenarioId(topic, lens, brief, inputShape);
+  const angle = deriveNarrativeAngle(topic, lens, brief, scenario, inputShape);
+  const commercialIntensity = deriveCommercialIntensity(topic, lens, brief, scenario, inputShape);
+  const roles = buildRoleSequence(targetCount, scenario, commercialIntensity);
   const seeds = brief.sourceIdeas.length ? brief.sourceIdeas : [topic];
   const family = chooseTemplateFamily(lens, topic);
   const allowInternetImages = options?.useInternetImages === true;
@@ -2354,7 +2730,10 @@ function buildDeterministicPlan(
       seeds,
       family,
       scenario,
-      allowInternetImages
+      allowInternetImages,
+      angle,
+      commercialIntensity,
+      inputShape
     );
     return planSlide;
   });
@@ -2371,6 +2750,9 @@ function buildDeterministicPlan(
     tone: lens.tone,
     category: lens.category,
     scenario,
+    angle,
+    commercialIntensity,
+    inputShape,
     slides
   };
 }
@@ -2384,10 +2766,23 @@ function buildFallbackPlanSlide(
   seeds: string[],
   family?: TemplateFamilyId,
   scenario: ScenarioId = "expert",
-  allowInternetImages = true
+  allowInternetImages = true,
+  angle: NarrativeAngle = "opportunity-shift",
+  commercialIntensity: CommercialIntensity = "medium",
+  inputShape: InputShape = "topic-only"
 ): CarouselPlanSlide {
   const seed = pickSeedLine(seeds, index, topic);
-  const coreIdea = buildCoreIdea(role, seed, topic, index, totalSlides);
+  const coreIdea = buildCoreIdea(
+    role,
+    seed,
+    topic,
+    index,
+    totalSlides,
+    scenario,
+    angle,
+    commercialIntensity,
+    inputShape
+  );
   const imageIntent = chooseImageIntent(role, lens, index, totalSlides, allowInternetImages);
   const layoutType = chooseLayoutForRole(role, imageIntent, scenario);
   const templateId = chooseTemplateForRole(role, lens, index, topic, family);
@@ -2406,10 +2801,101 @@ function buildFallbackPlanSlide(
   };
 }
 
-function chooseScenarioId(topic: string, lens: TopicLens, brief: ParsedBrief): ScenarioId {
+function deriveInputShape(topic: string, brief: ParsedBrief): InputShape {
+  const merged = `${topic}\n${brief.sourceIdeas.join("\n")}`.toLowerCase();
+  if (CASE_SIGNAL_PATTERN.test(merged)) {
+    return "case-driven";
+  }
+  if (DIRECTIVE_SIGNAL_PATTERN.test(merged) && brief.structureHints.length >= 2) {
+    return "directive";
+  }
+  if (LIST_SIGNAL_PATTERN.test(merged) || brief.sourceIdeas.length >= 4) {
+    return "idea-list";
+  }
+
+  return "topic-only";
+}
+
+function deriveNarrativeAngle(
+  topic: string,
+  lens: TopicLens,
+  brief: ParsedBrief,
+  scenario: ScenarioId,
+  inputShape: InputShape
+): NarrativeAngle {
   const merged = `${topic} ${brief.sourceIdeas.join(" ")} ${brief.structureHints.join(" ")}`.toLowerCase();
 
-  if (/(кейс|пример|разбор|реальный случай|case study|case\b|example\b)/i.test(merged)) {
+  if (/(потер|срыв|риски|утечк|слив|теря|loss|risk|leak|drop|fail)/i.test(merged)) {
+    return "loss-risk";
+  }
+  if (/(ошибк|миф|не работает|wrong|mistake|myth)/i.test(merged)) {
+    return "mistake-breakdown";
+  }
+  if (inputShape === "case-driven" || scenario === "case-driven") {
+    return "case-proof";
+  }
+  if (inputShape === "idea-list" || /(план|шаг|чеклист|структур|step|plan|checklist)/i.test(merged)) {
+    return "process-playbook";
+  }
+  if (
+    lens.category === "marketing-sales" ||
+    lens.category === "business" ||
+    scenario === "commercial"
+  ) {
+    return "loss-risk";
+  }
+
+  return "opportunity-shift";
+}
+
+function deriveCommercialIntensity(
+  topic: string,
+  lens: TopicLens,
+  brief: ParsedBrief,
+  scenario: ScenarioId,
+  inputShape: InputShape
+): CommercialIntensity {
+  const merged = `${topic} ${brief.sourceIdeas.join(" ")} ${brief.qualityHints.join(" ")}`.toLowerCase();
+  let score = 0;
+
+  if (COMMERCIAL_HIGH_SIGNAL_PATTERN.test(merged)) {
+    score += 2;
+  }
+  if (COMMERCIAL_MID_SIGNAL_PATTERN.test(merged)) {
+    score += 1;
+  }
+  if (scenario === "commercial") {
+    score += 2;
+  }
+  if (lens.category === "marketing-sales" || lens.category === "real-estate") {
+    score += 1;
+  }
+  if (inputShape === "case-driven") {
+    score += 1;
+  }
+  if (/(срочно|прямо сейчас|urgent|now|today)/i.test(merged)) {
+    score += 1;
+  }
+
+  if (score >= 5) {
+    return "high";
+  }
+  if (score >= 3) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+function chooseScenarioId(
+  topic: string,
+  lens: TopicLens,
+  brief: ParsedBrief,
+  inputShape: InputShape = "topic-only"
+): ScenarioId {
+  const merged = `${topic} ${brief.sourceIdeas.join(" ")} ${brief.structureHints.join(" ")}`.toLowerCase();
+
+  if (inputShape === "case-driven" || /(кейс|пример|разбор|реальный случай|case study|case\b|example\b)/i.test(merged)) {
     return "case-driven";
   }
 
@@ -2467,7 +2953,11 @@ function compressRoleSequence(base: CarouselSlideRole[], targetCount: number): C
   return sequence;
 }
 
-function buildRoleSequence(targetCount: number, scenario: ScenarioId = "expert"): CarouselSlideRole[] {
+function buildRoleSequence(
+  targetCount: number,
+  scenario: ScenarioId = "expert",
+  commercialIntensity: CommercialIntensity = "medium"
+): CarouselSlideRole[] {
   const canonical = SCENARIO_ROLE_TEMPLATES[scenario] ?? SCENARIO_ROLE_TEMPLATES.expert;
 
   if (targetCount === canonical.length) {
@@ -2490,7 +2980,16 @@ function buildRoleSequence(targetCount: number, scenario: ScenarioId = "expert")
 
   expanded[0] = "cover";
   expanded[expanded.length - 1] = "cta";
-  return expanded.slice(0, targetCount);
+  const sequence = expanded.slice(0, targetCount);
+  if (
+    commercialIntensity === "high" &&
+    targetCount >= 6 &&
+    !sequence.slice(1, -1).includes("comparison")
+  ) {
+    sequence[Math.min(targetCount - 2, 3)] = "comparison";
+  }
+
+  return sequence;
 }
 
 function chooseLayoutForRole(
@@ -2684,31 +3183,51 @@ function buildCoreIdea(
   seed: string,
   topic: string,
   index: number,
-  totalSlides: number
+  totalSlides: number,
+  scenario: ScenarioId = "expert",
+  angle: NarrativeAngle = "opportunity-shift",
+  commercialIntensity: CommercialIntensity = "medium",
+  _inputShape: InputShape = "topic-only"
 ) {
   const topicClean = clean(topic).slice(0, 140) || "теме";
   const seedClean = clean(seed).slice(0, 140);
   const seedUseful = seedClean && seedClean.toLowerCase() !== topicClean.toLowerCase() ? seedClean : "";
   const focus = seedUseful || topicClean;
   const useEnglish = isMostlyEnglish(`${topicClean} ${focus}`);
+  const isConsequenceSlide = role === "problem" && index > 1;
+  const isCommercialTone = commercialIntensity === "high" || scenario === "commercial";
 
   if (useEnglish) {
     if (role === "cover") {
+      if (angle === "loss-risk") {
+        return `Hidden loss in ${focus}: activity is high, but pipeline keeps leaking`;
+      }
+      if (angle === "mistake-breakdown") {
+        return `One mistake in ${focus} quietly destroys conversion`;
+      }
+      if (angle === "case-proof") {
+        return `Real-world conflict in ${focus}: why effort still fails without a system`;
+      }
       return `Core conflict in ${focus}: effort is high, outcomes stay unstable`;
     }
     if (role === "problem") {
-      return index <= 1
-        ? `Where ${focus} breaks in practice and why users lose value`
-        : `What happens if ${focus} stays unresolved this quarter`;
+      if (isConsequenceSlide || angle === "loss-risk") {
+        return `Consequence: if ${focus} stays unresolved, you lose trust, time and qualified leads`;
+      }
+      return `Where ${focus} breaks in practice and why users lose value`;
     }
     if (role === "myth") {
       return `Popular myth in ${focus} that creates false confidence`;
     }
     if (role === "mistake") {
-      return `Critical mistake in ${focus} that quietly kills momentum`;
+      return isCommercialTone
+        ? `Costly mistake in ${focus}: you sell features while client still fears risk`
+        : `Critical mistake in ${focus} that quietly kills momentum`;
     }
     if (role === "tip") {
-      return `Practical tactic for ${focus} that gives measurable progress`;
+      return angle === "process-playbook"
+        ? `Practical system move for ${focus} that can be executed today`
+        : `Practical tactic for ${focus} that gives measurable progress`;
     }
     if (role === "steps") {
       return `Action plan: 3-5 steps to execute ${focus} without chaos`;
@@ -2720,33 +3239,51 @@ function buildCoreIdea(
       return `Short case: specific move that improved ${focus}`;
     }
     if (role === "comparison") {
-      return `Comparison: high-leverage approach vs low-impact routine in ${focus}`;
+      return `Reframing: high-leverage approach vs weak routine in ${focus}`;
     }
     if (role === "summary") {
-      return `Key principle behind sustainable progress in ${focus}`;
+      return isCommercialTone
+        ? `Summary: the trust-first principle that turns ${focus} into predictable demand`
+        : `Key principle behind sustainable progress in ${focus}`;
     }
     if (index === totalSlides - 1) {
-      return `CTA: the first concrete move to make in ${focus} today`;
+      return isCommercialTone
+        ? `CTA: make one concrete move in ${focus} today and capture qualified demand`
+        : `CTA: the first concrete move to make in ${focus} today`;
     }
     return `Practical insight that improves ${focus}`;
   }
 
   if (role === "cover") {
+    if (angle === "loss-risk") {
+      return `Скрытая потеря в теме «${focus}»: действий много, а заявки продолжают утекать`;
+    }
+    if (angle === "mistake-breakdown") {
+      return `Одна ошибка в теме «${focus}» тихо убивает конверсию`;
+    }
+    if (angle === "case-proof") {
+      return `Реальный конфликт в теме «${focus}»: почему усилия не дают результата без системы`;
+    }
     return `Главный конфликт в теме «${focus}»: усилия есть, результат нестабилен`;
   }
   if (role === "problem") {
-    return index <= 1
-      ? `Где именно в теме «${focus}» теряется результат и почему это критично`
-      : `Что будет, если проблему в теме «${focus}» не исправить сейчас`;
+    if (isConsequenceSlide || angle === "loss-risk") {
+      return `Последствие: если проблему в теме «${focus}» не решить, вы теряете доверие, время и тёплых клиентов`;
+    }
+    return `Где именно в теме «${focus}» теряется результат и почему это критично`;
   }
   if (role === "myth") {
     return `Популярный миф в теме «${focus}», который даёт ложную уверенность`;
   }
   if (role === "mistake") {
-    return `Критичная ошибка в теме «${focus}», которая съедает прогресс`;
+    return isCommercialTone
+      ? `Дорогая ошибка в теме «${focus}»: вы продаёте услугу, пока клиент не прожил свою боль`
+      : `Критичная ошибка в теме «${focus}», которая съедает прогресс`;
   }
   if (role === "tip") {
-    return `Практический приём в теме «${focus}», который даёт измеримый сдвиг`;
+    return angle === "process-playbook"
+      ? `Рабочий системный шаг в теме «${focus}», который можно внедрить уже сегодня`
+      : `Практический приём в теме «${focus}», который даёт измеримый сдвиг`;
   }
   if (role === "steps") {
     return `План действий: 3-5 шагов, чтобы внедрить решение по теме «${focus}»`;
@@ -2758,13 +3295,17 @@ function buildCoreIdea(
     return `Короткий кейс: какое действие дало результат в теме «${focus}»`;
   }
   if (role === "comparison") {
-    return `Сравнение: рабочий подход и путь, который тормозит результат в теме «${focus}»`;
+    return `Смена рамки: рабочий подход и путь, который тормозит результат в теме «${focus}»`;
   }
   if (role === "summary") {
-    return `Ключевой принцип устойчивого результата в теме «${focus}»`;
+    return isCommercialTone
+      ? `Итог: принцип доверия, который превращает тему «${focus}» в прогнозируемые заявки`
+      : `Ключевой принцип устойчивого результата в теме «${focus}»`;
   }
   if (index === totalSlides - 1) {
-    return `CTA: что сделать прямо сейчас по теме «${focus}»`;
+    return isCommercialTone
+      ? `CTA: какой шаг по теме «${focus}» сделать сегодня, чтобы получить входящий спрос`
+      : `CTA: что сделать прямо сейчас по теме «${focus}»`;
   }
   return `Практический тезис по теме «${focus}»`;
 }
@@ -2997,11 +3538,11 @@ function buildFallbackBody(
 
   return useEnglish
     ? [
-        `Write "${ctaKeyword}" in DM — I'll send the ready-to-use structure.`,
+        buildCtaBody(topic, ctaKeyword, useEnglish),
         "Save this carousel so you can reuse the framework today."
       ].join("\n")
     : [
-        `Напишите в директ «${ctaKeyword}» — отправлю готовую структуру под вашу тему.`,
+        buildCtaBody(topic, ctaKeyword, useEnglish),
         "Сохраните карусель, чтобы не потерять рабочий сценарий."
       ].join("\n");
 }
@@ -3025,6 +3566,34 @@ function buildActionKeyword(source: string, useEnglish: boolean) {
   }
 
   return normalized.toLocaleUpperCase(useEnglish ? "en-US" : "ru-RU");
+}
+
+function buildCtaBody(source: string, keyword: string, useEnglish: boolean) {
+  const intensity = COMMERCIAL_HIGH_SIGNAL_PATTERN.test(source)
+    ? "high"
+    : COMMERCIAL_MID_SIGNAL_PATTERN.test(source)
+      ? "medium"
+      : "low";
+
+  if (useEnglish) {
+    if (intensity === "high") {
+      return `Write "${keyword}" in DM — I'll send the conversion-ready script and first-step framework.`;
+    }
+    if (intensity === "medium") {
+      return `Write "${keyword}" in DM — I'll send the practical structure you can apply today.`;
+    }
+
+    return `Write "${keyword}" in DM — I'll send the compact action template for this topic.`;
+  }
+
+  if (intensity === "high") {
+    return `Напишите в директ «${keyword}» — отправлю сценарий и структуру, которые переводят интерес в заявки.`;
+  }
+  if (intensity === "medium") {
+    return `Напишите в директ «${keyword}» — отправлю практичный шаблон, который можно внедрить сегодня.`;
+  }
+
+  return `Напишите в директ «${keyword}» — отправлю короткий рабочий шаблон по этой теме.`;
 }
 
 function summarizeCoreIdea(coreIdea: string, useEnglish: boolean) {
@@ -3125,12 +3694,12 @@ function fitSlideTextToLayout(
     }
   }
 
-  if (role === "cta" && !CTA_ACTION_PATTERN.test(normalizedLines)) {
+  if (role === "cta" && assessCtaStrength(fittedTitle, normalizedLines) < 3) {
     const useEnglish = isMostlyEnglish(coreIdea);
     const keyword = buildActionKeyword(coreIdea, useEnglish);
     normalizedLines = useEnglish
-      ? `Write "${keyword}" in DM to get the practical framework.\nSave this carousel and apply one step today.`
-      : `Напишите в директ «${keyword}» — отправлю практичный шаблон.\nСохраните карусель и внедрите один шаг сегодня.`;
+      ? `${buildCtaBody(coreIdea, keyword, useEnglish)}\nSave this carousel and apply one step today.`
+      : `${buildCtaBody(coreIdea, keyword, useEnglish)}\nСохраните карусель и внедрите один шаг сегодня.`;
   }
 
   return {
@@ -3720,6 +4289,17 @@ function normalizeTitle(
   );
   const normalizedWithoutPunctuation = normalized.replace(/\s{2,}/g, " ").trim();
 
+  if (hasMalformedTitle(normalizedWithoutPunctuation) || hasLanguageDriftForTopic(normalizedWithoutPunctuation, topic)) {
+    if (planSlide.role === "cover") {
+      return buildHookTitle(topic);
+    }
+    return enforceRoleTitleTone(
+      buildFallbackTitle(planSlide, topic, index, total),
+      planSlide.role,
+      topic
+    );
+  }
+
   if (planSlide.role === "cover" && isWeakHookTitle(normalizedWithoutPunctuation)) {
     return buildHookTitle(topic);
   }
@@ -3773,10 +4353,13 @@ function enforceRoleTitleTone(
     return title;
   }
 
-  const useEnglish = isMostlyEnglish(`${title} ${topic}`);
+  const useEnglish = isMostlyEnglish(topic);
   const lowercase = compact.toLowerCase();
 
   if (role === "cover") {
+    if (hasLanguageDriftForTopic(compact, topic)) {
+      return buildHookTitle(topic);
+    }
     if (/(в теме|по теме|core conflict|главный конфликт)/i.test(compact)) {
       return buildHookTitle(topic);
     }
@@ -3805,6 +4388,19 @@ function enforceRoleTitleTone(
       `${useEnglish ? "Case:" : "Кейс:"} ${compact}`,
       72
     );
+  }
+
+  if (role === "steps") {
+    if (/^шага(?=\b|[,:;.!?])/i.test(compact)) {
+      return clampTitle(compact.replace(/^шага(?=\b|[,:;.!?])/i, useEnglish ? "Steps" : "Шаги"), 72);
+    }
+    if (!/(шаг|план|step|plan)/i.test(lowercase)) {
+      return clampTitle(useEnglish ? `Steps: ${compact}` : `Шаги: ${compact}`, 72);
+    }
+  }
+
+  if (role === "checklist" && !/(чеклист|checklist)/i.test(lowercase)) {
+    return clampTitle(useEnglish ? `Checklist: ${compact}` : `Чеклист: ${compact}`, 72);
   }
 
   if (role === "cta") {
