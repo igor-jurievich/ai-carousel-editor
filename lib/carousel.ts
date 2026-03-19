@@ -829,6 +829,37 @@ function resolveCompositionLayout(layoutType?: CarouselLayoutType): SlideComposi
   return "card";
 }
 
+function resolveLayoutWithoutImageFallback(
+  layoutType: CarouselLayoutType | undefined,
+  role?: Slide["generationRole"]
+): CarouselLayoutType {
+  if (layoutType !== "image-top") {
+    return layoutType ?? "card";
+  }
+
+  if (role === "cover") {
+    return "hero";
+  }
+
+  if (role === "problem" || role === "myth") {
+    return "statement";
+  }
+
+  if (role === "mistake" || role === "steps" || role === "checklist") {
+    return "list";
+  }
+
+  if (role === "case" || role === "comparison") {
+    return "split";
+  }
+
+  if (role === "cta") {
+    return "cta";
+  }
+
+  return "card";
+}
+
 function composeManagedTextLayout(options: {
   layoutType?: CarouselLayoutType;
   template: CarouselTemplate;
@@ -1918,8 +1949,12 @@ function buildManagedElements(
   const managedBody = imageBlockMode
     ? createManagedBodyForImageTop(template, bodyText, format, bodyStart, imageMode)
     : createManagedBody(template, bodyText, format, bodyStart);
+  const resolvedLayoutForText =
+    imageBlockMode
+      ? "image-top"
+      : resolveLayoutWithoutImageFallback(slide.layoutType, slide.generationRole);
   const composedManagedText = composeManagedTextLayout({
-    layoutType: imageBlockMode ? "image-top" : slide.layoutType,
+    layoutType: resolvedLayoutForText,
     template,
     format,
     title: managedTitle,

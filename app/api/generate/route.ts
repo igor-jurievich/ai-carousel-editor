@@ -82,7 +82,9 @@ export async function POST(request: Request) {
 
   try {
     const slides = await withTimeout(
-      generateCarouselFromTopic(topic, slidesCount),
+      generateCarouselFromTopic(topic, slidesCount, {
+        useInternetImages
+      }),
       resolveGenerateTimeoutMs()
     );
 
