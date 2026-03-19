@@ -2216,110 +2216,152 @@ export function createStarterSlides(
   templateId: CarouselTemplateId = "technology",
   format: SlideFormat = "1:1"
 ): Slide[] {
+  type StarterDemoImageKind = "composer" | "editor" | "export";
   type StarterOutlineItem = CarouselOutlineSlide & {
     titleFont?: string;
     bodyFont?: string;
-    includeDemoImage?: boolean;
+    demoImageKind?: StarterDemoImageKind;
+    demoImageMode?: "top" | "bottom";
+    demoImageZoom?: number;
+    demoImageDarken?: number;
   };
 
   const starterHandle = "@ai-carousel-editor";
-  const starterSubtitle = "AI carousel workflow";
-  const onboardingImage = getStarterOnboardingImage();
+  const starterSubtitle = "Onboarding demo";
   const onboarding: StarterOutlineItem[] = [
     {
       templateId: "minimal",
       titleFont: "Manrope",
       bodyFont: "Inter",
       layoutType: "hero",
-      title: "Карусель, которую хочется публиковать",
-      text: "Вводите тему, получайте готовую серию и доводите её до финала за один поток работы."
+      title: "Соберите карусель, которую хочется публиковать",
+      text: "Это не техничка, а живая demo-серия: тема, генерация, правки, стиль и экспорт в одном потоке."
     },
     {
       templateId: "atlas",
-      titleFont: "Oswald",
+      titleFont: "Space Grotesk",
       bodyFont: "DM Sans",
       layoutType: "list",
-      title: "1. Начните с темы, а не с пустого холста",
-      text: "• Введите идею в 1-2 фразах.\n• Укажите количество карточек.\n• Нажмите «Сгенерировать» — получите осмысленный сценарий."
+      title: "1. Начните с темы и задачи",
+      text: "• Опишите идею в 1-2 фразах.\n• Выберите количество карточек.\n• Запустите генерацию и получите целостный сценарий."
     },
     {
       templateId: "technology",
-      titleFont: "Space Grotesk",
+      titleFont: "Oswald",
+      bodyFont: "Inter",
+      layoutType: "image-top",
+      demoImageKind: "composer",
+      demoImageMode: "top",
+      demoImageZoom: 1.04,
+      demoImageDarken: 0,
+      title: "2. Генерация сразу даёт рабочую структуру",
+      text: "Слайды приходят уже с ритмом: хук, раскрытие, польза и финал. Вы не пишете всё с нуля."
+    },
+    {
+      templateId: "editorial",
+      titleFont: "El Messiri",
       bodyFont: "Inter",
       layoutType: "split",
-      title: "2. Редактируйте прямо на canvas",
-      text: "Выбирайте блок тапом, открывайте текст двойным тапом и сразу видьте результат в финальной композиции."
+      title: "3. Правьте текст прямо на canvas",
+      text: "Тап выделяет блок, двойной тап открывает редактирование. Вы видите итоговую композицию без переключений."
     },
     {
-      titleFont: "El Messiri",
-      bodyFont: "Roboto Condensed",
       templateId: "premium",
-      layoutType: "dark-slide",
-      title: "3. Управляйте типографикой серии",
-      text: "Меняйте шрифты заголовков и описания глобально: ритм и характер карусели обновляются мгновенно."
-    },
-    {
-      templateId: "aurora",
-      titleFont: "Space Grotesk",
+      titleFont: "Fira Code",
       bodyFont: "Inter",
-      layoutType: "card",
-      title: "4. Переключайте стиль без потери контента",
-      text: "Светлая, тёмная или акцентная подача: меняется визуал, а текст и структура остаются на месте."
+      layoutType: "dark-slide",
+      title: "4. Меняйте стиль серии, не теряя смысл",
+      text: "Светлые, тёмные и акцентные шаблоны переключаются быстро, а текст и порядок карточек сохраняются."
     },
     {
-      templateId: "founder-dark",
+      templateId: "business-light",
       titleFont: "Manrope",
       bodyFont: "Inter",
       layoutType: "image-top",
-      includeDemoImage: true,
-      title: "5. Добавляйте изображения без визуального хаоса",
-      text: "Фото встраивается в layout image-top: текст остаётся читаемым, а карточка выглядит как готовый пост."
+      demoImageKind: "editor",
+      demoImageMode: "top",
+      demoImageZoom: 1.03,
+      demoImageDarken: 0.02,
+      title: "5. Добавляйте фото без визуального шума",
+      text: "Image-top держит баланс: иллюстрация сверху, читабельный текст снизу, аккуратный ритм карточки."
+    },
+    {
+      templateId: "aurora",
+      titleFont: "Advent Pro",
+      bodyFont: "Inter",
+      layoutType: "card",
+      title: "6. Подгоните под свой бренд за пару кликов",
+      text: "Шрифт, фон, рамка, подпись, бейдж — всё настраивается локально или сразу для всей серии."
+    },
+    {
+      templateId: "founder-dark",
+      titleFont: "Russo One",
+      bodyFont: "Inter",
+      layoutType: "image-top",
+      demoImageKind: "export",
+      demoImageMode: "top",
+      demoImageZoom: 1.02,
+      demoImageDarken: 0.05,
+      title: "7. Экспортируйте в нужный формат",
+      text: "PNG, JPG, PDF или ZIP — выбирайте режим и забирайте серию для публикации без ручной сборки."
     },
     {
       templateId: "netflix",
-      titleFont: "Fira Code",
+      titleFont: "Oswald",
       bodyFont: "Inter",
       layoutType: "statement",
-      title: "6. Адаптируйте под формат и платформу",
-      text: "1:1, 4:5 и 9:16 переключаются в один клик, а композиция перестраивается под выбранный формат."
+      title: "Готовая карусель за один рабочий проход",
+      text: "Сначала сценарий, потом polish и экспорт."
     },
     {
       templateId: "mandarin",
       titleFont: "Russo One",
       bodyFont: "Inter",
       layoutType: "cta",
-      title: "7. Экспортируйте и публикуйте",
-      text: "Скачайте ZIP, PNG, JPG или PDF и выложите карусель. Очистите демо и создайте свою серию прямо сейчас."
+      title: "8. Очистите демо и запустите свою серию",
+      text: "Введите тему, сгенерируйте карусель и доведите её до публикации в этом же редакторе."
     }
   ];
 
   const starterSlides = createSlidesFromOutline(
-    onboarding.map(({ titleFont: _titleFont, bodyFont: _bodyFont, includeDemoImage: _includeDemoImage, ...item }) => item),
+    onboarding.map(
+      ({
+        titleFont: _titleFont,
+        bodyFont: _bodyFont,
+        demoImageKind: _demoImageKind,
+        demoImageMode: _demoImageMode,
+        demoImageZoom: _demoImageZoom,
+        demoImageDarken: _demoImageDarken,
+        ...item
+      }) => item
+    ),
     templateId,
     format,
     onboarding.length
   );
 
   const withDemoImage = starterSlides.map((slide, index) => {
-    if (!onboarding[index]?.includeDemoImage) {
+    const onboardingItem = onboarding[index];
+    if (!onboardingItem?.demoImageKind) {
       return slide;
     }
 
+    const imageSource = getStarterOnboardingImage(onboardingItem.demoImageKind);
     const withImage = setSlideBackgroundImage(
       slide,
-      onboardingImage,
+      imageSource,
       index,
       starterSlides.length,
       format,
-      "top"
+      onboardingItem.demoImageMode ?? "top"
     );
 
     return setSlideBackgroundImageStyle(
       withImage,
       {
         fitMode: "cover",
-        zoom: 1.06,
-        darken: 0.06
+        zoom: onboardingItem.demoImageZoom ?? 1.02,
+        darken: onboardingItem.demoImageDarken ?? 0
       },
       index,
       starterSlides.length,
@@ -2387,43 +2429,161 @@ function applyStarterSlidePolish(
   };
 }
 
-let starterOnboardingImageCache: string | null = null;
+type StarterDemoImageKind = "composer" | "editor" | "export";
 
-function getStarterOnboardingImage() {
-  if (starterOnboardingImageCache) {
-    return starterOnboardingImageCache;
+const starterOnboardingImageCache: Partial<Record<StarterDemoImageKind, string>> = {};
+
+function getStarterOnboardingImage(kind: StarterDemoImageKind) {
+  if (starterOnboardingImageCache[kind]) {
+    return starterOnboardingImageCache[kind] as string;
   }
 
-  const svg = `
+  const svg = resolveStarterOnboardingSvg(kind).trim();
+  const encoded = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  starterOnboardingImageCache[kind] = encoded;
+  return encoded;
+}
+
+function resolveStarterOnboardingSvg(kind: StarterDemoImageKind) {
+  if (kind === "editor") {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900">
+        <defs>
+          <linearGradient id="editorBg" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#eaf5f3"/>
+            <stop offset="100%" stop-color="#dcefeb"/>
+          </linearGradient>
+          <filter id="shadowEditor" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="26" stdDeviation="18" flood-color="#2e7f77" flood-opacity="0.14"/>
+          </filter>
+        </defs>
+        <rect width="1400" height="900" fill="url(#editorBg)"/>
+        <g opacity="0.17" stroke="#91bcb6" stroke-width="18" stroke-linecap="round">
+          <path d="M110 124l62-42-62-42"/>
+          <path d="M304 124l62-42-62-42"/>
+          <path d="M498 124l62-42-62-42"/>
+          <path d="M692 124l62-42-62-42"/>
+          <path d="M886 124l62-42-62-42"/>
+          <path d="M1080 124l62-42-62-42"/>
+        </g>
+        <g filter="url(#shadowEditor)">
+          <rect x="166" y="118" width="1068" height="674" rx="56" fill="#f9fdfc" stroke="#b9d6d1" stroke-width="4"/>
+          <rect x="218" y="176" width="964" height="80" rx="30" fill="#ffffff" stroke="#c5ddda" stroke-width="3"/>
+          <rect x="250" y="198" width="196" height="38" rx="19" fill="#f06a36"/>
+          <text x="280" y="224" fill="#ffffff" font-size="26" font-family="Inter, Arial, sans-serif" font-weight="700">Generate</text>
+          <rect x="470" y="198" width="464" height="38" rx="19" fill="#eef5f4"/>
+          <text x="500" y="224" fill="#688280" font-size="24" font-family="Inter, Arial, sans-serif">How to launch carousel editor faster</text>
+          <rect x="966" y="198" width="184" height="38" rx="19" fill="#ffffff" stroke="#c5ddda" stroke-width="3"/>
+          <text x="1016" y="224" fill="#355e63" font-size="24" font-family="Inter, Arial, sans-serif" font-weight="700">7 slides</text>
+          <rect x="248" y="296" width="250" height="430" rx="26" fill="#ffffff" stroke="#c7dfdb" stroke-width="3"/>
+          <text x="282" y="346" fill="#2d4e52" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="700">Slides</text>
+          <rect x="282" y="372" width="182" height="52" rx="18" fill="#e9f7f4" stroke="#b9ddd7" stroke-width="2"/>
+          <text x="312" y="405" fill="#2f5f66" font-size="24" font-family="Inter, Arial, sans-serif" font-weight="700">01 cover</text>
+          <rect x="282" y="440" width="182" height="52" rx="18" fill="#ffffff" stroke="#d4e5e2" stroke-width="2"/>
+          <rect x="282" y="508" width="182" height="52" rx="18" fill="#ffffff" stroke="#d4e5e2" stroke-width="2"/>
+          <rect x="540" y="296" width="610" height="430" rx="28" fill="#eff7f5" stroke="#b7d7d2" stroke-width="3"/>
+          <rect x="628" y="344" width="434" height="290" rx="24" fill="#ffffff" stroke="#c4dfda" stroke-width="3"/>
+          <text x="676" y="414" fill="#223337" font-size="44" font-family="Manrope, Inter, sans-serif" font-weight="800">Build publish-ready</text>
+          <text x="676" y="468" fill="#223337" font-size="44" font-family="Manrope, Inter, sans-serif" font-weight="800">carousel in minutes</text>
+          <rect x="676" y="516" width="268" height="16" rx="8" fill="#f06a36" fill-opacity="0.82"/>
+          <rect x="676" y="546" width="332" height="12" rx="6" fill="#6a7e82" fill-opacity="0.36"/>
+        </g>
+      </svg>
+    `;
+  }
+
+  if (kind === "export") {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900">
+        <defs>
+          <linearGradient id="exportBg" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#12242d"/>
+            <stop offset="62%" stop-color="#1f3a42"/>
+            <stop offset="100%" stop-color="#305f66"/>
+          </linearGradient>
+          <filter id="exportShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="24" stdDeviation="16" flood-color="#09141a" flood-opacity="0.34"/>
+          </filter>
+        </defs>
+        <rect width="1400" height="900" fill="url(#exportBg)"/>
+        <g opacity="0.15" fill="#ecfffb">
+          <circle cx="170" cy="730" r="120"/>
+          <circle cx="1220" cy="130" r="140"/>
+          <circle cx="1060" cy="780" r="96"/>
+        </g>
+        <g filter="url(#exportShadow)">
+          <rect x="204" y="132" width="992" height="640" rx="52" fill="#f7fcfb"/>
+          <rect x="264" y="198" width="872" height="70" rx="30" fill="#ebf6f4"/>
+          <text x="314" y="243" fill="#365c61" font-size="30" font-family="Inter, Arial, sans-serif" font-weight="700">Export carousel</text>
+          <rect x="264" y="304" width="416" height="388" rx="30" fill="#ffffff" stroke="#d2e6e2" stroke-width="3"/>
+          <text x="308" y="364" fill="#1f3036" font-size="46" font-family="Manrope, Inter, sans-serif" font-weight="800">Ready to publish</text>
+          <rect x="308" y="394" width="190" height="14" rx="7" fill="#f06a36" fill-opacity="0.88"/>
+          <rect x="308" y="430" width="316" height="12" rx="6" fill="#65757f" fill-opacity="0.3"/>
+          <rect x="716" y="304" width="420" height="388" rx="30" fill="#eff8f6" stroke="#c2ddd8" stroke-width="3"/>
+          <text x="758" y="362" fill="#25474d" font-size="30" font-family="Inter, Arial, sans-serif" font-weight="700">Formats</text>
+          <rect x="758" y="392" width="120" height="56" rx="20" fill="#f06a36"/>
+          <text x="792" y="428" fill="#ffffff" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="800">PNG</text>
+          <rect x="900" y="392" width="120" height="56" rx="20" fill="#ffffff" stroke="#bdd8d4" stroke-width="3"/>
+          <text x="938" y="428" fill="#2b5156" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="800">JPG</text>
+          <rect x="758" y="466" width="120" height="56" rx="20" fill="#ffffff" stroke="#bdd8d4" stroke-width="3"/>
+          <text x="793" y="502" fill="#2b5156" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="800">PDF</text>
+          <rect x="900" y="466" width="120" height="56" rx="20" fill="#ffffff" stroke="#bdd8d4" stroke-width="3"/>
+          <text x="940" y="502" fill="#2b5156" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="800">ZIP</text>
+          <rect x="758" y="560" width="262" height="72" rx="26" fill="#1f5f64"/>
+          <text x="818" y="607" fill="#ffffff" font-size="30" font-family="Inter, Arial, sans-serif" font-weight="700">Download</text>
+        </g>
+      </svg>
+    `;
+  }
+
+  return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900">
       <defs>
-        <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0%" stop-color="#0f2f38"/>
-          <stop offset="55%" stop-color="#1f5e62"/>
-          <stop offset="100%" stop-color="#7fd7ce"/>
+        <linearGradient id="composerBg" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="#e9f4f2"/>
+          <stop offset="100%" stop-color="#dcefeb"/>
         </linearGradient>
-        <radialGradient id="glow" cx="68%" cy="22%" r="60%">
-          <stop offset="0%" stop-color="#dcfff8" stop-opacity="0.78"/>
-          <stop offset="100%" stop-color="#dcfff8" stop-opacity="0"/>
-        </radialGradient>
+        <filter id="composerShadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="20" stdDeviation="14" flood-color="#2d7b73" flood-opacity="0.15"/>
+        </filter>
       </defs>
-      <rect width="1400" height="900" fill="url(#bg)"/>
-      <rect width="1400" height="900" fill="url(#glow)"/>
-      <g opacity="0.18" fill="#ffffff">
-        <circle cx="230" cy="170" r="112"/>
-        <circle cx="1180" cy="98" r="84"/>
-        <circle cx="1260" cy="760" r="154"/>
+      <rect width="1400" height="900" fill="url(#composerBg)"/>
+      <g opacity="0.18" stroke="#9dc1bc" stroke-width="16" stroke-linecap="round">
+        <path d="M128 156l56-38-56-38"/>
+        <path d="M302 156l56-38-56-38"/>
+        <path d="M476 156l56-38-56-38"/>
+        <path d="M650 156l56-38-56-38"/>
+        <path d="M824 156l56-38-56-38"/>
+        <path d="M998 156l56-38-56-38"/>
       </g>
-      <g fill="#ffffff" fill-opacity="0.9">
-        <rect x="132" y="650" width="590" height="16" rx="8"/>
-        <rect x="132" y="684" width="490" height="14" rx="7"/>
+      <g filter="url(#composerShadow)">
+        <rect x="186" y="148" width="1028" height="602" rx="52" fill="#fbfefd" stroke="#bfdad5" stroke-width="4"/>
+        <rect x="262" y="220" width="876" height="72" rx="30" fill="#ffffff" stroke="#c8dedb" stroke-width="3"/>
+        <rect x="284" y="238" width="184" height="36" rx="18" fill="#f06a36"/>
+        <text x="324" y="262" fill="#ffffff" font-size="22" font-family="Inter, Arial, sans-serif" font-weight="700">Topic</text>
+        <rect x="488" y="238" width="478" height="36" rx="18" fill="#edf6f4"/>
+        <text x="516" y="262" fill="#678083" font-size="21" font-family="Inter, Arial, sans-serif">How to get clients from social media</text>
+        <rect x="984" y="238" width="132" height="36" rx="18" fill="#ffffff" stroke="#c8dedb" stroke-width="3"/>
+        <text x="1018" y="262" fill="#345d62" font-size="21" font-family="Inter, Arial, sans-serif" font-weight="700">7 cards</text>
+        <rect x="262" y="326" width="556" height="316" rx="30" fill="#ffffff" stroke="#c7dfdb" stroke-width="3"/>
+        <text x="304" y="384" fill="#21353b" font-size="38" font-family="Manrope, Inter, sans-serif" font-weight="800">Generate storyboard</text>
+        <rect x="304" y="412" width="182" height="12" rx="6" fill="#f06a36" fill-opacity="0.84"/>
+        <rect x="304" y="446" width="468" height="12" rx="6" fill="#6f8086" fill-opacity="0.28"/>
+        <rect x="304" y="470" width="422" height="12" rx="6" fill="#6f8086" fill-opacity="0.28"/>
+        <rect x="304" y="494" width="438" height="12" rx="6" fill="#6f8086" fill-opacity="0.28"/>
+        <rect x="304" y="536" width="286" height="62" rx="22" fill="#1f6267"/>
+        <text x="350" y="576" fill="#ffffff" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="700">Generate</text>
+        <rect x="846" y="326" width="292" height="316" rx="30" fill="#eff8f6" stroke="#c4ddd9" stroke-width="3"/>
+        <text x="878" y="378" fill="#2b4f54" font-size="26" font-family="Inter, Arial, sans-serif" font-weight="700">Flow</text>
+        <rect x="878" y="398" width="206" height="44" rx="16" fill="#ffffff"/>
+        <text x="904" y="427" fill="#2f5e64" font-size="22" font-family="Inter, Arial, sans-serif" font-weight="700">Hook</text>
+        <rect x="878" y="454" width="206" height="44" rx="16" fill="#ffffff"/>
+        <text x="904" y="483" fill="#2f5e64" font-size="22" font-family="Inter, Arial, sans-serif" font-weight="700">Value</text>
+        <rect x="878" y="510" width="206" height="44" rx="16" fill="#ffffff"/>
+        <text x="904" y="539" fill="#2f5e64" font-size="22" font-family="Inter, Arial, sans-serif" font-weight="700">CTA</text>
       </g>
-      <text x="132" y="578" fill="#ffffff" font-size="92" font-family="Inter, Arial, sans-serif" font-weight="700">Visual Workflow</text>
     </svg>
-  `.trim();
-
-  starterOnboardingImageCache = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  return starterOnboardingImageCache;
+  `;
 }
 
 export function createBlankSlide(

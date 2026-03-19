@@ -50,7 +50,7 @@ import type {
 } from "@/types/editor";
 
 const DEFAULT_STATUS =
-  "Откройте onboarding-серию ниже или введите тему и нажмите «Сгенерировать».";
+  "Откройте demo-серию, затем введите свою тему и нажмите «Сгенерировать».";
 const MOBILE_BREAKPOINT = 768;
 const MAX_TOPIC_CHARS = 4000;
 const MIN_TOPIC_CHARS = 3;
@@ -111,7 +111,7 @@ export function Editor() {
   const [pendingImageSlideId, setPendingImageSlideId] = useState<string | null>(null);
   const [pendingBackgroundSlideId, setPendingBackgroundSlideId] = useState<string | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
-  const [showSlideBadge, setShowSlideBadge] = useState(true);
+  const [showSlideBadge, setShowSlideBadge] = useState(false);
   const [useInternetImages, setUseInternetImages] = useState(false);
   const [fontsReady, setFontsReady] = useState(false);
   const [globalTypography, setGlobalTypography] = useState<GlobalTypography>({
@@ -1886,7 +1886,7 @@ export function Editor() {
           </header>
 
           <details className="mobile-generate-panel">
-            <summary>Новая генерация: тема → карусель</summary>
+            <summary>Создать новую карусель</summary>
             <div className="mobile-generate-body">
               <textarea
                 value={topic}

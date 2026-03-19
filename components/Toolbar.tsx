@@ -33,7 +33,7 @@ export function Toolbar({
     <header className="prompt-shell">
       <div className="prompt-brand">
         <span className="prompt-eyebrow">AI Carousel Editor</span>
-        <h1>Из идеи в готовую карусель за пару минут</h1>
+        <h1>Из идеи в готовую карусель за 5 минут</h1>
       </div>
 
       <div className="prompt-composer">
@@ -68,8 +68,8 @@ export function Toolbar({
             disabled={disabled}
           />
           <span>
-            Картинки из интернета
-            <small>Подберём до 3 релевантных фото, иначе оставим текстовый layout</small>
+            Подбирать картинки из интернета
+            <small>Добавим до 3 релевантных фото, если они реально усиливают серию</small>
           </span>
         </label>
         <button className="btn" type="button" onClick={onGenerate} disabled={isGenerating || disabled}>
