@@ -84,20 +84,25 @@ function resolveDragBounds(
   const measuredTextHeight =
     element.type === "text" ? Math.max(height, estimateTextHeight(element, width) + 14) : height;
   const effectiveHeight = measuredTextHeight;
+  const textBleedX = element.type === "text" ? Math.min(26, Math.round(width * 0.08)) : 0;
+  const textBleedY = element.type === "text" ? Math.min(20, Math.round(effectiveHeight * 0.08)) : 0;
+  const safeMinX = Math.max(0, safeArea.left - textBleedX);
+  const safeMaxX = Math.min(canvasWidth - width, safeArea.right - width + textBleedX);
+  const safeMinY = Math.max(0, safeArea.top - textBleedY);
+  const safeMaxY = Math.min(canvasHeight - effectiveHeight, safeArea.bottom - effectiveHeight + textBleedY);
   const safeWidth = Math.max(60, safeArea.right - safeArea.left);
   const safeHeight = Math.max(40, safeArea.bottom - safeArea.top);
   const forceCanvasBounds =
-    element.type === "text" ||
-    (element.type === "image" && element.metaKey === "background-image");
-  const useCanvasX = forceCanvasBounds || width > safeWidth;
-  const useCanvasY = forceCanvasBounds || effectiveHeight > safeHeight;
+    element.type === "image" && element.metaKey === "background-image";
+  const useCanvasX = forceCanvasBounds || width > safeWidth + textBleedX * 2;
+  const useCanvasY = forceCanvasBounds || effectiveHeight > safeHeight + textBleedY * 2;
 
-  const minX = useCanvasX ? 0 : safeArea.left;
-  const maxX = useCanvasX ? Math.max(0, canvasWidth - width) : Math.max(minX, safeArea.right - width);
-  const minY = useCanvasY ? 0 : safeArea.top;
+  const minX = useCanvasX ? 0 : safeMinX;
+  const maxX = useCanvasX ? Math.max(0, canvasWidth - width) : Math.max(minX, safeMaxX);
+  const minY = useCanvasY ? 0 : safeMinY;
   const maxY = useCanvasY
     ? Math.max(0, canvasHeight - effectiveHeight)
-    : Math.max(minY, safeArea.bottom - effectiveHeight);
+    : Math.max(minY, safeMaxY);
 
   return {
     minX,
@@ -116,7 +121,7 @@ function clampPosition(position: { x: number; y: number }, bounds: DragBounds) {
 
 function estimateTextHeight(element: TextElement, width: number) {
   const lineHeight = element.lineHeight ?? 1.1;
-  const approxCharsPerLine = Math.max(6, Math.floor(width / Math.max(8, element.fontSize * 0.58)));
+  const approxCharsPerLine = Math.max(6, Math.floor(width / Math.max(8, element.fontSize * 0.66)));
   const paragraphs = element.text.replace(/\r/g, "").split("\n");
   let lines = 0;
 

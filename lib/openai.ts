@@ -197,9 +197,9 @@ const TEMPLATE_FAMILY_POOLS: Record<
 const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
   hero: {
     titleMin: 14,
-    titleMax: 72,
+    titleMax: 68,
     bodyMin: 18,
-    bodyMax: 150,
+    bodyMax: 146,
     preferredLinesMin: 1,
     preferredLinesMax: 2
   },
@@ -207,7 +207,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 64,
     bodyMin: 18,
-    bodyMax: 145,
+    bodyMax: 150,
     preferredLinesMin: 1,
     preferredLinesMax: 2
   },
@@ -215,15 +215,15 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 64,
     bodyMin: 36,
-    bodyMax: 190,
+    bodyMax: 188,
     preferredLinesMin: 3,
-    preferredLinesMax: 5
+    preferredLinesMax: 4
   },
   split: {
     titleMin: 14,
     titleMax: 66,
     bodyMin: 32,
-    bodyMax: 190,
+    bodyMax: 188,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -231,7 +231,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 68,
     bodyMin: 34,
-    bodyMax: 190,
+    bodyMax: 188,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -239,15 +239,15 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 66,
     bodyMin: 22,
-    bodyMax: 140,
+    bodyMax: 138,
     preferredLinesMin: 1,
     preferredLinesMax: 2
   },
   "cover-hero": {
     titleMin: 14,
-    titleMax: 72,
+    titleMax: 68,
     bodyMin: 18,
-    bodyMax: 120,
+    bodyMax: 116,
     preferredLinesMin: 1,
     preferredLinesMax: 2
   },
@@ -255,7 +255,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 68,
     bodyMin: 34,
-    bodyMax: 190,
+    bodyMax: 188,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -263,31 +263,31 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 64,
     bodyMin: 36,
-    bodyMax: 190,
+    bodyMax: 188,
     preferredLinesMin: 3,
-    preferredLinesMax: 5
+    preferredLinesMax: 4
   },
   steps: {
     titleMin: 14,
     titleMax: 64,
     bodyMin: 36,
-    bodyMax: 190,
+    bodyMax: 188,
     preferredLinesMin: 3,
-    preferredLinesMax: 5
+    preferredLinesMax: 4
   },
   checklist: {
     titleMin: 14,
     titleMax: 64,
     bodyMin: 36,
-    bodyMax: 190,
+    bodyMax: 188,
     preferredLinesMin: 3,
-    preferredLinesMax: 5
+    preferredLinesMax: 4
   },
   "case-split": {
     titleMin: 14,
     titleMax: 66,
     bodyMin: 32,
-    bodyMax: 190,
+    bodyMax: 188,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -295,7 +295,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 66,
     bodyMin: 32,
-    bodyMax: 190,
+    bodyMax: 188,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   },
@@ -311,7 +311,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 62,
     bodyMin: 22,
-    bodyMax: 145,
+    bodyMax: 148,
     preferredLinesMin: 1,
     preferredLinesMax: 2
   },
@@ -319,7 +319,7 @@ const LAYOUT_LIMITS: Record<CarouselLayoutType, LayoutLimit> = {
     titleMin: 14,
     titleMax: 68,
     bodyMin: 30,
-    bodyMax: 170,
+    bodyMax: 174,
     preferredLinesMin: 2,
     preferredLinesMax: 3
   }
@@ -333,22 +333,22 @@ const LAYOUT_WORD_LIMITS: Record<
     lineWords: number;
   }
 > = {
-  hero: { titleWords: 9, bodyWords: 16, lineWords: 9 },
-  statement: { titleWords: 9, bodyWords: 21, lineWords: 10 },
-  list: { titleWords: 8, bodyWords: 24, lineWords: 6 },
-  split: { titleWords: 8, bodyWords: 24, lineWords: 10 },
-  card: { titleWords: 9, bodyWords: 24, lineWords: 10 },
-  "dark-slide": { titleWords: 8, bodyWords: 15, lineWords: 9 },
-  "cover-hero": { titleWords: 8, bodyWords: 16, lineWords: 9 },
-  "title-body": { titleWords: 9, bodyWords: 24, lineWords: 10 },
-  bullets: { titleWords: 8, bodyWords: 24, lineWords: 6 },
-  steps: { titleWords: 8, bodyWords: 24, lineWords: 6 },
-  checklist: { titleWords: 8, bodyWords: 24, lineWords: 6 },
-  "case-split": { titleWords: 8, bodyWords: 24, lineWords: 10 },
-  comparison: { titleWords: 8, bodyWords: 24, lineWords: 10 },
-  summary: { titleWords: 8, bodyWords: 20, lineWords: 10 },
-  cta: { titleWords: 8, bodyWords: 18, lineWords: 10 },
-  "image-top": { titleWords: 8, bodyWords: 22, lineWords: 10 }
+  hero: { titleWords: 9, bodyWords: 18, lineWords: 10 },
+  statement: { titleWords: 10, bodyWords: 26, lineWords: 11 },
+  list: { titleWords: 9, bodyWords: 26, lineWords: 8 },
+  split: { titleWords: 10, bodyWords: 28, lineWords: 11 },
+  card: { titleWords: 10, bodyWords: 28, lineWords: 11 },
+  "dark-slide": { titleWords: 9, bodyWords: 18, lineWords: 10 },
+  "cover-hero": { titleWords: 9, bodyWords: 18, lineWords: 10 },
+  "title-body": { titleWords: 10, bodyWords: 28, lineWords: 11 },
+  bullets: { titleWords: 9, bodyWords: 26, lineWords: 8 },
+  steps: { titleWords: 9, bodyWords: 26, lineWords: 8 },
+  checklist: { titleWords: 9, bodyWords: 26, lineWords: 8 },
+  "case-split": { titleWords: 10, bodyWords: 28, lineWords: 11 },
+  comparison: { titleWords: 10, bodyWords: 28, lineWords: 11 },
+  summary: { titleWords: 10, bodyWords: 24, lineWords: 11 },
+  cta: { titleWords: 10, bodyWords: 22, lineWords: 10 },
+  "image-top": { titleWords: 10, bodyWords: 26, lineWords: 11 }
 };
 
 const STRUCTURED_LAYOUTS = new Set<CarouselLayoutType>([
@@ -451,7 +451,10 @@ const WEAK_COPY_PATTERNS = [
 ];
 
 const HANGING_ENDING_PATTERN =
-  /\b(и|но|или|либо|чтобы|если|когда|потому|так\s+как|поэтому|а|а\s+также|to|for|with|from|of|in|on|at|by|and|or|as|a|when|if|because)\s*$/i;
+  /\b(и|но|или|либо|чтобы|если|когда|потому|так\s+как|поэтому|а|а\s+также|в|на|по|к|с|из|от|до|за|to|for|with|from|of|in|on|at|by|and|or|as|a|an|the|when|if|because)\s*$/i;
+
+const FRAGMENT_START_PATTERN =
+  /^(если|когда|чтобы|пока|так\s+как|потому\s+что|if|when|while|because|unless|although)\b/i;
 
 const CTA_ACTION_PATTERN =
   /(сделайт|запусти|проверь|примени|выбери|внедри|сохран|начни|попробуй|поделись|подпиш|save|start|try|share|follow|apply|check)/i;
@@ -564,6 +567,7 @@ export async function generateCarouselFromTopic(topic: string, requestedSlidesCo
   }
 
   let slides = normalizeSlides(coreTopic, draftedSlides, deterministicPlan, targetCount, brief);
+  slides = polishSlidesForPublishability(coreTopic, slides, deterministicPlan, brief, targetCount);
   const quality = assessSlidesQuality(coreTopic, slides, deterministicPlan);
   const criticalRepairIndexes = pickCriticalRepairIndexes(slides, quality.problematicIndexes);
 
@@ -585,7 +589,7 @@ export async function generateCarouselFromTopic(topic: string, requestedSlidesCo
     );
   }
 
-  return slides;
+  return polishSlidesForPublishability(coreTopic, slides, deterministicPlan, brief, targetCount);
 }
 
 async function generatePlanWithFallback(
@@ -792,11 +796,13 @@ async function requestCarouselSlides(
               "Every slide must be a complete micro-idea with real value.",
               "One slide = one finished thought. No fragments, no hanging endings.",
               "Avoid filler and fake expertise.",
+              "Do not produce abstract textbook language. Write as a practical social post.",
               "Forbidden RU filler: «в современном мире», «следует отметить», «необходимо учитывать», «данный аспект».",
               "Forbidden EN filler: «it is important to note», «in today’s world», «it should be considered».",
               "Use simple conversational phrasing, concrete causal logic and actionable clarity.",
               "Do not duplicate ideas across slides.",
-              "Keep copy compact and readable for social cards (2-3 lines usually).",
+              "Keep copy compact and readable for social cards (2-3 lines usually), but complete in meaning.",
+              "If text is too long, rewrite it shorter instead of dropping the ending.",
               `Use exactly ${targetCount} slides in provided order with fixed role and layout.`
             ].join(" ")
           }
@@ -1006,6 +1012,9 @@ function buildPlanPrompt(
   const structureBlock = brief.structureHints.length
     ? brief.structureHints.map((line, index) => `${index + 1}. ${line}`).join("\n")
     : "- Выстрой структуру самостоятельно";
+  const qualityBlock = brief.qualityHints.length
+    ? brief.qualityHints.map((line, index) => `${index + 1}. ${line}`).join("\n")
+    : "- Делай коротко, конкретно и без обрывков.";
 
   return [
     `Тема: ${brief.coreTopic || topic}`,
@@ -1021,6 +1030,9 @@ function buildPlanPrompt(
     "",
     "Дополнительные структурные подсказки:",
     structureBlock,
+    "",
+    "Пожелания по качеству текста:",
+    qualityBlock,
     "",
     "Требования:",
     "- Не дублируй coreIdea между слайдами.",
@@ -1056,6 +1068,18 @@ function buildContentPrompt(topic: string, brief: ParsedBrief, plan: CarouselPla
       ].join(" | ")
     )
     .join("\n");
+  const qualityBlock = brief.qualityHints.length
+    ? brief.qualityHints.map((line, index) => `${index + 1}. ${line}`).join("\n")
+    : "—";
+  const rolePlaybook = [
+    "cover: резкий хук через боль/конфликт, без нейтральных слов вроде «обзор/гайд».",
+    "problem: где и почему теряется результат, с конкретным последствием.",
+    "myth/mistake: что именно делают не так и чем это бьёт по метрике.",
+    "tip/steps/checklist: прикладные шаги, которые можно сделать сегодня.",
+    "case/comparison: короткий пример и вывод «что работает vs что тормозит».",
+    "summary: собрать суть в одну рабочую формулу.",
+    "cta: финальный призыв с конкретным действием (сохранить/написать/применить)."
+  ].join("\n");
 
   return [
     `Topic: ${brief.coreTopic || topic}`,
@@ -1067,6 +1091,12 @@ function buildContentPrompt(topic: string, brief: ParsedBrief, plan: CarouselPla
     "Fixed slide sequence (strict order, do not reorder):",
     slideSequence,
     "",
+    "Role playbook:",
+    rolePlaybook,
+    "",
+    "Quality hints from user brief:",
+    qualityBlock,
+    "",
     "Layout limits:",
     layoutLimitsBlock,
     "",
@@ -1076,8 +1106,10 @@ function buildContentPrompt(topic: string, brief: ParsedBrief, plan: CarouselPla
     "- No unfinished endings. No sentence fragments.",
     "- No generic empty phrases. No pseudo-expert jargon.",
     "- Keep copy concise, but never cut meaning for brevity.",
+    "- Keep each line compact: usually up to 8-10 words.",
     "- If idea is complex, compress into a clear micro-insight, not a broken draft.",
     "- Every text line must be a complete sentence.",
+    "- Start each non-cover slide with concrete value, not a generic intro.",
     "- Never end a line with a conjunction/preposition (e.g., и/но/а/to/for/with).",
     "- Avoid repeating the same advice with different wording.",
     "- Hook slide must create tension (pain, conflict, sharp question or costly mistake).",
@@ -1653,6 +1685,15 @@ function isIncompleteTitle(value: string) {
     return true;
   }
 
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const lastWord = words.at(-1) ?? "";
+  if (
+    words.length >= 6 &&
+    /(ый|ий|ой|ая|ое|ые|ого|ему|ым|ую|able|ive|al|ful|less)$/i.test(lastWord)
+  ) {
+    return true;
+  }
+
   return /\b(?:to|for|with|from|of|in|on|at|by|and|or|as|while|when|if|because|because of|из-за|для|при|как|когда|если|потому|чтобы|и|или|а)\s*$/i.test(
     normalized
   );
@@ -1751,6 +1792,11 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
       score -= 4;
     }
 
+    if (index > 0 && index < slides.length - 1 && !STRUCTURED_LAYOUTS.has(layout) && bodyWords < 8) {
+      problematic.add(index);
+      score -= 4;
+    }
+
     if (
       index > 0 &&
       index < slides.length - 1 &&
@@ -1758,6 +1804,16 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
       layout !== "cta" &&
       lineCount < 2
     ) {
+      problematic.add(index);
+      score -= 4;
+    }
+
+    const tooLongLines = text
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => countWords(line) > wordLimits.lineWords + 3).length;
+    if (tooLongLines >= 2) {
       problematic.add(index);
       score -= 4;
     }
@@ -1786,7 +1842,7 @@ function assessSlidesQuality(topic: string, slides: CarouselOutlineSlide[], plan
         .map((line) => line.trim())
         .filter(Boolean)
         .filter((line) => /^([•\-]|\d+\.)/.test(line)).length;
-      if (bulletLines < 2) {
+      if (bulletLines < 3) {
         problematic.add(index);
         score -= 4;
       }
@@ -1846,36 +1902,62 @@ function pickCriticalRepairIndexes(
     return [];
   }
 
-  const selected = problematicIndexes.filter((index) => {
-    const slide = slides[index];
-    if (!slide) {
-      return false;
-    }
-
-    const title = clean(slide.title || "");
-    const text = clean(slide.text || "");
-    if (!title || !text) {
-      return true;
-    }
-
-    if (hasMetaEcho(`${title}\n${text}`)) {
-      return true;
-    }
-
-    const prev = slides[index - 1];
-    if (prev) {
-      const prevTitle = clean(prev.title || "");
-      const prevText = clean(prev.text || "");
-      if (
-        semanticSimilarity(title, prevTitle) > 0.9 ||
-        semanticSimilarity(`${title} ${text}`, `${prevTitle} ${prevText}`) > 0.9
-      ) {
-        return true;
+  const maxRepairs = Math.max(2, Math.min(4, Math.ceil(slides.length * 0.4)));
+  const scored = problematicIndexes
+    .map((index) => {
+      const slide = slides[index];
+      if (!slide) {
+        return { index, severity: 0 };
       }
-    }
 
-    return false;
-  });
+      const title = clean(slide.title || "");
+      const text = clean(slide.text || "");
+      let severity = 0;
+
+      if (!title || !text) {
+        severity += 10;
+      }
+
+      if (hasMetaEcho(`${title}\n${text}`)) {
+        severity += 8;
+      }
+
+      if (hasWeakCopy(`${title}\n${text}`)) {
+        severity += 4;
+      }
+
+      if (hasHangingEnding(text)) {
+        severity += 4;
+      }
+
+      if (index === 0 && !isHookLikeTitle(title)) {
+        severity += 7;
+      }
+
+      if (index === slides.length - 1 && !CTA_ACTION_PATTERN.test(text)) {
+        severity += 7;
+      }
+
+      const prev = slides[index - 1];
+      if (prev) {
+        const prevTitle = clean(prev.title || "");
+        const prevText = clean(prev.text || "");
+        if (
+          semanticSimilarity(title, prevTitle) > 0.84 ||
+          semanticSimilarity(`${title} ${text}`, `${prevTitle} ${prevText}`) > 0.83
+        ) {
+          severity += 8;
+        }
+      }
+
+      return { index, severity };
+    })
+    .sort((left, right) => right.severity - left.severity);
+
+  const selected = scored
+    .filter((item) => item.severity >= 4)
+    .slice(0, maxRepairs)
+    .map((item) => item.index);
 
   return Array.from(new Set(selected)).sort((left, right) => left - right);
 }
@@ -1943,6 +2025,143 @@ function applyRepairs(
       templateId: planSlide.templateId
     };
   });
+}
+
+function polishSlidesForPublishability(
+  topic: string,
+  slides: CarouselOutlineSlide[],
+  plan: CarouselPlan,
+  brief: ParsedBrief,
+  totalSlides: number
+) {
+  const polished = slides.map((slide, index) => {
+    const planSlide =
+      plan.slides[index] ??
+      buildFallbackPlanSlide(
+        topic,
+        index === 0 ? "cover" : index === totalSlides - 1 ? "cta" : "tip",
+        index,
+        totalSlides,
+        inferTopicLens(topic, brief.sourceIdeas),
+        brief.sourceIdeas
+      );
+
+    const normalizedTitle = normalizeTitle(
+      removeMetaLines(String(slide.title ?? "")),
+      topic,
+      planSlide,
+      index,
+      totalSlides
+    );
+    const normalizedBody = normalizeBody(removeMetaLines(String(slide.text ?? "")), normalizedTitle);
+    const fallbackBody = buildFallbackBody(planSlide, topic, index, totalSlides, brief);
+    const preparedBody = isWeakBodyText(normalizedBody, index > 0 && index < totalSlides - 1)
+      ? fallbackBody
+      : normalizedBody;
+    const fitted = fitSlideTextToLayout(
+      normalizedTitle,
+      preparedBody,
+      planSlide.layoutType,
+      planSlide.role,
+      planSlide.coreIdea
+    );
+
+    return {
+      ...slide,
+      title: fitted.title,
+      text: fitted.body,
+      role: planSlide.role,
+      coreIdea: planSlide.coreIdea,
+      layoutType: normalizeLayoutType(planSlide.layoutType),
+      imageIntent: planSlide.imageIntent,
+      imageQueryDraft: planSlide.imageQueryDraft,
+      templateId: planSlide.templateId
+    };
+  });
+
+  for (let left = 0; left < polished.length; left += 1) {
+    for (let right = left + 1; right < polished.length; right += 1) {
+      const leftSlide = polished[left];
+      const rightSlide = polished[right];
+      if (!leftSlide || !rightSlide || right === polished.length - 1) {
+        continue;
+      }
+
+      const similarity = semanticSimilarity(
+        `${leftSlide.title} ${leftSlide.text}`,
+        `${rightSlide.title} ${rightSlide.text}`
+      );
+      if (similarity < 0.74) {
+        continue;
+      }
+
+      const replacementPlanSlide =
+        plan.slides[right] ??
+        buildFallbackPlanSlide(
+          topic,
+          right === 0 ? "cover" : right === totalSlides - 1 ? "cta" : "tip",
+          right,
+          totalSlides,
+          inferTopicLens(topic, brief.sourceIdeas),
+          brief.sourceIdeas
+        );
+      const replacementTitle = buildFallbackTitle(replacementPlanSlide, topic, right, totalSlides);
+      const replacementBody = buildFallbackBody(
+        replacementPlanSlide,
+        topic,
+        right,
+        totalSlides,
+        brief
+      );
+      const fitted = fitSlideTextToLayout(
+        replacementTitle,
+        replacementBody,
+        replacementPlanSlide.layoutType,
+        replacementPlanSlide.role,
+        replacementPlanSlide.coreIdea
+      );
+      polished[right] = {
+        ...rightSlide,
+        title: fitted.title,
+        text: fitted.body,
+        role: replacementPlanSlide.role,
+        coreIdea: replacementPlanSlide.coreIdea,
+        layoutType: normalizeLayoutType(replacementPlanSlide.layoutType),
+        imageIntent: replacementPlanSlide.imageIntent,
+        imageQueryDraft: replacementPlanSlide.imageQueryDraft,
+        templateId: replacementPlanSlide.templateId
+      };
+    }
+  }
+
+  const lastIndex = polished.length - 1;
+  const last = polished[lastIndex];
+  if (last && !CTA_ACTION_PATTERN.test(last.text)) {
+    const ctaPadding = isMostlyEnglish(topic)
+      ? "Save this carousel and apply the first step today."
+      : "Сохраните карусель и внедрите первый шаг сегодня.";
+    const planSlide = plan.slides[lastIndex];
+    if (planSlide) {
+      const fitted = fitSlideTextToLayout(
+        last.title,
+        `${last.text}\n${ctaPadding}`,
+        "cta",
+        "cta",
+        planSlide.coreIdea
+      );
+      polished[lastIndex] = {
+        ...last,
+        title: fitted.title,
+        text: fitted.body,
+        role: "cta",
+        layoutType: "cta",
+        imageIntent: "none",
+        imageQueryDraft: ""
+      };
+    }
+  }
+
+  return polished;
 }
 
 function buildDeterministicFallbackSlides(
@@ -2387,8 +2606,24 @@ function buildFallbackTitle(
     return buildHookTitle(topic);
   }
 
-  const basis = idea || fallbackByRole[planSlide.role] || fallbackByRole.tip;
-  return clampTitle(basis, LAYOUT_LIMITS[normalizeLayoutType(planSlide.layoutType)].titleMax);
+  const compactIdea = clampTitle(idea.replace(/^[^:]+:\s*/, ""), 76);
+  const ideaWords = countWords(compactIdea);
+  const canUseIdeaAsTitle =
+    compactIdea &&
+    ideaWords >= 3 &&
+    ideaWords <= 10 &&
+    !/[,:;]/.test(compactIdea) &&
+    !isIncompleteTitle(compactIdea);
+  const basis = canUseIdeaAsTitle
+    ? compactIdea
+    : fallbackByRole[planSlide.role] || fallbackByRole.tip;
+  const maxLength = LAYOUT_LIMITS[normalizeLayoutType(planSlide.layoutType)].titleMax;
+  const fitted = clampTitle(basis, maxLength);
+  if (!isIncompleteTitle(fitted)) {
+    return fitted;
+  }
+
+  return clampTitle(fallbackByRole[planSlide.role] || fallbackByRole.tip, maxLength);
 }
 
 function buildFallbackBody(
@@ -2401,7 +2636,7 @@ function buildFallbackBody(
   const useEnglish = isMostlyEnglish(`${topic} ${planSlide?.coreIdea ?? ""}`);
   const role = planSlide?.role ?? (index === 0 ? "cover" : index === totalSlides - 1 ? "cta" : "tip");
   const coreIdea = planSlide?.coreIdea ?? pickSeedLine(brief.sourceIdeas, index, topic);
-  const shortIdea = clampSentenceByWords(clean(coreIdea).replace(/^[^:]+:\s*/, ""), 8) || (useEnglish ? "this topic" : "этот фокус");
+  const shortIdea = summarizeCoreIdea(coreIdea, useEnglish);
 
   if (role === "cover") {
     return useEnglish
@@ -2468,6 +2703,16 @@ function buildFallbackBody(
     : ["Сохраните эту карусель, чтобы не потерять шаги.", "Сделайте первый шаг сегодня."].join("\n");
 }
 
+function summarizeCoreIdea(coreIdea: string, useEnglish: boolean) {
+  const normalized = tidyLineEnding(clean(coreIdea).replace(/^[^:]+:\s*/, "").replace(/[«»"]/g, ""));
+  const compact = stripHangingEnding(clampSentenceByWords(normalized, 9)).replace(/[.!?…]+$/g, "").trim();
+  if (countWords(compact) >= 3) {
+    return compact;
+  }
+
+  return useEnglish ? "this topic" : "этот фокус";
+}
+
 function fitSlideTextToLayout(
   title: string,
   body: string,
@@ -2492,7 +2737,7 @@ function fitSlideTextToLayout(
 
   preparedBody = clampBody(preparedBody, limits.bodyMax);
 
-  if (preparedBody.length < limits.bodyMin) {
+  if (preparedBody.length < Math.max(16, limits.bodyMin - 28)) {
     const expanded = `${preparedBody}\n${buildBodyPadding(role, coreIdea)}`.trim();
     const compactExpanded = STRUCTURED_LAYOUTS.has(resolvedLayout)
       ? toStructuredBody(expanded, resolvedLayout, coreIdea, wordLimits.lineWords)
@@ -2500,7 +2745,7 @@ function fitSlideTextToLayout(
     preparedBody = clampBody(compactExpanded, limits.bodyMax);
   }
 
-  const normalizedLines = preparedBody
+  let normalizedLines = preparedBody
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -2510,8 +2755,33 @@ function fitSlideTextToLayout(
         ? tidyLineEnding(clampSentence(stripHangingEnding(line), 120))
         : ensureLineClosure(line)
     )
+    .map((line) => capitalizeLineStart(line))
     .filter(Boolean)
     .join("\n");
+
+  if (!STRUCTURED_LAYOUTS.has(resolvedLayout) && hasBrokenBodyStructure(normalizedLines)) {
+    const recoveryBody = toCompactBody(
+      `${buildBodyPadding(role, coreIdea)} ${buildMicroConclusion(role, coreIdea)}`,
+      wordLimits.bodyWords,
+      wordLimits.lineWords,
+      limits.preferredLinesMax
+    );
+    const recoveredLines = recoveryBody
+      .split(/\n+/)
+      .map((line) => ensureLineClosure(line))
+      .filter(Boolean)
+      .slice(0, limits.preferredLinesMax)
+      .join("\n");
+    if (recoveredLines) {
+      normalizedLines = recoveredLines;
+    }
+  }
+
+  if (role === "cta" && !CTA_ACTION_PATTERN.test(normalizedLines)) {
+    normalizedLines = isMostlyEnglish(coreIdea)
+      ? "Save this carousel and take one concrete step today."
+      : "Сохраните карусель и сделайте один конкретный шаг сегодня.";
+  }
 
   return {
     title: fittedTitle,
@@ -2535,10 +2805,6 @@ function ensureMicroIdeaBody(
     .filter(Boolean)
     .slice(0, 3);
   const nextLines = rawLines.length ? [...rawLines] : [buildBodyPadding(role, coreIdea)];
-
-  if (nextLines.length === 1 && role !== "cta") {
-    nextLines.push(buildMicroConclusion(role, coreIdea));
-  }
 
   if (hasWeakCopy(nextLines.join(" "))) {
     nextLines[0] = buildBodyPadding(role, coreIdea);
@@ -2569,10 +2835,31 @@ function ensureMicroIdeaBody(
   )
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => (countWords(line) < 4 ? buildBodyPadding(role, coreIdea) : line))
+    .map((line, lineIndex) => {
+      if (countWords(line) < 2) {
+        return buildBodyPadding(role, coreIdea);
+      }
+      if (FRAGMENT_START_PATTERN.test(line)) {
+        return lineIndex === 0
+          ? buildBodyPadding(role, coreIdea)
+          : buildMicroConclusion(role, coreIdea);
+      }
+      return line;
+    })
     .slice(0, 3);
 
-  return deduped.join("\n");
+  const finalized = Array.from(
+    new Set(
+      deduped
+        .map((line) => tidyLineEnding(line))
+        .filter(Boolean)
+    )
+  );
+  if (!finalized.length) {
+    finalized.push(buildBodyPadding(role, coreIdea));
+  }
+
+  return finalized.slice(0, 3).join("\n");
 }
 
 function toStructuredBody(
@@ -2582,11 +2869,29 @@ function toStructuredBody(
   lineWords: number
 ) {
   const lines = extractBodyLines(body);
-  const safeLines = lines.length ? lines : extractBodyLines(coreIdea);
-  const targetLines = Math.max(3, Math.min(5, safeLines.length || 3));
+  const normalizedLines = lines.flatMap((line) => splitInlineBullets(line));
+  const safeLines = normalizedLines.length ? normalizedLines : extractBodyLines(coreIdea);
+  const targetLines = Math.max(3, Math.min(4, safeLines.length || 3));
   const compact = safeLines
     .slice(0, targetLines)
-    .map((line) => tidyLineEnding(clampSentence(stripHangingEnding(line), Math.max(86, lineWords * 14))))
+    .map((line) => {
+      const normalized = tidyLineEnding(stripHangingEnding(line));
+      if (!normalized) {
+        return "";
+      }
+      return countWords(normalized) > lineWords + 4
+        ? clampLineByWordsSoft(normalized, lineWords + 4, 2)
+        : normalized;
+    })
+    .map((line) => ensureLineClosure(line))
+    .map((line) =>
+      countWords(line) < 3
+        ? clampSentenceByWords(
+            tidyLineEnding(coreIdea.replace(/^[^:]+:\s*/, "")) || "Полезный шаг по теме",
+            lineWords + 1
+          )
+        : line
+    )
     .filter(Boolean);
 
   if (layoutType === "steps") {
@@ -2602,19 +2907,28 @@ function toCompactBody(
   lineWords: number,
   maxLines: number
 ) {
-  const normalized = clean(body).replace(/\n+/g, " ").trim();
+  const normalized = injectClauseBoundaries(body);
   if (!normalized) {
     return normalized;
   }
 
-  const sentenceSource = normalized
+  const compactSource = clampSentenceByWords(normalized, bodyWords + 3);
+
+  const sentenceSource = compactSource
     .split(/(?<=[.!?])\s+/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const safeSentences = sentenceSource.length ? sentenceSource : [normalized];
+  const clauseSource =
+    sentenceSource.length <= 1
+      ? compactSource
+          .split(/(?:,\s+|;\s+|—\s+|-\s+)/)
+          .map((line) => line.trim())
+          .filter((line) => countWords(line) >= 3)
+      : [];
+  const safeSentences = sentenceSource.length > 1 ? sentenceSource : clauseSource.length ? clauseSource : [normalized];
   const reducedSentences = safeSentences
     .slice(0, maxLines)
-    .map((line) => tidyLineEnding(clampSentence(stripHangingEnding(line), Math.max(110, lineWords * 13))))
+    .map((line) => tidyLineEnding(stripHangingEnding(line)))
     .filter(Boolean)
     .map((line) => ensureLineClosure(line))
     .filter(Boolean);
@@ -2625,18 +2939,48 @@ function toCompactBody(
   }
 
   const fallbackLine = ensureLineClosure(
-    tidyLineEnding(clampSentence(stripHangingEnding(normalized), Math.max(120, bodyWords * 8)))
+    tidyLineEnding(
+      clampLineByWordsSoft(stripHangingEnding(compactSource), bodyWords + 4, 4)
+    )
   );
 
   if (!fallbackLine) {
     return "";
   }
 
+  if (countWords(fallbackLine) > lineWords + 4 && maxLines >= 2) {
+    const chunks = fallbackLine
+      .split(/,\s+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (chunks.length >= 2) {
+      return chunks
+        .slice(0, 2)
+        .map((line) => ensureLineClosure(clampLineByWordsSoft(line, lineWords + 1)))
+        .filter(Boolean)
+        .join("\n");
+    }
+  }
+
   return fallbackLine;
 }
 
+function splitInlineBullets(value: string) {
+  const normalized = clean(value)
+    .replace(/\s*([•▪◦●])\s*/g, "\n")
+    .split(/\n+/)
+    .map((line) => line.replace(/^([•\-]|\d+\.)\s*/, "").trim())
+    .filter(Boolean);
+
+  if (!normalized.length) {
+    return [];
+  }
+
+  return normalized;
+}
+
 function extractBodyLines(value: string) {
-  const rawLines = clean(value)
+  const rawLines = clean(injectClauseBoundaries(value))
     .split(/\n+/)
     .map((line) => line.replace(/^([•\-]|\d+\.)\s*/, "").trim())
     .filter(Boolean);
@@ -2656,8 +3000,8 @@ function buildBodyPadding(role: CarouselSlideRole, coreIdea: string) {
   const useEnglish = isMostlyEnglish(coreIdea);
   if (role === "cover") {
     return useEnglish
-      ? "Show the core conflict and why it matters now."
-      : "Покажите конфликт и почему он важен прямо сейчас.";
+      ? "Swipe: we break the conflict into practical steps."
+      : "Листайте: дальше разберём конфликт и рабочие шаги.";
   }
 
   if (role === "cta") {
@@ -2673,7 +3017,7 @@ function buildBodyPadding(role: CarouselSlideRole, coreIdea: string) {
   if (role === "problem") {
     return useEnglish
       ? "Show where results are lost and why it is critical."
-      : "Покажите, где именно теряется результат и почему это критично.";
+      : "Здесь теряется результат и именно это нужно исправить первым.";
   }
 
   if (role === "myth") {
@@ -2752,6 +3096,40 @@ function buildMicroConclusion(role: CarouselSlideRole, coreIdea: string) {
   return buildBodyPadding(role, coreIdea);
 }
 
+function injectClauseBoundaries(value: string) {
+  const normalized = clean(value).replace(/\n+/g, " ").replace(/\s{2,}/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.replace(/([a-zа-яё0-9])\s+(?=(?:Если|Когда|Чтобы|Пока|Сохраните|Сделайте|Проверьте|Откройте|Запустите|Листайте|Save|Start|Try|Check|Open|Apply|Then)\b)/giu, "$1. ");
+}
+
+function hasBrokenBodyStructure(value: string) {
+  const lines = value
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) {
+    return true;
+  }
+
+  return lines.some((line) => {
+    if (FRAGMENT_START_PATTERN.test(line)) {
+      return true;
+    }
+    if (hasHangingEnding(line)) {
+      return true;
+    }
+    if (/•\s*•/.test(line)) {
+      return true;
+    }
+
+    return countWords(line) < 3;
+  });
+}
+
 function hasWeakCopy(value: string) {
   return WEAK_COPY_PATTERNS.some((pattern) => pattern.test(value));
 }
@@ -2792,6 +3170,10 @@ function ensureLineClosure(value: string) {
     return "";
   }
 
+  if (countWords(withoutHanging) < 3) {
+    return "";
+  }
+
   if (/[.!?…:]$/.test(withoutHanging)) {
     return withoutHanging;
   }
@@ -2801,6 +3183,27 @@ function ensureLineClosure(value: string) {
   }
 
   return withoutHanging;
+}
+
+function capitalizeLineStart(value: string) {
+  const line = clean(value);
+  if (!line) {
+    return "";
+  }
+
+  const bulletMatch = line.match(/^([•\-]|\d+\.)\s+(.*)$/);
+  if (bulletMatch) {
+    const [, bullet, rest] = bulletMatch;
+    const trimmed = rest.trim();
+    if (!trimmed) {
+      return line;
+    }
+    const [first, ...tail] = Array.from(trimmed);
+    return `${bullet} ${first.toLocaleUpperCase("ru-RU")}${tail.join("")}`;
+  }
+
+  const [first, ...tail] = Array.from(line);
+  return `${first.toLocaleUpperCase("ru-RU")}${tail.join("")}`;
 }
 
 function stripHangingEnding(value: string) {

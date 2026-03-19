@@ -667,8 +667,8 @@ function getFormatLayout(format: SlideFormat) {
     return {
       titleFactor: 0.94,
       bodyFactor: 0.96,
-      titleYBoost: 82,
-      bodyYBoost: 148,
+      titleYBoost: 72,
+      bodyYBoost: 124,
       footerBottom: 118
     };
   }
@@ -677,8 +677,8 @@ function getFormatLayout(format: SlideFormat) {
     return {
       titleFactor: 0.82,
       bodyFactor: 0.88,
-      titleYBoost: 136,
-      bodyYBoost: 276,
+      titleYBoost: 116,
+      bodyYBoost: 232,
       footerBottom: 144
     };
   }
@@ -859,24 +859,11 @@ function composeManagedTextLayout(options: {
     body.y = title.y + title.height + 34;
     body.fontSize = clampValue(Math.round(body.fontSize * 0.84), 20, 54);
     body.lineHeight = Math.max(1.05, body.lineHeight ?? 1.1);
-
-    extras.push(
-      createShapeElement({
-        metaKey: "layout-hero-line",
-        x: Math.round((SLIDE_SIZE - 176) / 2),
-        y: title.y - 36,
-        width: 176,
-        height: 6,
-        fill: template.accent,
-        cornerRadius: 999,
-        opacity: 0.72
-      })
-    );
   } else if (composition === "statement") {
     title.width = clampValue(Math.round(title.width * 0.8), 560, 840);
     title.x = clampValue(120, 88, SLIDE_SIZE - title.width - 88);
     title.y = clampValue(Math.round(height * 0.32), 220, Math.round(height * 0.48));
-    title.fontSize = clampValue(Math.round(title.fontSize * 1.3), 72, 176);
+    title.fontSize = clampValue(Math.round(title.fontSize * 1.24), 66, 152);
     title.lineHeight = 0.98;
     body.width = clampValue(Math.round(title.width * 0.92), 500, 790);
     body.x = title.x;
@@ -903,19 +890,6 @@ function composeManagedTextLayout(options: {
     body.y = title.y + title.height + 28;
     body.width = title.width;
     body.fontSize = clampValue(Math.round(body.fontSize * 0.9), 18, 40);
-
-    extras.push(
-      createShapeElement({
-        metaKey: "layout-split-accent",
-        x: 88,
-        y: title.y - 18,
-        width: 6,
-        height: body.y + body.height - (title.y - 18),
-        fill: template.accent,
-        cornerRadius: 12,
-        opacity: 0.42
-      })
-    );
   } else if (composition === "dark-slide") {
     title.align = "center";
     title.width = clampValue(Math.round(title.width * 0.84), 560, 860);
@@ -948,7 +922,34 @@ function composeManagedTextLayout(options: {
     body.y = title.y + title.height + 30;
   }
 
-  const cappedBodyHeight = Math.max(42, height - body.y - (format === "9:16" ? 180 : 140));
+  const bottomReserve = format === "9:16" ? 188 : format === "4:5" ? 166 : 146;
+  const minTitleY = format === "9:16" ? 124 : format === "4:5" ? 106 : 92;
+  const minGap = 22;
+  const maxBottom = height - bottomReserve;
+
+  if (title.y < minTitleY) {
+    const shift = minTitleY - title.y;
+    title.y += shift;
+    body.y += shift;
+  }
+
+  if (body.y + body.height > maxBottom) {
+    const overflow = body.y + body.height - maxBottom;
+    const bodyMinY = title.y + title.height + minGap;
+    body.y = Math.max(bodyMinY, body.y - overflow);
+  }
+
+  if (body.y + body.height > maxBottom) {
+    const overflow = body.y + body.height - maxBottom;
+    const titleShiftCapacity = Math.max(0, title.y - minTitleY);
+    const titleShift = Math.min(titleShiftCapacity, overflow + 8);
+    if (titleShift > 0) {
+      title.y -= titleShift;
+      body.y = Math.max(title.y + title.height + minGap, body.y - titleShift);
+    }
+  }
+
+  const cappedBodyHeight = Math.max(42, maxBottom - body.y);
   body.height = clampValue(body.height, 42, cappedBodyHeight);
 
   return [...extras, title, body];
@@ -1211,7 +1212,7 @@ function createImageTopFrame(
 
 function countWrappedLines(text: string, width: number, fontSize: number) {
   const paragraphs = text.replace(/\r/g, "").split("\n");
-  const approxCharsPerLine = Math.max(6, Math.floor(width / Math.max(1, fontSize * 0.62)));
+  const approxCharsPerLine = Math.max(6, Math.floor(width / Math.max(1, fontSize * 0.68)));
   let totalLines = 0;
 
   for (const paragraph of paragraphs) {
@@ -1309,17 +1310,38 @@ function applyTextOverflowGuard(
   options: Omit<Parameters<typeof fitTextBlock>[0], "text">,
   initialFit: ReturnType<typeof fitTextBlock>
 ) {
-  // Keep full text. Never trim content with ellipsis at this stage.
-  const candidateFit = initialFit.overflow
+  // Keep full text. Prefer controlled reflow over clipping.
+  const directFit = initialFit.overflow
     ? fitTextBlock({
         ...options,
         text
       })
     : initialFit;
 
+  if (!directFit.overflow) {
+    return {
+      text,
+      fitted: directFit
+    };
+  }
+
+  const reflowedText = text
+    .replace(/;\s+/g, ";\n")
+    .replace(/,\s+(?=[А-ЯA-Z0-9])/g, ",\n")
+    .replace(/\.\s+(?=[А-ЯA-Z0-9])/g, ".\n")
+    .replace(/\n{3,}/g, "\n\n");
+  const reflowedFit = fitTextBlock({
+    ...options,
+    text: reflowedText
+  });
+
+  const useReflowed =
+    (!reflowedFit.overflow && directFit.overflow) ||
+    reflowedFit.requiredHeight < directFit.requiredHeight;
+
   return {
-    text,
-    fitted: candidateFit
+    text: useReflowed ? reflowedText : text,
+    fitted: useReflowed ? reflowedFit : directFit
   };
 }
 
@@ -1334,7 +1356,7 @@ function createManagedTitle(
 ): TextElement {
   const layout = getFormatLayout(format);
   const { height: canvasHeight } = SLIDE_FORMAT_DIMENSIONS[format];
-  const width = template.titleWidth ?? 900;
+  const width = template.titleWidth ?? 912;
   const x = clampValue(Math.round((SLIDE_SIZE - width) / 2), 48, 170);
   const titleY = clampValue(
     template.titleOffsetY + layout.titleYBoost,
@@ -1384,18 +1406,18 @@ function createManagedBody(
 ): TextElement {
   const layout = getFormatLayout(format);
   const { height: canvasHeight } = SLIDE_FORMAT_DIMENSIONS[format];
-  const width = template.bodyWidth ?? 848;
+  const width = template.bodyWidth ?? 872;
   const x = clampValue(Math.round((SLIDE_SIZE - width) / 2), 54, 192);
-  const preferredBodyY = Math.max(startY + 18, template.bodyOffsetY + layout.bodyYBoost);
+  const preferredBodyY = Math.max(startY + 20, template.bodyOffsetY + layout.bodyYBoost);
   const footerReserve = layout.footerBottom + 74;
-  const minBodyHeight = format === "9:16" ? 220 : format === "4:5" ? 186 : 156;
+  const minBodyHeight = format === "9:16" ? 228 : format === "4:5" ? 194 : 162;
   const maxBodyY = Math.max(0, canvasHeight - footerReserve - minBodyHeight);
   const preferredMinBodyY =
     format === "9:16"
-      ? Math.round(canvasHeight * 0.46)
+      ? Math.round(canvasHeight * 0.41)
       : format === "4:5"
-        ? Math.round(canvasHeight * 0.43)
-        : Math.round(canvasHeight * 0.4);
+        ? Math.round(canvasHeight * 0.38)
+        : Math.round(canvasHeight * 0.36);
   const minBodyY = clampValue(preferredMinBodyY, 0, maxBodyY);
   const bodyY = clampValue(preferredBodyY, minBodyY, maxBodyY);
   const baseSize = Math.round((format === "9:16" ? 29 : 34) * layout.bodyFactor);
@@ -2067,7 +2089,7 @@ export function createSlideFromOutline(
   const title = rawTitle || "Новый заголовок";
   const body =
     rawBody ||
-    "Добавьте текст, загрузите изображение или поставьте своё фото в фон. В этом блоке стоит раскрыть главную мысль и дать конкретику, чтобы карточка выглядела законченной.";
+    "Добавьте краткий тезис, раскройте пользу в 1-2 строках и завершите конкретным действием.";
   const resolvedLayoutType =
     outline.layoutType ??
     (index === 0 ? "hero" : index === totalSlides - 1 ? "cta" : "card");
