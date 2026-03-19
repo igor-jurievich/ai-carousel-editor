@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { clampSlidesCount, generateCarouselFromTopic } from "@/lib/openai";
 import { findInternetImagesForCarousel } from "@/lib/internet-images";
+import type { CarouselOutlineSlide, CarouselSlideRole } from "@/types/editor";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,33 @@ const RATE_LIMIT_SWEEP_THRESHOLD = 5000;
 type RateLimitBucket = {
   count: number;
   resetAt: number;
+};
+
+type PainModelPayload = {
+  pain: string;
+  wrongAction: string;
+  consequence: string;
+  desiredOutcome: string;
+  emotionalState: string;
+};
+
+type GenerationPayloadDiagnostics = {
+  isValid: boolean;
+  qualityScore: number;
+  flags: {
+    hasHook: boolean;
+    hasProblem: boolean;
+    hasAmplify: boolean;
+    hasMistake: boolean;
+    hasConsequence: boolean;
+    hasShift: boolean;
+    hasMindsetShift: boolean;
+    hasSolution: boolean;
+    hasStructure: boolean;
+    hasExample: boolean;
+    hasCta: boolean;
+    hasNarrativeProgression: boolean;
+  };
 };
 
 const generateRateLimit = new Map<string, RateLimitBucket>();
@@ -37,13 +65,21 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { topic?: unknown; slidesCount?: unknown; useInternetImages?: unknown };
+  let body: {
+    topic?: unknown;
+    slidesCount?: unknown;
+    useInternetImages?: unknown;
+    niche?: unknown;
+    audience?: unknown;
+  };
 
   try {
     body = (await request.json()) as {
       topic?: unknown;
       slidesCount?: unknown;
       useInternetImages?: unknown;
+      niche?: unknown;
+      audience?: unknown;
     };
   } catch {
     return NextResponse.json(
@@ -58,6 +94,8 @@ export async function POST(request: Request) {
   );
   const useInternetImages =
     body.useInternetImages === true || body.useInternetImages === "true";
+  const niche = typeof body.niche === "string" ? body.niche.trim().slice(0, 120) : "";
+  const audience = typeof body.audience === "string" ? body.audience.trim().slice(0, 160) : "";
 
   if (!topic) {
     return NextResponse.json(
@@ -81,16 +119,57 @@ export async function POST(request: Request) {
   }
 
   try {
-    const slides = await withTimeout(
+    const timeoutMs = resolveGenerateTimeoutMs();
+    let generationResult = await withTimeout(
       generateCarouselFromTopic(topic, slidesCount, {
-        useInternetImages
+        useInternetImages,
+        niche,
+        audience
       }),
-      resolveGenerateTimeoutMs()
+      timeoutMs
     );
+
+    const firstAttemptDiagnostics = assessGenerationPayload(
+      generationResult.slides,
+      generationResult.painModel
+    );
+
+    if (!firstAttemptDiagnostics.isValid) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("Generate payload rejected (attempt 1):", firstAttemptDiagnostics);
+      }
+
+      generationResult = await withTimeout(
+        generateCarouselFromTopic(topic, slidesCount, {
+          useInternetImages,
+          niche,
+          audience
+        }),
+        timeoutMs
+      );
+    }
+
+    const { slides, painModel } = generationResult;
 
     if (!slides.length) {
       return NextResponse.json(
         { error: "Генерация вернула пустой результат. Попробуйте переформулировать тему." },
+        { status: 502 }
+      );
+    }
+
+    const secondAttemptDiagnostics = assessGenerationPayload(slides, painModel);
+
+    if (!secondAttemptDiagnostics.isValid) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("Generate payload rejected (attempt 2):", secondAttemptDiagnostics);
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            "Не удалось собрать цельную карусель. Уточните тему или добавьте больше исходных мыслей и попробуйте снова."
+        },
         { status: 502 }
       );
     }
@@ -106,7 +185,7 @@ export async function POST(request: Request) {
       internetImages = await findInternetImagesForCarousel(topic, slides, 2).catch(() => []);
     }
 
-    return NextResponse.json({ slides, internetImages });
+    return NextResponse.json({ slides, painModel, internetImages });
   } catch (error) {
     if (error instanceof Error && error.name === "GenerateTimeoutError") {
       return NextResponse.json(
@@ -237,4 +316,225 @@ function sweepRateLimit(now: number) {
       generateRateLimit.delete(key);
     }
   }
+}
+
+function assessGenerationPayload(
+  slides: CarouselOutlineSlide[],
+  painModel: unknown
+): GenerationPayloadDiagnostics {
+  if (!Array.isArray(slides) || slides.length < 8 || slides.length > 10) {
+    return {
+      isValid: false,
+      qualityScore: 0,
+      flags: {
+        hasHook: false,
+        hasProblem: false,
+        hasAmplify: false,
+        hasMistake: false,
+        hasConsequence: false,
+        hasShift: false,
+        hasMindsetShift: false,
+        hasSolution: false,
+        hasStructure: false,
+        hasExample: false,
+        hasCta: false,
+        hasNarrativeProgression: false
+      }
+    };
+  }
+
+  if (!isValidPainModel(painModel)) {
+    return {
+      isValid: false,
+      qualityScore: 0,
+      flags: {
+        hasHook: false,
+        hasProblem: false,
+        hasAmplify: false,
+        hasMistake: false,
+        hasConsequence: false,
+        hasShift: false,
+        hasMindsetShift: false,
+        hasSolution: false,
+        hasStructure: false,
+        hasExample: false,
+        hasCta: false,
+        hasNarrativeProgression: false
+      }
+    };
+  }
+
+  const normalizedRoles = slides.map((slide, index) => normalizeRole(slide.role, index, slides.length));
+  const mergedSlides = slides.map((slide) => `${slide.title ?? ""}\n${slide.text ?? ""}`);
+
+  const hasEmptySlide = slides.some(
+    (slide) =>
+      typeof slide?.title !== "string" ||
+      typeof slide?.text !== "string" ||
+      slide.title.trim().length < 4 ||
+      slide.text.trim().length < 14
+  );
+  if (hasEmptySlide) {
+    return {
+      isValid: false,
+      qualityScore: 0,
+      flags: {
+        hasHook: false,
+        hasProblem: false,
+        hasAmplify: false,
+        hasMistake: false,
+        hasConsequence: false,
+        hasShift: false,
+        hasMindsetShift: false,
+        hasSolution: false,
+        hasStructure: false,
+        hasExample: false,
+        hasCta: false,
+        hasNarrativeProgression: false
+      }
+    };
+  }
+
+  const hasHook = normalizedRoles[0] === "hook";
+  const hasMergedProblemAmplify =
+    slides.length <= 8 && normalizedRoles.some((role) => role === "problem");
+  const hasMergedMistakeConsequence =
+    slides.length <= 9 && normalizedRoles.some((role) => role === "mistake");
+  const hasProblem = normalizedRoles.some((role) =>
+    role === "problem" || role === "amplify" || role === "consequence" || role === "mistake"
+  );
+  const hasAmplify =
+    normalizedRoles.some((role) => role === "amplify") ||
+    hasMergedProblemAmplify ||
+    mergedSlides.some((slide) => /(усили|обостр|worse|worsen|escalat|deeper pain|дороже)/i.test(slide));
+  const hasMistake = normalizedRoles.some((role) => role === "mistake");
+  const hasConsequence =
+    normalizedRoles.some((role) => role === "consequence") ||
+    hasMergedMistakeConsequence ||
+    mergedSlides.some(hasConsequenceSignal);
+  const hasShift = normalizedRoles.some((role) => role === "shift");
+  const hasSolution = normalizedRoles.some((role) => role === "solution");
+  const hasStructure =
+    normalizedRoles.some((role) => role === "structure") || mergedSlides.some(hasStructureSignal);
+  const hasExample =
+    normalizedRoles.some((role) => role === "example") || mergedSlides.some(hasProofSignal);
+  const hasMindsetShift = hasShift || mergedSlides.some(hasShiftSignal);
+  const hasNarrativeProgression = hasProblem && (hasConsequence || hasAmplify) && hasShift && hasSolution;
+
+  const lastRole = normalizedRoles[normalizedRoles.length - 1];
+  const lastSlide = slides[slides.length - 1];
+  const hasCta =
+    lastRole === "cta" &&
+    /(напиш|сохран|получ|write|save|send|dm|direct|коммент|директ|чеклист|шаблон)/i.test(
+      `${lastSlide?.title ?? ""}\n${lastSlide?.text ?? ""}`
+    );
+
+  const qualityScore = [
+    hasHook,
+    hasProblem,
+    hasAmplify,
+    hasMistake,
+    hasConsequence,
+    hasShift,
+    hasMindsetShift,
+    hasSolution,
+    hasStructure,
+    hasExample,
+    hasCta
+  ].filter(Boolean).length;
+
+  const isValid =
+    hasHook &&
+    hasNarrativeProgression &&
+    hasMindsetShift &&
+    hasCta &&
+    (hasStructure || hasExample) &&
+    qualityScore >= 8;
+
+  return {
+    isValid,
+    qualityScore,
+    flags: {
+      hasHook,
+      hasProblem,
+      hasAmplify,
+      hasMistake,
+      hasConsequence,
+      hasShift,
+      hasMindsetShift,
+      hasSolution,
+      hasStructure,
+      hasExample,
+      hasCta,
+      hasNarrativeProgression
+    }
+  };
+}
+
+function isValidPainModel(value: unknown): value is PainModelPayload {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const model = value as Record<string, unknown>;
+  const fields: Array<keyof PainModelPayload> = [
+    "pain",
+    "wrongAction",
+    "consequence",
+    "desiredOutcome",
+    "emotionalState"
+  ];
+
+  return fields.every((field) => {
+    const current = model[field];
+    return typeof current === "string" && current.trim().length >= 8;
+  });
+}
+
+function normalizeRole(role: CarouselSlideRole | undefined, index: number, total: number): CarouselSlideRole {
+  if (!role) {
+    return index === 0 ? "hook" : index === total - 1 ? "cta" : "solution";
+  }
+
+  if (role === "cover") {
+    return "hook";
+  }
+
+  if (role === "case") {
+    return "example";
+  }
+
+  if (role === "tip" || role === "summary") {
+    return "solution";
+  }
+
+  if (role === "steps" || role === "checklist") {
+    return "structure";
+  }
+
+  if (role === "comparison") {
+    return "shift";
+  }
+
+  return role;
+}
+
+function hasConsequenceSignal(value: string) {
+  return /(теря|потер|слива|срыв|риски|дорого|loss|risk|drop|leak|fails?)/i.test(value);
+}
+
+function hasStructureSignal(value: string) {
+  return /(шаг|план|структур|чеклист|по порядку|step|plan|framework|checklist|playbook)/i.test(value);
+}
+
+function hasProofSignal(value: string) {
+  return /(кейс|пример|результат|case|example|result|получил|вырос|снизил|grew|increased|reduced)/i.test(value);
+}
+
+function hasShiftSignal(value: string) {
+  return (
+    /это\s+не\s+.+,\s*это\s+.+/i.test(value) ||
+    /\bне\b.+\bа\b.+/i.test(value) ||
+    /not\s+.+,\s*but\s+.+/i.test(value)
+  );
 }

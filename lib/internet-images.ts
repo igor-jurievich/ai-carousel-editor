@@ -283,6 +283,24 @@ type ImageTopicCategory =
   | "business"
   | "generic";
 
+const IMAGE_ROLE_ALIASES: Partial<Record<CarouselSlideRole, CarouselSlideRole>> = {
+  cover: "hook",
+  tip: "solution",
+  steps: "structure",
+  checklist: "structure",
+  case: "example",
+  comparison: "shift",
+  summary: "solution"
+};
+
+function normalizeImageRole(role?: CarouselSlideRole): CarouselSlideRole {
+  if (!role) {
+    return "solution";
+  }
+
+  return IMAGE_ROLE_ALIASES[role] ?? role;
+}
+
 export async function findInternetImagesForCarousel(
   topic: string,
   slides: CarouselOutlineSlide[],
@@ -337,7 +355,7 @@ export async function findInternetImagesForCarousel(
       const topicQuery = normalizeQuery(topic);
       const translatedTopicQuery = normalizeQuery(translateSceneToEnglish(topic));
       const categoryTopicQuery = normalizeQuery(
-        `${getCategoryHintTokens(topicCategory, "cover").join(" ")} ${translatedTopicQuery}`
+        `${getCategoryHintTokens(topicCategory, "hook").join(" ")} ${translatedTopicQuery}`
       );
       const fallbackQueries = Array.from(
         new Set([topicQuery, translatedTopicQuery, categoryTopicQuery].filter(Boolean))
@@ -348,7 +366,7 @@ export async function findInternetImagesForCarousel(
           fallbackQueries,
           topicTokens,
           {
-            role: "cover",
+            role: "hook",
             imageIntent: "subject-photo"
           },
           usedUrls,
@@ -454,14 +472,15 @@ async function findBestCandidateAcrossQueries(
 }
 
 function resolveMinScoreForSlide(role: CarouselSlideRole, intent: CarouselImageIntent) {
+  const normalizedRole = normalizeImageRole(role);
   const roleThreshold =
-    role === "cover"
+    normalizedRole === "hook"
       ? 0.52
-      : role === "case"
+      : normalizedRole === "example"
         ? 0.47
-        : role === "problem"
+        : normalizedRole === "problem" || normalizedRole === "amplify" || normalizedRole === "consequence"
           ? 0.44
-          : role === "comparison"
+          : normalizedRole === "shift"
             ? 0.43
             : 0.4;
 
@@ -485,7 +504,7 @@ function pickTargetSlides(topic: string, slides: CarouselOutlineSlide[], imagesC
         return null;
       }
 
-      const role = slide.role ?? inferRoleByIndex(slideIndex, slides.length);
+      const role = normalizeImageRole(slide.role ?? inferRoleByIndex(slideIndex, slides.length));
       const queryVariants = buildQueryVariants(topic, slide, role, imageIntent);
       if (!queryVariants.length) {
         return null;
@@ -508,9 +527,9 @@ function pickTargetSlides(topic: string, slides: CarouselOutlineSlide[], imagesC
 
   const fallbackCandidates = slides
     .map<SlideImageCandidate | null>((slide, slideIndex) => {
-      const role = inferRoleByIndex(slideIndex, slides.length);
+      const role = normalizeImageRole(inferRoleByIndex(slideIndex, slides.length));
       const imageIntent: CarouselImageIntent =
-        role === "cover" || role === "case" || role === "problem"
+        role === "hook" || role === "example" || role === "problem" || role === "amplify"
           ? "subject-photo"
           : "none";
       if (imageIntent === "none") {
@@ -557,6 +576,7 @@ function buildSlideQuery(
   imageIntent: CarouselImageIntent,
   category: ImageTopicCategory
 ) {
+  const normalizedRole = normalizeImageRole(role);
   const intentHint =
     imageIntent === "people-photo"
       ? "professional people portrait"
@@ -567,17 +587,17 @@ function buildSlideQuery(
           : "subject photo";
 
   const roleHint =
-    role === "case"
+    normalizedRole === "example"
       ? "real case study"
-      : role === "cover"
+      : normalizedRole === "hook"
         ? "hero visual"
-        : role === "comparison"
+        : normalizedRole === "shift"
           ? "comparison concept"
-          : role === "problem"
+          : normalizedRole === "problem" || normalizedRole === "amplify" || normalizedRole === "consequence"
             ? "problem situation"
             : "";
 
-  const categoryHint = getCategoryHintTokens(category, role).join(" ");
+  const categoryHint = getCategoryHintTokens(category, normalizedRole).join(" ");
   const title = normalizeQuery(slide.title);
   const body = tokenize(slide.text).slice(0, 5).join(" ");
   const topicQuery = normalizeQuery(topic);
@@ -592,6 +612,7 @@ function buildTranslatedSemanticQuery(
   imageIntent: CarouselImageIntent,
   category: ImageTopicCategory
 ) {
+  const normalizedRole = normalizeImageRole(role);
   const tokens = tokenize(`${topic} ${slide.title} ${slide.text}`)
     .slice(0, 10)
     .map((token) => TRANSLATIONS[token] ?? token)
@@ -607,15 +628,17 @@ function buildTranslatedSemanticQuery(
           ? ["conceptual", "scene"]
           : ["subject", "photo"];
   const roleTokens =
-    role === "case"
+    normalizedRole === "example"
       ? ["real", "scenario"]
-      : role === "cover"
+      : normalizedRole === "hook"
         ? ["hero", "visual"]
-        : role === "problem"
+        : normalizedRole === "problem" || normalizedRole === "amplify" || normalizedRole === "consequence"
           ? ["situation"]
           : [];
 
-  return normalizeQuery([...getCategoryHintTokens(category, role), ...roleTokens, ...intentTokens, ...tokens].join(" "));
+  return normalizeQuery(
+    [...getCategoryHintTokens(category, normalizedRole), ...roleTokens, ...intentTokens, ...tokens].join(" ")
+  );
 }
 
 function buildIntentFallbackQuery(
@@ -624,15 +647,16 @@ function buildIntentFallbackQuery(
   imageIntent: CarouselImageIntent,
   category: ImageTopicCategory
 ) {
+  const normalizedRole = normalizeImageRole(role);
   const topicTokens = tokenize(topic).slice(0, 4).map((token) => TRANSLATIONS[token] ?? token);
   const roleTokens =
-    role === "case"
+    normalizedRole === "example"
       ? ["business", "meeting", "real", "people"]
-      : role === "cover"
+      : normalizedRole === "hook"
         ? ["hero", "editorial", "clean"]
-        : role === "problem"
+        : normalizedRole === "problem" || normalizedRole === "amplify" || normalizedRole === "consequence"
           ? ["situation", "professional"]
-          : role === "comparison"
+          : normalizedRole === "shift"
             ? ["contrast", "choice"]
             : ["editorial", "clean"];
   const intentTokens =
@@ -643,7 +667,7 @@ function buildIntentFallbackQuery(
         : imageIntent === "conceptual-photo"
           ? ["concept", "scene"]
           : ["subject", "photo"];
-  const categoryTokens = getCategoryHintTokens(category, role);
+  const categoryTokens = getCategoryHintTokens(category, normalizedRole);
 
   return normalizeQuery([...categoryTokens, ...roleTokens, ...intentTokens, ...topicTokens].join(" "));
 }
@@ -655,13 +679,14 @@ function buildCategoryVisualQuery(
   imageIntent: CarouselImageIntent,
   category: ImageTopicCategory
 ) {
-  const categoryTokens = getCategoryHintTokens(category, role);
+  const normalizedRole = normalizeImageRole(role);
+  const categoryTokens = getCategoryHintTokens(category, normalizedRole);
   const roleTokens =
-    role === "cover"
+    normalizedRole === "hook"
       ? ["clean", "hero", "editorial"]
-      : role === "case"
+      : normalizedRole === "example"
         ? ["real", "documentary", "scene"]
-        : role === "problem"
+        : normalizedRole === "problem" || normalizedRole === "amplify" || normalizedRole === "consequence"
           ? ["situation", "realistic"]
           : ["clean", "minimal", "photo"];
   const intentTokens =
@@ -684,14 +709,15 @@ function rankSlideImagePriority(
   intent: CarouselImageIntent,
   imageQueryDraft?: string
 ) {
+  const normalizedRole = normalizeImageRole(role);
   const roleScore =
-    role === "cover"
+    normalizedRole === "hook"
       ? 0.65
-      : role === "case"
+      : normalizedRole === "example"
         ? 0.56
-        : role === "problem"
+        : normalizedRole === "problem" || normalizedRole === "amplify"
           ? 0.44
-          : role === "comparison"
+          : normalizedRole === "shift"
             ? 0.38
             : 0.2;
 
@@ -712,7 +738,7 @@ function rankSlideImagePriority(
 
 function inferRoleByIndex(index: number, total: number): CarouselSlideRole {
   if (index <= 0) {
-    return "cover";
+    return "hook";
   }
 
   if (index >= total - 1) {
@@ -720,10 +746,10 @@ function inferRoleByIndex(index: number, total: number): CarouselSlideRole {
   }
 
   if (index === total - 2) {
-    return "case";
+    return "example";
   }
 
-  return "tip";
+  return "solution";
 }
 
 function pickDistributedCandidates(candidates: SlideImageCandidate[], imagesCount: number) {
@@ -777,8 +803,9 @@ function inferImageTopicCategory(source: string): ImageTopicCategory {
 }
 
 function getCategoryHintTokens(category: ImageTopicCategory, role: CarouselSlideRole) {
+  const normalizedRole = normalizeImageRole(role);
   if (category === "real-estate") {
-    if (role === "case") {
+    if (normalizedRole === "example") {
       return ["real", "estate", "consultation", "office"];
     }
     return ["luxury", "property", "architecture", "interior", "daylight"];
@@ -789,7 +816,7 @@ function getCategoryHintTokens(category: ImageTopicCategory, role: CarouselSlide
   }
 
   if (category === "marketing-sales") {
-    return role === "case"
+    return normalizedRole === "example"
       ? ["business", "meeting", "discussion", "clients"]
       : ["business", "strategy", "workspace", "professional"];
   }
@@ -988,6 +1015,7 @@ function scoreCandidate(
     imageIntent: CarouselImageIntent;
   }
 ) {
+  const normalizedRole = normalizeImageRole(context.role);
   if (!queryTokens.length) {
     return null;
   }
@@ -1057,11 +1085,11 @@ function scoreCandidate(
     return null;
   }
   const roleBonus =
-    context.role === "cover"
+    normalizedRole === "hook"
       ? 0.04
-      : context.role === "case"
+      : normalizedRole === "example"
         ? 0.03
-        : context.role === "problem"
+        : normalizedRole === "problem" || normalizedRole === "amplify" || normalizedRole === "consequence"
           ? 0.02
           : 0;
 

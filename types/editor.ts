@@ -6,13 +6,20 @@ export type TemplateCategoryId = "dark" | "light" | "color";
 export type ElementMetaKey = string;
 export type ImageFitMode = "cover" | "contain" | "original";
 export type CarouselSlideRole =
+  | "hook"
   | "cover"
   | "problem"
+  | "amplify"
   | "myth"
   | "mistake"
+  | "consequence"
+  | "shift"
+  | "solution"
+  | "structure"
   | "tip"
   | "steps"
   | "checklist"
+  | "example"
   | "case"
   | "comparison"
   | "summary"

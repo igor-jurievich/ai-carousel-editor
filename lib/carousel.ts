@@ -837,19 +837,19 @@ function resolveLayoutWithoutImageFallback(
     return layoutType ?? "card";
   }
 
-  if (role === "cover") {
+  if (role === "hook" || role === "cover") {
     return "hero";
   }
 
-  if (role === "problem" || role === "myth") {
+  if (role === "problem" || role === "amplify" || role === "consequence" || role === "myth") {
     return "statement";
   }
 
-  if (role === "mistake" || role === "steps" || role === "checklist") {
+  if (role === "mistake" || role === "structure" || role === "steps" || role === "checklist") {
     return "list";
   }
 
-  if (role === "case" || role === "comparison") {
+  if (role === "example" || role === "case" || role === "shift" || role === "comparison") {
     return "split";
   }
 
