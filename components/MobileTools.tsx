@@ -1,13 +1,8 @@
 "use client";
 
 import { useRef, useState, type MutableRefObject, type TouchEvent } from "react";
-import { getPrimaryTemplates } from "@/lib/carousel";
 import { AppIcon, type AppIconName } from "@/components/icons";
-import type {
-  CanvasElement,
-  CarouselTemplateId,
-  Slide
-} from "@/types/editor";
+import type { CanvasElement } from "@/types/editor";
 
 export type MobileToolTab = "templates" | "background" | "text";
 
@@ -15,13 +10,13 @@ type MobileToolsProps = {
   activeTab: MobileToolTab | null;
   onTabChange: (tab: MobileToolTab | null) => void;
   selectedElement: CanvasElement | null;
-  activeTemplateId: CarouselTemplateId;
+  activeTemplateName: string;
   profileHandle: string;
   profileSubtitle: string;
   hasBackgroundImage: boolean;
   onUploadBackgroundImage: () => void;
   onRemoveBackgroundImage: () => void;
-  onApplyTemplate: (templateId: CarouselTemplateId) => void;
+  onOpenTemplateModal: () => void;
   onProfileHandleChange: (value: string) => void;
   onProfileSubtitleChange: (value: string) => void;
   toolbarRef?: MutableRefObject<HTMLElement | null>;
@@ -40,13 +35,13 @@ export function MobileTools({
   activeTab,
   onTabChange,
   selectedElement,
-  activeTemplateId,
+  activeTemplateName,
   profileHandle,
   profileSubtitle,
   hasBackgroundImage,
   onUploadBackgroundImage,
   onRemoveBackgroundImage,
-  onApplyTemplate,
+  onOpenTemplateModal,
   onProfileHandleChange,
   onProfileSubtitleChange,
   toolbarRef,
@@ -54,7 +49,6 @@ export function MobileTools({
   disabled = false,
   previewMode = false
 }: MobileToolsProps) {
-  const templates = getPrimaryTemplates();
   const swipeRef = useRef<{ startY: number; startX: number; drag: number } | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
   const selectedElementLabel = selectedElement
@@ -178,22 +172,25 @@ export function MobileTools({
 
             {activeTab === "templates" ? (
               <div className="settings-block">
-                <span className="settings-label">Тема карусели</span>
-                <div className="mobile-style-grid">
-                  {templates.map((template) => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      className={`mobile-style-chip ${
-                        activeTemplateId === template.id ? "active" : ""
-                      }`}
-                      onClick={() => onApplyTemplate(template.id)}
-                      disabled={disabled}
-                    >
-                      {template.name}
-                    </button>
-                  ))}
-                </div>
+                <span className="settings-label">Шаблон карусели</span>
+                <button
+                  type="button"
+                  className="template-library-trigger template-library-trigger-mobile"
+                  onClick={() => {
+                    onOpenTemplateModal();
+                    onTabChange(null);
+                  }}
+                  disabled={disabled}
+                >
+                  <span className="template-library-trigger-icon">
+                    <AppIcon name="templates" size={16} />
+                  </span>
+                  <span className="template-library-trigger-copy">
+                    <strong>Открыть библиотеку</strong>
+                    <small>{activeTemplateName}</small>
+                  </span>
+                  <AppIcon name="chevron-right" size={14} />
+                </button>
               </div>
             ) : null}
 

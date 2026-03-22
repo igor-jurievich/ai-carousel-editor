@@ -1,12 +1,7 @@
 "use client";
 
-import { getPrimaryTemplates } from "@/lib/carousel";
 import { AppIcon } from "@/components/icons";
-import type {
-  CarouselTemplateId,
-  Slide,
-  SlideFormat
-} from "@/types/editor";
+import type { Slide, SlideFormat } from "@/types/editor";
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
 
@@ -16,7 +11,7 @@ type SettingsPanelProps = {
   slide: Slide;
   slideIndex: number;
   totalSlides: number;
-  activeTemplateId: CarouselTemplateId;
+  activeTemplateName: string;
   activeFormat: SlideFormat;
   profileHandle: string;
   profileSubtitle: string;
@@ -25,11 +20,11 @@ type SettingsPanelProps = {
   isGenerating?: boolean;
   isExporting?: boolean;
   onExportModeChange: (mode: ExportMode) => void;
-  onExport: () => void;
+  onOpenExportModal: () => void;
   onUploadBackgroundImage: () => void;
   onRemoveBackgroundImage: () => void;
   onFormatChange: (format: SlideFormat) => void;
-  onApplyTemplate: (templateId: CarouselTemplateId) => void;
+  onOpenTemplateModal: () => void;
   onSelectSlide: (slideId: string) => void;
   onInsertSlideAt: (index: number, slideType?: "text" | "image_text" | "big_text") => void;
   onDeleteSlide: (slideId: string) => void;
@@ -45,7 +40,7 @@ export function SettingsPanel({
   slide,
   slideIndex,
   totalSlides,
-  activeTemplateId,
+  activeTemplateName,
   activeFormat,
   profileHandle,
   profileSubtitle,
@@ -54,11 +49,11 @@ export function SettingsPanel({
   isGenerating = false,
   isExporting = false,
   onExportModeChange,
-  onExport,
+  onOpenExportModal,
   onUploadBackgroundImage,
   onRemoveBackgroundImage,
   onFormatChange,
-  onApplyTemplate,
+  onOpenTemplateModal,
   onSelectSlide,
   onInsertSlideAt,
   onDeleteSlide,
@@ -67,7 +62,6 @@ export function SettingsPanel({
   disabled = false,
   previewMode = false
 }: SettingsPanelProps) {
-  const templates = getPrimaryTemplates();
   const activeIndex = Math.max(
     0,
     slides.findIndex((item) => item.id === (activeSlideId ?? slide.id))
@@ -160,20 +154,25 @@ export function SettingsPanel({
       </section>
 
       <section className="settings-card">
-        <h3>Тема Карусели</h3>
-        <div className="mobile-style-grid">
-          {templates.map((template) => (
-            <button
-              key={template.id}
-              type="button"
-              className={`mobile-style-chip ${activeTemplateId === template.id ? "active" : ""}`}
-              onClick={() => onApplyTemplate(template.id)}
-              disabled={disabled}
-            >
-              {template.name}
-            </button>
-          ))}
+        <div className="settings-inline-head">
+          <h3>Шаблон</h3>
+          <span className="status-pill">{activeTemplateName}</span>
         </div>
+        <button
+          type="button"
+          className="template-library-trigger"
+          onClick={onOpenTemplateModal}
+          disabled={disabled}
+        >
+          <span className="template-library-trigger-icon">
+            <AppIcon name="templates" size={16} />
+          </span>
+          <span className="template-library-trigger-copy">
+            <strong>Открыть библиотеку шаблонов</strong>
+            <small>Применяется ко всей карусели</small>
+          </span>
+          <AppIcon name="chevron-right" size={14} />
+        </button>
       </section>
 
       <section className="settings-card">
@@ -259,14 +258,13 @@ export function SettingsPanel({
           <button
             type="button"
             className="btn"
-            onClick={onExport}
+            onClick={onOpenExportModal}
             disabled={disabled || isExporting || isGenerating}
           >
-            {isExporting ? "Экспорт..." : "Экспорт"}
+            {isExporting ? "Экспорт..." : "Выбрать слайды"}
           </button>
         </div>
       </section>
-
     </>
   );
 }

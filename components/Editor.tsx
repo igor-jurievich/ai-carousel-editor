@@ -9,7 +9,9 @@ import { AppIcon } from "@/components/icons";
 import { CanvasEditor } from "@/components/CanvasEditor";
 import { MobileTools, type MobileToolTab } from "@/components/MobileTools";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { SlideExportModal } from "@/components/SlideExportModal";
 import { SlideStage } from "@/components/SlideStage";
+import { TemplateLibraryModal } from "@/components/TemplateLibraryModal";
 import { Toolbar } from "@/components/Toolbar";
 import {
   applyTemplateToSlide,
@@ -80,6 +82,9 @@ export function Editor() {
   const [editingValue, setEditingValue] = useState("");
   const [exportMode, setExportMode] = useState<ExportMode>("zip");
   const [isExportRendering, setIsExportRendering] = useState(false);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [isSlideExportModalOpen, setIsSlideExportModalOpen] = useState(false);
+  const [selectedExportSlideIds, setSelectedExportSlideIds] = useState<string[]>([]);
   const [mobileToolTab, setMobileToolTab] = useState<MobileToolTab | null>(null);
   const [mobileBottomOffset, setMobileBottomOffset] = useState(120);
   const [pendingImageSlideId, setPendingImageSlideId] = useState<string | null>(null);
@@ -315,10 +320,28 @@ export function Editor() {
     () => activeSlide?.templateId ?? slides[0]?.templateId ?? "light",
     [activeSlide, slides]
   );
+  const activeTemplateName = useMemo(
+    () => getTemplate(activeTemplateId).name,
+    [activeTemplateId]
+  );
   const generationLocked = isGenerating || isExportRendering;
   const exportModeLabel = getExportModeLabel(exportMode);
   const canUndo = historyPast.length > 0;
   const canRedo = historyFuture.length > 0;
+
+  useEffect(() => {
+    if (!isSlideExportModalOpen) {
+      return;
+    }
+
+    setSelectedExportSlideIds((current) => {
+      const ordered = slides.map((slide) => slide.id);
+      const currentSet = new Set(current);
+      const synced = ordered.filter((slideId) => currentSet.has(slideId));
+
+      return synced.length > 0 ? synced : ordered;
+    });
+  }, [isSlideExportModalOpen, slides]);
 
   const makeHistorySnapshot = () => ({
     slides: cloneSlides(slides),
@@ -836,6 +859,66 @@ export function Editor() {
     setEditingTextElementId(null);
   };
 
+  const handleOpenTemplateModal = () => {
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
+      return;
+    }
+
+    setIsTemplateModalOpen(true);
+  };
+
+  const handleOpenSlideExportModal = () => {
+    if (isGenerating) {
+      setStatus(GENERATE_LOCK_STATUS);
+      return;
+    }
+
+    if (isExportRendering) {
+      setStatus(EXPORT_LOCK_STATUS);
+      return;
+    }
+
+    if (!slides.length) {
+      setStatus("Добавьте хотя бы один слайд перед экспортом.");
+      return;
+    }
+
+    setSelectedExportSlideIds(slides.map((slide) => slide.id));
+    setIsSlideExportModalOpen(true);
+  };
+
+  const handleToggleExportSlide = (slideId: string) => {
+    setSelectedExportSlideIds((current) => {
+      const selected = new Set(current);
+      if (selected.has(slideId)) {
+        selected.delete(slideId);
+      } else {
+        selected.add(slideId);
+      }
+
+      return slides
+        .map((slide) => slide.id)
+        .filter((orderedSlideId) => selected.has(orderedSlideId));
+    });
+  };
+
+  const handleToggleAllExportSlides = () => {
+    setSelectedExportSlideIds((current) =>
+      current.length === slides.length ? [] : slides.map((slide) => slide.id)
+    );
+  };
+
+  const handleConfirmSlideExport = () => {
+    if (!selectedExportSlideIds.length) {
+      setStatus("Выберите хотя бы один слайд для экспорта.");
+      return;
+    }
+
+    setIsSlideExportModalOpen(false);
+    void handleExport(selectedExportSlideIds);
+  };
+
   const handleFormatChange = (format: SlideFormat) => {
     if (generationLocked) {
       setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
@@ -1054,8 +1137,7 @@ export function Editor() {
     throw lastError ?? new Error("Не удалось подготовить слайд к экспорту.");
   };
 
-  const ensureExportStagesReady = async () => {
-    const targetIds = slides.map((slide) => slide.id);
+  const ensureExportStagesReady = async (targetIds: string[]) => {
     let stageAttempts = 0;
 
     while (stageAttempts < 240) {
@@ -1096,13 +1178,14 @@ export function Editor() {
   };
 
   const exportSlidesAsZip = async (
+    targetSlideIds: string[],
     filenameSuffix = "slides",
     imageType: "png" | "jpg" = "png"
   ) => {
     const zip = new JSZip();
 
-    for (let index = 0; index < slides.length; index += 1) {
-      const rawDataUrl = await getSlideDataUrl(slides[index].id);
+    for (let index = 0; index < targetSlideIds.length; index += 1) {
+      const rawDataUrl = await getSlideDataUrl(targetSlideIds[index]);
       const exportDataUrl =
         imageType === "jpg" ? await convertDataUrlToJpeg(rawDataUrl) : rawDataUrl;
       const base64 = exportDataUrl.replace(/^data:image\/(?:png|jpeg);base64,/, "");
@@ -1113,7 +1196,7 @@ export function Editor() {
     saveAs(blob, `${slugify(projectTitleFromTopic(topic))}-${filenameSuffix}.zip`);
   };
 
-  const handleExport = async () => {
+  const handleExport = async (requestedSlideIds?: string[]) => {
     if (isGenerating) {
       setStatus(GENERATE_LOCK_STATUS);
       return;
@@ -1128,16 +1211,27 @@ export function Editor() {
       if (!slides.length) {
         return;
       }
+      const selectedIds = requestedSlideIds?.length
+        ? new Set(requestedSlideIds)
+        : new Set(slides.map((slide) => slide.id));
+      const targetSlides = slides.filter((slide) => selectedIds.has(slide.id));
+      const targetSlideIds = targetSlides.map((slide) => slide.id);
+
+      if (!targetSlideIds.length) {
+        throw new Error("Выберите хотя бы один слайд для экспорта.");
+      }
+
+      const firstExportSlideIndex = slides.findIndex((slide) => slide.id === targetSlideIds[0]);
       let lastAttemptError: unknown = null;
 
       for (let attempt = 1; attempt <= EXPORT_ATTEMPTS_MAX; attempt += 1) {
         try {
           setStatus(
-            `Подготавливаю экспорт: ${exportModeLabel} (${attempt}/${EXPORT_ATTEMPTS_MAX}).`
+            `Подготавливаю экспорт: ${exportModeLabel}, ${targetSlideIds.length} слайд(ов) (${attempt}/${EXPORT_ATTEMPTS_MAX}).`
           );
           await ensureFontsReadyForExport();
 
-          const imagesReady = await ensureExportStagesReady();
+          const imagesReady = await ensureExportStagesReady(targetSlideIds);
           if (!imagesReady) {
             throw new Error(
               "Не удалось дождаться загрузки всех изображений для экспорта. Повторите попытку через несколько секунд."
@@ -1147,21 +1241,23 @@ export function Editor() {
           if (exportMode === "png" || exportMode === "jpg") {
             const imageType = exportMode === "jpg" ? "jpg" : "png";
 
-            if (slides.length === 1) {
-              const rawDataUrl = await getSlideDataUrl(slides[0].id);
+            if (targetSlideIds.length === 1) {
+              const rawDataUrl = await getSlideDataUrl(targetSlideIds[0]);
               const exportDataUrl =
                 imageType === "jpg" ? await convertDataUrlToJpeg(rawDataUrl) : rawDataUrl;
               const blob = await dataUrlToBlob(exportDataUrl);
-              saveAs(blob, `${slugify(projectTitleFromTopic(topic))}-slide1.${imageType}`);
+              const slideNumber = firstExportSlideIndex >= 0 ? firstExportSlideIndex + 1 : 1;
+              saveAs(blob, `${slugify(projectTitleFromTopic(topic))}-slide${slideNumber}.${imageType}`);
               setStatus(`${imageType.toUpperCase()} скачан.`);
               return;
             }
 
             await exportSlidesAsZip(
+              targetSlideIds,
               imageType === "jpg" ? "slides-jpg" : "slides-png",
               imageType
             );
-            setStatus(`${imageType.toUpperCase()} всех слайдов скачаны одним архивом.`);
+            setStatus(`${imageType.toUpperCase()} экспортирован архивом (${targetSlideIds.length} шт.).`);
             return;
           }
 
@@ -1172,8 +1268,8 @@ export function Editor() {
               format: [slideDimensions.width, slideDimensions.height]
             });
 
-            for (let index = 0; index < slides.length; index += 1) {
-              const dataUrl = await getSlideDataUrl(slides[index].id);
+            for (let index = 0; index < targetSlideIds.length; index += 1) {
+              const dataUrl = await getSlideDataUrl(targetSlideIds[index]);
 
               if (index > 0) {
                 pdf.addPage([slideDimensions.width, slideDimensions.height], "portrait");
@@ -1183,12 +1279,12 @@ export function Editor() {
             }
 
             pdf.save(`${slugify(projectTitleFromTopic(topic))}.pdf`);
-            setStatus("PDF экспортирован.");
+            setStatus(`PDF экспортирован (${targetSlideIds.length} слайд(ов)).`);
             return;
           }
 
-          await exportSlidesAsZip("slides", "png");
-          setStatus("Архив со слайдами скачан.");
+          await exportSlidesAsZip(targetSlideIds, "slides", "png");
+          setStatus(`Архив со слайдами скачан (${targetSlideIds.length} шт.).`);
           return;
         } catch (attemptError) {
           lastAttemptError = attemptError;
@@ -1254,6 +1350,15 @@ export function Editor() {
               <button
                 className="rail-button"
                 type="button"
+                title="Выбрать шаблон"
+                onClick={handleOpenTemplateModal}
+                disabled={generationLocked}
+              >
+                <AppIcon name="templates" size={18} />
+              </button>
+              <button
+                className="rail-button"
+                type="button"
                 title={isPreviewMode ? "Вернуться в режим редактирования" : "Режим предпросмотра"}
                 onClick={() => setIsPreviewMode((value) => !value)}
                 disabled={generationLocked}
@@ -1313,7 +1418,7 @@ export function Editor() {
                   slide={activeSlide}
                   slideIndex={activeSlideIndex}
                   totalSlides={slides.length}
-                  activeTemplateId={activeTemplateId}
+                  activeTemplateName={activeTemplateName}
                   activeFormat={slideFormat}
                   profileHandle={activeSlide.profileHandle ?? ""}
                   profileSubtitle={activeSlide.profileSubtitle ?? ""}
@@ -1322,7 +1427,7 @@ export function Editor() {
                   isGenerating={isGenerating}
                   isExporting={isExportRendering}
                   onExportModeChange={setExportMode}
-                  onExport={handleExport}
+                  onOpenExportModal={handleOpenSlideExportModal}
                   onUploadBackgroundImage={() => handleAddBackgroundImage(activeSlide.id)}
                   onRemoveBackgroundImage={() => {
                     if (activeSlideIndex === -1) {
@@ -1336,7 +1441,7 @@ export function Editor() {
                     setStatus("Фоновое изображение удалено.");
                   }}
                   onFormatChange={handleFormatChange}
-                  onApplyTemplate={handleApplyTemplate}
+                  onOpenTemplateModal={handleOpenTemplateModal}
                   onSelectSlide={handleSelectSlide}
                   onInsertSlideAt={handleInsertSlideAt}
                   onDeleteSlide={handleDeleteSlide}
@@ -1423,7 +1528,7 @@ export function Editor() {
             <button
               className="mobile-export-button"
               type="button"
-              onClick={handleExport}
+              onClick={handleOpenSlideExportModal}
               disabled={isExportRendering || isGenerating}
               title={`Экспорт в ${exportModeLabel}`}
             >
@@ -1512,7 +1617,7 @@ export function Editor() {
               activeTab={mobileToolTab}
               onTabChange={setMobileToolTab}
               selectedElement={selectedElement}
-              activeTemplateId={activeTemplateId}
+              activeTemplateName={activeTemplateName}
               profileHandle={activeSlide.profileHandle ?? ""}
               profileSubtitle={activeSlide.profileSubtitle ?? ""}
               hasBackgroundImage={activeHasBackgroundImage}
@@ -1528,7 +1633,7 @@ export function Editor() {
                 setEditingTextElementId(null);
                 setStatus("Фоновое изображение удалено.");
               }}
-              onApplyTemplate={handleApplyTemplate}
+              onOpenTemplateModal={handleOpenTemplateModal}
               onProfileHandleChange={(value) => handleUpdateFooter({ profileHandle: value })}
               onProfileSubtitleChange={(value) => handleUpdateFooter({ profileSubtitle: value })}
               toolbarRef={mobileToolbarRef}
@@ -1539,6 +1644,24 @@ export function Editor() {
           ) : null}
         </div>
       </div>
+
+      <TemplateLibraryModal
+        isOpen={isTemplateModalOpen}
+        activeTemplateId={activeTemplateId}
+        onApplyTemplate={handleApplyTemplate}
+        onClose={() => setIsTemplateModalOpen(false)}
+      />
+
+      <SlideExportModal
+        isOpen={isSlideExportModalOpen}
+        slides={slides}
+        selectedSlideIds={selectedExportSlideIds}
+        exportModeLabel={exportModeLabel}
+        onToggleSlide={handleToggleExportSlide}
+        onToggleAll={handleToggleAllExportSlides}
+        onConfirm={handleConfirmSlideExport}
+        onClose={() => setIsSlideExportModalOpen(false)}
+      />
 
       <input
         ref={imageInputRef}
