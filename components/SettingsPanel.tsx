@@ -69,7 +69,7 @@ export function SettingsPanel({
 
   if (previewMode) {
     return (
-      <section className="settings-card">
+      <section className="settings-card settings-card-slides">
         <h3>Preview mode</h3>
         <div className="settings-hint">
           Режим просмотра скрывает управляющие элементы на canvas. Отключите Preview, чтобы
@@ -125,7 +125,7 @@ export function SettingsPanel({
           })}
         </div>
 
-        <div className="field-row" style={{ marginTop: 12 }}>
+        <div className="field-row field-row-add">
           <button
             type="button"
             className="ghost-chip"
@@ -153,7 +153,7 @@ export function SettingsPanel({
         </div>
       </section>
 
-      <section className="settings-card">
+      <section className="settings-card settings-card-template">
         <div className="settings-inline-head">
           <h3>Шаблон</h3>
           <span className="status-pill">{activeTemplateName}</span>
@@ -175,7 +175,7 @@ export function SettingsPanel({
         </button>
       </section>
 
-      <section className="settings-card">
+      <section className="settings-card settings-card-format">
         <h3>Формат</h3>
         <div className="segment-control">
           {(["1:1", "4:5", "9:16"] as SlideFormat[]).map((format) => (
@@ -192,9 +192,9 @@ export function SettingsPanel({
         </div>
       </section>
 
-      <section className="settings-card">
+      <section className="settings-card settings-card-photo">
         <h3>Фото</h3>
-        <div className="field-row">
+        <div className="field-row field-row-actions">
           <button
             type="button"
             className="ghost-chip"
@@ -217,7 +217,7 @@ export function SettingsPanel({
         </div>
       </section>
 
-      <section className="settings-card">
+      <section className="settings-card settings-card-signature">
         <h3>Подпись</h3>
         <label className="field-label">
           Ник
@@ -241,9 +241,9 @@ export function SettingsPanel({
         </label>
       </section>
 
-      <section className="settings-card">
+      <section className="settings-card settings-card-export">
         <h3>Экспорт</h3>
-        <div className="field-row">
+        <div className="field-row field-row-export">
           <select
             className="select"
             value={exportMode}

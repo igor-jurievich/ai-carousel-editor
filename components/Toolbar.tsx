@@ -42,23 +42,30 @@ export function Toolbar({
           title={`Максимум ${topicMaxLength} символов`}
           disabled={disabled}
         />
-        <label className="prompt-count-field">
-          <span>Карточек</span>
-          <select
-            value={slidesCount}
-            onChange={(event) => onSlidesCountChange(Number(event.target.value))}
-            disabled={disabled}
+        <div className="prompt-actions">
+          <label className="prompt-count-field">
+            <span>Карточек</span>
+            <select
+              value={slidesCount}
+              onChange={(event) => onSlidesCountChange(Number(event.target.value))}
+              disabled={disabled}
+            >
+              {SLIDES_COUNT_OPTIONS.map((count) => (
+                <option key={count} value={count}>
+                  {count}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="btn prompt-generate-btn"
+            type="button"
+            onClick={onGenerate}
+            disabled={isGenerating || disabled}
           >
-            {SLIDES_COUNT_OPTIONS.map((count) => (
-              <option key={count} value={count}>
-                {count}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="btn" type="button" onClick={onGenerate} disabled={isGenerating || disabled}>
-          {isGenerating ? "Генерирую..." : "Сгенерировать"}
-        </button>
+            {isGenerating ? "Генерирую..." : "Сгенерировать"}
+          </button>
+        </div>
       </div>
 
       <div className="prompt-status">{status}</div>

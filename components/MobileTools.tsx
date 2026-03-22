@@ -113,7 +113,7 @@ export function MobileTools({
             toolbarRef.current = node;
           }
         }}
-        className="mobile-bottom-toolbar"
+        className={`mobile-bottom-toolbar ${activeTab ? "is-sheet-open" : ""}`}
         aria-label="Панель инструментов"
       >
         {TOOLBAR_ITEMS.map((item) => {
@@ -167,7 +167,7 @@ export function MobileTools({
             </button>
           </div>
 
-          <div className="mobile-tool-sheet-body">
+          <div className={`mobile-tool-sheet-body mobile-tool-sheet-body-${activeTab}`}>
             <div className="settings-selected-pill">{selectedElementLabel}</div>
 
             {activeTab === "templates" ? (
