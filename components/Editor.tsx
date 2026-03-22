@@ -301,6 +301,10 @@ export function Editor() {
     () => activeSlide?.elements.find((element) => element.id === selectedElementId) ?? null,
     [activeSlide, selectedElementId]
   );
+  const selectedTextElement = useMemo(
+    () => (selectedElement?.type === "text" ? selectedElement : null),
+    [selectedElement]
+  );
   const activeHasBackgroundImage = Boolean(activeSlide?.backgroundImage);
 
   const editingTextElement = useMemo(() => {
@@ -955,6 +959,89 @@ export function Editor() {
     setEditingTextElementId(null);
   };
 
+  const updateSelectedTextElement = (
+    updater: (element: TextElement) => TextElement,
+    options?: { recordHistory?: boolean }
+  ) => {
+    if (!selectedTextElement) {
+      return;
+    }
+
+    updateElement(
+      selectedTextElement.id,
+      (element) => (element.type === "text" ? updater(element) : element),
+      options
+    );
+  };
+
+  const handleSelectedTextChange = (value: string) => {
+    updateSelectedTextElement(
+      (element) => ({
+        ...element,
+        text: value
+      }),
+      { recordHistory: false }
+    );
+  };
+
+  const handleSelectedTextColorChange = (value: string) => {
+    updateSelectedTextElement(
+      (element) => ({
+        ...element,
+        fill: value
+      }),
+      { recordHistory: false }
+    );
+  };
+
+  const handleSelectedTextFontChange = (value: string) => {
+    updateSelectedTextElement(
+      (element) => ({
+        ...element,
+        fontFamily: value
+      }),
+      { recordHistory: false }
+    );
+  };
+
+  const handleSelectedTextSizeChange = (value: number) => {
+    const nextSize = Math.max(14, Math.min(96, Math.round(value)));
+    updateSelectedTextElement(
+      (element) => ({
+        ...element,
+        fontSize: nextSize
+      }),
+      { recordHistory: false }
+    );
+  };
+
+  const handleSelectedTextCaseChange = (
+    mode: "normal" | "uppercase" | "lowercase" | "capitalize"
+  ) => {
+    updateSelectedTextElement(
+      (element) => ({
+        ...element,
+        text: transformTextCase(element.text, mode)
+      }),
+      { recordHistory: false }
+    );
+  };
+
+  const handleSlideBackgroundColorChange = (value: string) => {
+    if (!activeSlide) {
+      return;
+    }
+
+    updateSlide(
+      activeSlide.id,
+      (slide) => ({
+        ...slide,
+        background: value
+      }),
+      { recordHistory: false }
+    );
+  };
+
   const handleStartTextEditing = (slideId: string, elementId: string) => {
     if (generationLocked) {
       return;
@@ -1403,6 +1490,7 @@ export function Editor() {
                 onDeleteSelectedElement={handleDeleteElement}
                 onMoveSlide={handleMoveSlide}
                 onDeleteSlide={handleDeleteSlide}
+                onOpenTemplateModal={handleOpenTemplateModal}
                 disabled={generationLocked}
                 previewMode={isPreviewMode}
                 showSlideBadge={false}
@@ -1459,7 +1547,7 @@ export function Editor() {
       <div className="mobile-only">
         <div className="mobile-editor-shell">
           <header className="mobile-topbar">
-            <div className="mobile-top-actions">
+            <div className="mobile-top-left">
               <button
                 className="mobile-icon-button"
                 type="button"
@@ -1478,27 +1566,9 @@ export function Editor() {
               >
                 <AppIcon name="history-forward" size={16} />
               </button>
-              <button
-                className="mobile-icon-button"
-                type="button"
-                title={isPreviewMode ? "Выключить превью" : "Включить превью"}
-                onClick={() => setIsPreviewMode((value) => !value)}
-                disabled={generationLocked}
-              >
-                <AppIcon name={isPreviewMode ? "eye-off" : "eye"} size={16} />
-              </button>
-              <button
-                className="mobile-icon-button mobile-icon-button-muted"
-                type="button"
-                title="Новая сессия"
-                onClick={handleResetSession}
-                disabled={generationLocked}
-              >
-                <AppIcon name="reset" size={16} />
-              </button>
             </div>
 
-            <div className="mobile-top-selects">
+            <div className="mobile-top-center">
               <select
                 className="mobile-compact-select"
                 value={slideFormat}
@@ -1510,19 +1580,6 @@ export function Editor() {
                 <option value="4:5">4:5</option>
                 <option value="9:16">9:16</option>
               </select>
-
-              <select
-                className="mobile-export-mode-select"
-                value={exportMode}
-                onChange={(event) => setExportMode(event.target.value as ExportMode)}
-                aria-label="Режим экспорта"
-                disabled={generationLocked}
-              >
-                <option value="zip">ZIP</option>
-                <option value="png">PNG</option>
-                <option value="jpg">JPG</option>
-                <option value="pdf">PDF</option>
-              </select>
             </div>
 
             <button
@@ -1532,7 +1589,8 @@ export function Editor() {
               disabled={isExportRendering || isGenerating}
               title={`Экспорт в ${exportModeLabel}`}
             >
-              {isExportRendering ? "Экспорт..." : `Экспорт ${exportModeLabel}`}
+              <AppIcon name="download" size={16} />
+              <span>{isExportRendering ? "Экспорт..." : "Экспорт"}</span>
             </button>
           </header>
 
@@ -1605,6 +1663,7 @@ export function Editor() {
               onDeleteSelectedElement={handleDeleteElement}
               onMoveSlide={handleMoveSlide}
               onDeleteSlide={handleDeleteSlide}
+              onOpenTemplateModal={handleOpenTemplateModal}
               disabled={generationLocked}
               previewMode={isPreviewMode}
               showSlideBadge={false}
@@ -1617,10 +1676,12 @@ export function Editor() {
               activeTab={mobileToolTab}
               onTabChange={setMobileToolTab}
               selectedElement={selectedElement}
+              selectedTextElement={selectedTextElement}
               activeTemplateName={activeTemplateName}
               profileHandle={activeSlide.profileHandle ?? ""}
               profileSubtitle={activeSlide.profileSubtitle ?? ""}
               hasBackgroundImage={activeHasBackgroundImage}
+              slideBackground={activeSlide.background}
               onUploadBackgroundImage={() => handleAddBackgroundImage(activeSlide.id)}
               onRemoveBackgroundImage={() => {
                 if (activeSlideIndex === -1) {
@@ -1636,6 +1697,12 @@ export function Editor() {
               onOpenTemplateModal={handleOpenTemplateModal}
               onProfileHandleChange={(value) => handleUpdateFooter({ profileHandle: value })}
               onProfileSubtitleChange={(value) => handleUpdateFooter({ profileSubtitle: value })}
+              onSlideBackgroundChange={handleSlideBackgroundColorChange}
+              onSelectedTextChange={handleSelectedTextChange}
+              onSelectedTextColorChange={handleSelectedTextColorChange}
+              onSelectedTextFontChange={handleSelectedTextFontChange}
+              onSelectedTextSizeChange={handleSelectedTextSizeChange}
+              onSelectedTextCaseChange={handleSelectedTextCaseChange}
               toolbarRef={mobileToolbarRef}
               toolSheetRef={mobileToolSheetRef}
               disabled={generationLocked}
@@ -1656,7 +1723,9 @@ export function Editor() {
         isOpen={isSlideExportModalOpen}
         slides={slides}
         selectedSlideIds={selectedExportSlideIds}
+        exportMode={exportMode}
         exportModeLabel={exportModeLabel}
+        onExportModeChange={setExportMode}
         onToggleSlide={handleToggleExportSlide}
         onToggleAll={handleToggleAllExportSlides}
         onConfirm={handleConfirmSlideExport}
@@ -1886,6 +1955,28 @@ function slugify(value: string) {
     .replace(/[^a-z0-9а-яё]+/gi, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+function transformTextCase(
+  value: string,
+  mode: "normal" | "uppercase" | "lowercase" | "capitalize"
+) {
+  if (mode === "uppercase") {
+    return value.toUpperCase();
+  }
+
+  if (mode === "lowercase") {
+    return value.toLowerCase();
+  }
+
+  if (mode === "capitalize") {
+    return value.replace(
+      /\p{L}+/gu,
+      (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    );
+  }
+
+  return value;
 }
 
 async function downscaleDataUrl(dataUrl: string, maxSide: number) {

@@ -30,14 +30,14 @@ export function TemplateLibraryModal({
   onClose
 }: TemplateLibraryModalProps) {
   const templates = useMemo(() => getPrimaryTemplates(), []);
-  const [expandedCategory, setExpandedCategory] = useState<CarouselTemplateId>(activeTemplateId);
+  const [activeCategory, setActiveCategory] = useState<CarouselTemplateId>(activeTemplateId);
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    setExpandedCategory(activeTemplateId);
+    setActiveCategory(activeTemplateId);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -50,6 +50,8 @@ export function TemplateLibraryModal({
     return null;
   }
 
+  const visibleTemplates = templates.filter((template) => template.id === activeCategory);
+
   return (
     <div className="editor-modal-overlay" onClick={onClose} role="presentation">
       <section
@@ -60,7 +62,7 @@ export function TemplateLibraryModal({
         aria-label="Выбор шаблона"
       >
         <header className="editor-modal-header">
-          <h3>Выбор шаблона</h3>
+          <h3>Шаблоны</h3>
           <button
             type="button"
             className="editor-modal-close"
@@ -71,52 +73,47 @@ export function TemplateLibraryModal({
           </button>
         </header>
 
-        <div className="editor-modal-content template-library-content">
-          {TEMPLATE_CATEGORIES.map((category) => {
-            const isExpanded = expandedCategory === category.id;
-            const template =
-              templates.find((item) => item.id === category.id) ?? templates[0];
+        <div className="editor-modal-content template-library-content template-library-content-v2">
+          <div className="template-library-topline">
+            <button type="button" className="template-create-button" disabled>
+              Создать шаблон
+            </button>
+          </div>
 
-            return (
-              <section key={category.id} className="template-library-section">
-                <button
-                  type="button"
-                  className={`template-library-section-toggle ${isExpanded ? "is-expanded" : ""}`}
-                  onClick={() =>
-                    setExpandedCategory((current) =>
-                      current === category.id ? activeTemplateId : category.id
-                    )
-                  }
-                >
-                  <span>{category.title}</span>
-                  <span className="template-library-section-arrow">
-                    <AppIcon name="chevron-right" size={16} />
-                  </span>
-                </button>
+          <div className="template-library-categories-row">
+            {TEMPLATE_CATEGORIES.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                className={`template-library-category-tab ${
+                  activeCategory === category.id ? "active" : ""
+                }`}
+                onClick={() => setActiveCategory(category.id)}
+              >
+                {category.title}
+              </button>
+            ))}
+          </div>
 
-                {isExpanded ? (
-                  <div className="template-library-grid">
-                    <button
-                      type="button"
-                      className={`template-library-card ${
-                        activeTemplateId === template.id ? "active" : ""
-                      }`}
-                      onClick={() => {
-                        onApplyTemplate(template.id);
-                        onClose();
-                      }}
-                    >
-                      <TemplatePreview template={template} />
-                      <div className="template-library-card-meta">
-                        <strong>{template.name}</strong>
-                        <span>{template.preview ?? template.description}</span>
-                      </div>
-                    </button>
-                  </div>
-                ) : null}
-              </section>
-            );
-          })}
+          <div className="template-library-grid template-library-grid-v2">
+            {visibleTemplates.map((template) => (
+              <button
+                key={template.id}
+                type="button"
+                className={`template-library-card ${activeTemplateId === template.id ? "active" : ""}`}
+                onClick={() => {
+                  onApplyTemplate(template.id);
+                  onClose();
+                }}
+              >
+                <TemplatePreview template={template} />
+                <div className="template-library-card-meta">
+                  <strong>{template.name}</strong>
+                  <span>{template.preview ?? template.description}</span>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </section>
     </div>

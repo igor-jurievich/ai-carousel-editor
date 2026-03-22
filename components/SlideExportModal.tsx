@@ -8,7 +8,9 @@ type SlideExportModalProps = {
   isOpen: boolean;
   slides: Slide[];
   selectedSlideIds: string[];
+  exportMode: "zip" | "png" | "jpg" | "pdf";
   exportModeLabel: string;
+  onExportModeChange: (mode: "zip" | "png" | "jpg" | "pdf") => void;
   onToggleSlide: (slideId: string) => void;
   onToggleAll: () => void;
   onConfirm: () => void;
@@ -19,7 +21,9 @@ export function SlideExportModal({
   isOpen,
   slides,
   selectedSlideIds,
+  exportMode,
   exportModeLabel,
+  onExportModeChange,
   onToggleSlide,
   onToggleAll,
   onConfirm,
@@ -66,6 +70,20 @@ export function SlideExportModal({
         </header>
 
         <div className="editor-modal-content slide-export-content">
+          <div className="slide-export-mode-row">
+            <span>Формат</span>
+            <select
+              className="select"
+              value={exportMode}
+              onChange={(event) => onExportModeChange(event.target.value as "zip" | "png" | "jpg" | "pdf")}
+            >
+              <option value="zip">ZIP (PNG)</option>
+              <option value="png">PNG</option>
+              <option value="jpg">JPG</option>
+              <option value="pdf">PDF</option>
+            </select>
+          </div>
+
           <label className="slide-export-all-toggle">
             <input type="checkbox" checked={isAllSelected} onChange={onToggleAll} />
             <span>Все слайды ({slides.length})</span>

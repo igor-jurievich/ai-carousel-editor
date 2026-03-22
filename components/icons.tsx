@@ -32,7 +32,9 @@ export type AppIconName =
   | "strike"
   | "history-back"
   | "history-forward"
-  | "close";
+  | "close"
+  | "layers"
+  | "download";
 
 type AppIconProps = {
   name: AppIconName;
@@ -288,6 +290,22 @@ function renderIcon(name: AppIconName) {
         <>
           <path d="M6 6l12 12" />
           <path d="M18 6L6 18" />
+        </>
+      );
+    case "layers":
+      return (
+        <>
+          <path d="M12 4 4 8l8 4 8-4-8-4z" />
+          <path d="M4 12l8 4 8-4" />
+          <path d="M4 16l8 4 8-4" />
+        </>
+      );
+    case "download":
+      return (
+        <>
+          <path d="M12 4v10" />
+          <path d="m8 10 4 4 4-4" />
+          <path d="M4 19h16" />
         </>
       );
     default:
