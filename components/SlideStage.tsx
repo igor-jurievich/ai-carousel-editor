@@ -53,6 +53,10 @@ const ROTATION_SNAP_VALUES = [-180, -90, 0, 90, 180];
 const ROTATION_SNAP_THRESHOLD = 6;
 const EMPTY_GUIDES: SnapGuides = { vertical: [], horizontal: [] };
 const NON_INTERACTIVE_TEXT_META_KEYS = new Set(["managed-title-accent"]);
+const UI_ACCENT = "#2caea1";
+const UI_ACCENT_SOFT = "rgba(86, 207, 194, 0.24)";
+const UI_ACCENT_FAINT = "rgba(86, 207, 194, 0.12)";
+const UI_ACCENT_GUIDE = "rgba(86, 207, 194, 0.72)";
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
@@ -317,7 +321,7 @@ function SlideImageNode({
   const darken = clamp(element.darken ?? 0, 0, 1);
   const outlineStroke =
     selected
-      ? "#f25a2b"
+      ? UI_ACCENT
       : element.strokeWidth && element.strokeWidth > 0
         ? element.stroke
         : undefined;
@@ -354,7 +358,7 @@ function SlideImageNode({
         stroke={outlineStroke}
         strokeWidth={outlineWidth}
         shadowBlur={selected ? 18 : 0}
-        shadowColor={selected ? "rgba(242, 90, 43, 0.32)" : undefined}
+        shadowColor={selected ? UI_ACCENT_SOFT : undefined}
       />
       {darken > 0 ? (
         <Rect
@@ -402,10 +406,10 @@ function SlideShapeNode({
       opacity={element.opacity}
       rotation={element.rotation}
       cornerRadius={element.shape === "circle" ? Math.min(element.width, element.height) / 2 : element.cornerRadius}
-      stroke={selected ? "#f25a2b" : element.stroke}
+      stroke={selected ? UI_ACCENT : element.stroke}
       strokeWidth={selected ? 4 : element.strokeWidth}
       shadowBlur={selected ? 14 : 0}
-      shadowColor={selected ? "rgba(242, 90, 43, 0.24)" : undefined}
+      shadowColor={selected ? UI_ACCENT_SOFT : undefined}
       listening={interactive}
       draggable={interactive && selected}
       dragDistance={10}
@@ -671,7 +675,7 @@ export function SlideStage({
               y={safeArea.top}
               width={Math.max(4, safeArea.right - safeArea.left)}
               height={Math.max(4, safeArea.bottom - safeArea.top)}
-              stroke="rgba(242, 90, 43, 0.24)"
+              stroke={UI_ACCENT_SOFT}
               strokeWidth={1.2}
               dash={[8, 8]}
               listening={false}
@@ -681,7 +685,7 @@ export function SlideStage({
               y={safeArea.top}
               width={1}
               height={Math.max(4, safeArea.bottom - safeArea.top)}
-              fill="rgba(242, 90, 43, 0.12)"
+              fill={UI_ACCENT_FAINT}
               listening={false}
             />
             <Rect
@@ -689,7 +693,7 @@ export function SlideStage({
               y={canvasHeight / 2}
               width={Math.max(4, safeArea.right - safeArea.left)}
               height={1}
-              fill="rgba(242, 90, 43, 0.12)"
+              fill={UI_ACCENT_FAINT}
               listening={false}
             />
           </>
@@ -702,7 +706,7 @@ export function SlideStage({
             y={safeArea.top}
             width={1.4}
             height={Math.max(4, safeArea.bottom - safeArea.top)}
-            fill="rgba(242, 90, 43, 0.72)"
+            fill={UI_ACCENT_GUIDE}
             listening={false}
           />
         ))}
@@ -713,7 +717,7 @@ export function SlideStage({
             y={value}
             width={Math.max(4, safeArea.right - safeArea.left)}
             height={1.4}
-            fill="rgba(242, 90, 43, 0.72)"
+            fill={UI_ACCENT_GUIDE}
             listening={false}
           />
         ))}
@@ -847,9 +851,9 @@ export function SlideStage({
                   ? ["top-center", "bottom-center"]
                 : ["top-left", "top-right", "bottom-left", "bottom-right"]
             }
-            borderStroke="#f25a2b"
+            borderStroke={UI_ACCENT}
             anchorFill="#ffffff"
-            anchorStroke="#c34a24"
+            anchorStroke="#278f85"
             anchorStrokeWidth={1}
             anchorSize={10}
             boundBoxFunc={(oldBox, newBox) => {

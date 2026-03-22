@@ -298,13 +298,13 @@ export function MobileTools({
                       <input
                         type="color"
                         className="color-input"
-                        value={selectedTextElement?.fill ?? "#f25a2b"}
+                        value={selectedTextElement?.fill ?? "#56cfc2"}
                         onChange={(event) => onSelectedTextColorChange(event.target.value)}
                         disabled={disabled || !selectedTextElement}
                       />
                       <input
                         className="field"
-                        value={(selectedTextElement?.fill ?? "#f25a2b").toUpperCase()}
+                        value={(selectedTextElement?.fill ?? "#56cfc2").toUpperCase()}
                         readOnly
                       />
                     </div>

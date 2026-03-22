@@ -476,39 +476,22 @@ function resolveTitleAccent(title: string) {
   }
 
   const candidates: AccentCandidate[] = [];
-
   const pushCandidate = (rawText: string, startIndex: number, score: number) => {
     const text = trimAccentEdge(rawText);
-    if (!text || text.length < 3 || text.length > 32 || startIndex < 0) {
+    if (
+      !text ||
+      text.includes(" ") ||
+      text.includes("\n") ||
+      text.length < 4 ||
+      text.length > 22 ||
+      startIndex < 0
+    ) {
       return;
     }
     candidates.push({ text, startIndex, score });
   };
 
-  if (/^одно слово\b/iu.test(normalized)) {
-    pushCandidate(normalized.slice(0, "одно слово".length), 0, 220);
-  }
-
-  const colonIndex = normalized.indexOf(":");
-  if (colonIndex > 0 && colonIndex < 28) {
-    pushCandidate(normalized.slice(0, colonIndex + 1), 0, 200);
-  }
-
-  const quotedPattern = /["«](.{3,30}?)["»]/gu;
-  for (const match of normalized.matchAll(quotedPattern)) {
-    if (typeof match.index === "number" && match[1]) {
-      pushCandidate(match[1], match.index + 1, 190);
-    }
-  }
-
-  const numberPattern = /\d+\s*[^\n?!.,]{0,20}/gu;
-  for (const match of normalized.matchAll(numberPattern)) {
-    if (typeof match.index === "number") {
-      pushCandidate(match[0], match.index, match.index <= 14 ? 185 : 160);
-    }
-  }
-
-  const tokenPattern = /\S+/gu;
+  const tokenPattern = /[\p{L}\p{N}-]+/gu;
   const tokens = Array.from(normalized.matchAll(tokenPattern));
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
@@ -516,35 +499,51 @@ function resolveTitleAccent(title: string) {
     const lower = value.toLocaleLowerCase("ru-RU");
     const tokenStart = token.index ?? 0;
 
-    if (value.includes("-")) {
-      pushCandidate(value, tokenStart, 175);
+    if (ACCENT_STOP_WORDS.has(lower)) {
+      continue;
     }
 
+    let score = 0;
     IMPACT_WORD_PATTERN.lastIndex = 0;
     if (IMPACT_WORD_PATTERN.test(value)) {
-      const previous = tokens[index - 1]?.[0] ?? "";
-      const previousLower = previous.toLocaleLowerCase("ru-RU");
-      const canUsePrev =
-        previous.length >= 3 &&
-        previous.length <= 10 &&
-        !ACCENT_STOP_WORDS.has(previousLower) &&
-        /^[\p{L}\p{N}-]+$/u.test(previous);
-
-      if (canUsePrev) {
-        pushCandidate(`${previous} ${value}`, (tokens[index - 1].index ?? tokenStart), 170);
-      }
-      pushCandidate(value, tokenStart, 168);
+      score += 220;
+    }
+    if (value.includes("-")) {
+      score += 28;
+    }
+    if (/[0-9]/u.test(value)) {
+      score += 18;
+    }
+    if (value.length >= 5 && value.length <= 15) {
+      score += 16;
+    } else {
+      score += 8;
+    }
+    if (tokenStart <= 22) {
+      score += 12;
+    } else if (tokenStart <= 42) {
+      score += 4;
     }
 
-    if (!ACCENT_STOP_WORDS.has(lower) && value.length >= 9 && value.length <= 20 && index > 0) {
-      pushCandidate(value, tokenStart, 120);
+    if (score > 0) {
+      pushCandidate(value, tokenStart, score);
     }
   }
 
-  const words = normalized.split(" ").filter(Boolean);
-  const lead = words.slice(0, 2).join(" ").trim();
-  if (lead.length >= 6 && lead.length <= 24) {
-    pushCandidate(lead, 0, 80);
+  if (!candidates.length) {
+    const fallback = tokens.find((token) => {
+      const value = token[0];
+      if (value.length < 4 || value.length > 18) {
+        return false;
+      }
+      return !ACCENT_STOP_WORDS.has(value.toLocaleLowerCase("ru-RU"));
+    });
+    if (fallback) {
+      return {
+        text: fallback[0],
+        startIndex: fallback.index ?? 0
+      };
+    }
   }
 
   if (!candidates.length) {
@@ -575,23 +574,75 @@ function resolveTextOffsetByIndex(
   lineHeight: number,
   index: number
 ) {
+  if (index <= 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const tokenPattern = /\n|[^\s\n]+|[ \t]+/gu;
+  const tokens = Array.from(sourceText.matchAll(tokenPattern));
+
   let x = 0;
   let line = 0;
 
-  for (let i = 0; i < index; i += 1) {
-    const char = sourceText[i] ?? "";
-    if (char === "\n") {
+  const measureTextWidth = (value: string) =>
+    value.split("").reduce((sum, char) => sum + estimateCharWidth(char, fontSize), 0);
+
+  for (const token of tokens) {
+    const tokenText = token[0] ?? "";
+    const tokenStart = token.index ?? 0;
+    const tokenEnd = tokenStart + tokenText.length;
+
+    if (tokenText === "\n") {
+      if (index >= tokenStart && index < tokenEnd) {
+        return {
+          x,
+          y: line * fontSize * lineHeight
+        };
+      }
       line += 1;
       x = 0;
       continue;
     }
 
-    const charWidth = estimateCharWidth(char, fontSize);
-    if (x + charWidth > width && x > 0) {
+    if (/\S/u.test(tokenText)) {
+      const tokenWidth = measureTextWidth(tokenText);
+      if (x > 0 && x + tokenWidth > width) {
+        line += 1;
+        x = 0;
+      }
+
+      if (index >= tokenStart && index < tokenEnd) {
+        const relativeText = tokenText.slice(0, index - tokenStart);
+        return {
+          x: x + measureTextWidth(relativeText),
+          y: line * fontSize * lineHeight
+        };
+      }
+
+      x += tokenWidth;
+      continue;
+    }
+
+    if (x === 0) {
+      continue;
+    }
+
+    const spaceWidth = measureTextWidth(tokenText);
+    if (x + spaceWidth > width) {
       line += 1;
       x = 0;
+      continue;
     }
-    x += charWidth;
+
+    if (index >= tokenStart && index < tokenEnd) {
+      const relativeText = tokenText.slice(0, index - tokenStart);
+      return {
+        x: x + measureTextWidth(relativeText),
+        y: line * fontSize * lineHeight
+      };
+    }
+
+    x += spaceWidth;
   }
 
   return {
@@ -621,6 +672,10 @@ function buildTitleAccentElements(params: {
     return [];
   }
 
+  if (accent.text.includes(" ") || accent.text.includes("\n")) {
+    return [];
+  }
+
   const { x: offsetX, y: offsetY } = resolveTextOffsetByIndex(
     titleElement.text,
     titleElement.width,
@@ -641,7 +696,11 @@ function buildTitleAccentElements(params: {
     return [];
   }
 
-  const clippedWidth = clampValue(textWidth, 24, Math.max(24, maxWidth - textX - 4));
+  if (textX + textWidth > maxWidth - 2) {
+    return [];
+  }
+
+  const clippedWidth = textWidth;
 
   if (palette.accentMode === "chip") {
     return [
