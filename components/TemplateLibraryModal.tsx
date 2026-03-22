@@ -50,7 +50,7 @@ export function TemplateLibraryModal({
     return null;
   }
 
-  const visibleTemplates = templates.filter((template) => template.id === activeCategory);
+  const visibleTemplates = templates;
 
   return (
     <div className="editor-modal-overlay" onClick={onClose} role="presentation">
@@ -100,7 +100,9 @@ export function TemplateLibraryModal({
               <button
                 key={template.id}
                 type="button"
-                className={`template-library-card ${activeTemplateId === template.id ? "active" : ""}`}
+                className={`template-library-card ${
+                  activeTemplateId === template.id || activeCategory === template.id ? "active" : ""
+                }`}
                 onClick={() => {
                   onApplyTemplate(template.id);
                   onClose();
@@ -121,11 +123,17 @@ export function TemplateLibraryModal({
 }
 
 function TemplatePreview({ template }: { template: CarouselTemplate }) {
+  const backgroundImage =
+    template.id === "dark"
+      ? "repeating-linear-gradient(90deg, rgba(255,255,255,0.11) 0 1px, transparent 1px 62px)"
+      : "repeating-linear-gradient(90deg, rgba(23,28,36,0.08) 0 1px, transparent 1px 62px), repeating-linear-gradient(180deg, rgba(23,28,36,0.08) 0 1px, transparent 1px 62px)";
+
   return (
     <div
-      className="template-library-preview"
+      className={`template-library-preview template-library-preview-${template.id}`}
       style={{
         backgroundColor: template.background,
+        backgroundImage,
         color: template.bodyColor,
         borderColor: template.surface
       }}

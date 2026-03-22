@@ -52,6 +52,7 @@ const SNAP_THRESHOLD = 10;
 const ROTATION_SNAP_VALUES = [-180, -90, 0, 90, 180];
 const ROTATION_SNAP_THRESHOLD = 6;
 const EMPTY_GUIDES: SnapGuides = { vertical: [], horizontal: [] };
+const NON_INTERACTIVE_TEXT_META_KEYS = new Set(["managed-title-accent"]);
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
@@ -316,7 +317,7 @@ function SlideImageNode({
   const darken = clamp(element.darken ?? 0, 0, 1);
   const outlineStroke =
     selected
-      ? "#72d6cb"
+      ? "#f25a2b"
       : element.strokeWidth && element.strokeWidth > 0
         ? element.stroke
         : undefined;
@@ -353,7 +354,7 @@ function SlideImageNode({
         stroke={outlineStroke}
         strokeWidth={outlineWidth}
         shadowBlur={selected ? 18 : 0}
-        shadowColor={selected ? "rgba(114, 214, 203, 0.35)" : undefined}
+        shadowColor={selected ? "rgba(242, 90, 43, 0.32)" : undefined}
       />
       {darken > 0 ? (
         <Rect
@@ -401,10 +402,10 @@ function SlideShapeNode({
       opacity={element.opacity}
       rotation={element.rotation}
       cornerRadius={element.shape === "circle" ? Math.min(element.width, element.height) / 2 : element.cornerRadius}
-      stroke={selected ? "#72d6cb" : element.stroke}
+      stroke={selected ? "#f25a2b" : element.stroke}
       strokeWidth={selected ? 4 : element.strokeWidth}
       shadowBlur={selected ? 14 : 0}
-      shadowColor={selected ? "rgba(114, 214, 203, 0.28)" : undefined}
+      shadowColor={selected ? "rgba(242, 90, 43, 0.24)" : undefined}
       listening={interactive}
       draggable={interactive && selected}
       dragDistance={10}
@@ -670,7 +671,7 @@ export function SlideStage({
               y={safeArea.top}
               width={Math.max(4, safeArea.right - safeArea.left)}
               height={Math.max(4, safeArea.bottom - safeArea.top)}
-              stroke="rgba(64, 167, 156, 0.22)"
+              stroke="rgba(242, 90, 43, 0.24)"
               strokeWidth={1.2}
               dash={[8, 8]}
               listening={false}
@@ -680,7 +681,7 @@ export function SlideStage({
               y={safeArea.top}
               width={1}
               height={Math.max(4, safeArea.bottom - safeArea.top)}
-              fill="rgba(64, 167, 156, 0.12)"
+              fill="rgba(242, 90, 43, 0.12)"
               listening={false}
             />
             <Rect
@@ -688,7 +689,7 @@ export function SlideStage({
               y={canvasHeight / 2}
               width={Math.max(4, safeArea.right - safeArea.left)}
               height={1}
-              fill="rgba(64, 167, 156, 0.12)"
+              fill="rgba(242, 90, 43, 0.12)"
               listening={false}
             />
           </>
@@ -701,7 +702,7 @@ export function SlideStage({
             y={safeArea.top}
             width={1.4}
             height={Math.max(4, safeArea.bottom - safeArea.top)}
-            fill="rgba(56, 170, 158, 0.7)"
+            fill="rgba(242, 90, 43, 0.72)"
             listening={false}
           />
         ))}
@@ -712,7 +713,7 @@ export function SlideStage({
             y={value}
             width={Math.max(4, safeArea.right - safeArea.left)}
             height={1.4}
-            fill="rgba(56, 170, 158, 0.7)"
+            fill="rgba(242, 90, 43, 0.72)"
             listening={false}
           />
         ))}
@@ -776,18 +777,27 @@ export function SlideStage({
             };
 
             if (element.type === "text") {
+              const isLockedTextLayer = Boolean(
+                element.metaKey && NON_INTERACTIVE_TEXT_META_KEYS.has(element.metaKey)
+              );
               return (
                 <SlideTextNode
                   key={element.id}
                   element={element}
-                  selected={selected}
-                  interactive={interactive}
+                  selected={selected && !isLockedTextLayer}
+                  interactive={interactive && !isLockedTextLayer}
                   nodeRef={nodeRef as (node: Konva.Text | null) => void}
                   dragBoundFunc={dragBoundFunc}
-                  onSelect={() => onSelectElement?.(element.id)}
-                  onDoubleClick={() => onStartTextEditing?.(element.id)}
-                  onDragEnd={handleDragEnd}
-                  onTransformEnd={(node) => handleTransformEnd(element, node)}
+                  onSelect={
+                    isLockedTextLayer ? undefined : () => onSelectElement?.(element.id)
+                  }
+                  onDoubleClick={
+                    isLockedTextLayer ? undefined : () => onStartTextEditing?.(element.id)
+                  }
+                  onDragEnd={isLockedTextLayer ? undefined : handleDragEnd}
+                  onTransformEnd={
+                    isLockedTextLayer ? undefined : (node) => handleTransformEnd(element, node)
+                  }
                 />
               );
             }
@@ -837,9 +847,9 @@ export function SlideStage({
                   ? ["top-center", "bottom-center"]
                 : ["top-left", "top-right", "bottom-left", "bottom-right"]
             }
-            borderStroke="#72d6cb"
+            borderStroke="#f25a2b"
             anchorFill="#ffffff"
-            anchorStroke="#2d6f69"
+            anchorStroke="#c34a24"
             anchorStrokeWidth={1}
             anchorSize={10}
             boundBoxFunc={(oldBox, newBox) => {

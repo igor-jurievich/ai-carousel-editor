@@ -190,5 +190,9 @@ export type CarouselTemplate = {
   bodyHeight?: number;
   chipStyle?: "solid" | "outline";
   decoration?: "grid" | "none";
+  accentMode?: "none" | "text" | "chip";
+  gridMode?: "full" | "vertical";
+  gridStep?: number;
+  gridOpacity?: number;
   preview?: string;
 };

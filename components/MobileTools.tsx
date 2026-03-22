@@ -53,12 +53,44 @@ const TOOLBAR_ITEMS: Array<{ id: MobileToolTab; icon: AppIconName; label: string
 const FONT_OPTIONS = ["Inter", "Manrope", "Advent Pro", "Fira Code", "Russo One", "Oswald"];
 
 const STYLE_PRESETS = [
-  { id: "mono", label: "Монохром", background: "#ffffff" },
-  { id: "warm", label: "Теплый", background: "#f6f2ed" },
-  { id: "cool", label: "Холодный", background: "#edf3f6" },
-  { id: "soft", label: "Мягкий", background: "#f2f1f8" },
-  { id: "grid", label: "Сетка", background: "#f9f9f9" },
-  { id: "dark", label: "Контраст", background: "#1e2226" }
+  {
+    id: "mono",
+    label: "Монохром",
+    background: "#ffffff",
+    preview: "none"
+  },
+  {
+    id: "grid",
+    label: "Сетка",
+    background: "#f8f8f9",
+    preview:
+      "repeating-linear-gradient(90deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px), repeating-linear-gradient(180deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px)"
+  },
+  {
+    id: "gradient",
+    label: "Градиент",
+    background: "#f4ede8",
+    preview: "linear-gradient(135deg, #f7f7f7 0%, #f2e8df 100%)"
+  },
+  {
+    id: "notes",
+    label: "Заметки",
+    background: "#ececf1",
+    preview: "linear-gradient(180deg, #f2f2f6 0%, #eaebef 100%)"
+  },
+  {
+    id: "dots",
+    label: "Точки",
+    background: "#f5f5f6",
+    preview:
+      "radial-gradient(circle, rgba(18,21,27,0.2) 1px, transparent 1.2px), radial-gradient(circle, rgba(18,21,27,0.14) 1px, transparent 1.2px)"
+  },
+  {
+    id: "flash",
+    label: "Молнии",
+    background: "#e8e9ed",
+    preview: "linear-gradient(130deg, #f6f6f7 10%, #e8e9ed 46%, #dfe1e7 100%)"
+  }
 ] as const;
 
 export function MobileTools({
@@ -89,6 +121,10 @@ export function MobileTools({
 }: MobileToolsProps) {
   const swipeRef = useRef<{ startY: number; startX: number; drag: number } | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
+  const [colorMode, setColorMode] = useState<"single" | "double">("single");
+  const [sizeTarget, setSizeTarget] = useState<"title" | "body">("title");
+  const [applyStyleForAll, setApplyStyleForAll] = useState(true);
+  const [applySizeForAll, setApplySizeForAll] = useState(false);
   const selectedElementLabel = selectedElement
     ? selectedElement.type === "text"
       ? "Выбран текст"
@@ -236,29 +272,40 @@ export function MobileTools({
             {activeTab === "color" ? (
               <div className="settings-block">
                 <span className="settings-label">Цветовая схема</span>
-                <div className="mobile-sheet-row mobile-sheet-row-two">
+                <div className="segment-control">
+                  <button
+                    type="button"
+                    className={`segment-item ${colorMode === "single" ? "active" : ""}`}
+                    onClick={() => setColorMode("single")}
+                    disabled={disabled}
+                  >
+                    Одинарная
+                  </button>
+                  <button
+                    type="button"
+                    className={`segment-item ${colorMode === "double" ? "active" : ""}`}
+                    onClick={() => setColorMode("double")}
+                    disabled={disabled}
+                  >
+                    Двойная
+                  </button>
+                </div>
+
+                <div className="mobile-sheet-row">
                   <label className="field-label">
-                    Цвет текста
-                    <div className="mobile-color-field">
+                    Цвет выделений
+                    <div className="mobile-color-inline">
                       <input
                         type="color"
                         className="color-input"
-                        value={selectedTextElement?.fill ?? "#202329"}
+                        value={selectedTextElement?.fill ?? "#f25a2b"}
                         onChange={(event) => onSelectedTextColorChange(event.target.value)}
                         disabled={disabled || !selectedTextElement}
                       />
-                    </div>
-                  </label>
-
-                  <label className="field-label">
-                    Цвет фона
-                    <div className="mobile-color-field">
                       <input
-                        type="color"
-                        className="color-input"
-                        value={normalizeColor(slideBackground)}
-                        onChange={(event) => onSlideBackgroundChange(event.target.value)}
-                        disabled={disabled}
+                        className="field"
+                        value={(selectedTextElement?.fill ?? "#f25a2b").toUpperCase()}
+                        readOnly
                       />
                     </div>
                   </label>
@@ -284,6 +331,15 @@ export function MobileTools({
                     <option value="#1f2428">Графит</option>
                   </select>
                 </label>
+                <label className="mobile-switch-row">
+                  <span>Применить для всех слайдов</span>
+                  <input
+                    type="checkbox"
+                    checked={applyStyleForAll}
+                    onChange={(event) => setApplyStyleForAll(event.target.checked)}
+                    disabled={disabled}
+                  />
+                </label>
                 <div className="field-row">
                   <button
                     type="button"
@@ -308,6 +364,15 @@ export function MobileTools({
             {activeTab === "style" ? (
               <div className="settings-block">
                 <span className="settings-label">Стиль фона</span>
+                <label className="mobile-switch-row">
+                  <span>Применить для всех слайдов</span>
+                  <input
+                    type="checkbox"
+                    checked={applyStyleForAll}
+                    onChange={(event) => setApplyStyleForAll(event.target.checked)}
+                    disabled={disabled}
+                  />
+                </label>
                 <div className="mobile-style-grid">
                   {STYLE_PRESETS.map((preset) => {
                     const isActive = normalizeColor(slideBackground) === preset.background;
@@ -319,7 +384,20 @@ export function MobileTools({
                         disabled={disabled}
                         onClick={() => onSlideBackgroundChange(preset.background)}
                       >
-                        {preset.label}
+                        <span
+                          className="mobile-style-chip-preview"
+                          style={{
+                            backgroundColor: preset.background,
+                            backgroundImage: preset.preview === "none" ? undefined : preset.preview,
+                            backgroundSize:
+                              preset.id === "dots"
+                                ? "8px 8px, 8px 8px"
+                                : preset.id === "grid"
+                                  ? "10px 10px, 10px 10px"
+                                  : undefined
+                          }}
+                        />
+                        <span>{preset.label}</span>
                       </button>
                     );
                   })}
@@ -411,12 +489,13 @@ export function MobileTools({
             {activeTab === "font" ? (
               <div className="settings-block">
                 <span className="settings-label">Шрифты</span>
+                <label className="field-label">Заголовок</label>
                 <div className="mobile-font-grid">
                   {FONT_OPTIONS.map((fontName) => {
                     const isActive = selectedTextElement?.fontFamily === fontName;
                     return (
                       <button
-                        key={fontName}
+                        key={`title-${fontName}`}
                         type="button"
                         className={`mobile-font-item ${isActive ? "active" : ""}`}
                         onClick={() => onSelectedTextFontChange(fontName)}
@@ -428,12 +507,90 @@ export function MobileTools({
                     );
                   })}
                 </div>
+                <label className="field-label">Описание</label>
+                <div className="mobile-font-grid">
+                  {FONT_OPTIONS.map((fontName) => {
+                    const isActive = selectedTextElement?.fontFamily === fontName;
+                    return (
+                      <button
+                        key={`body-${fontName}`}
+                        type="button"
+                        className={`mobile-font-item ${isActive ? "active" : ""}`}
+                        onClick={() => onSelectedTextFontChange(fontName)}
+                        disabled={disabled || !selectedTextElement}
+                        style={{ fontFamily: fontName }}
+                      >
+                        {fontName}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button type="button" className="mobile-upload-font-btn" disabled>
+                  + Добавить шрифт
+                </button>
+                <div className="mobile-font-note">
+                  Убедитесь, что у Вас есть лицензия на использование загружаемого шрифта
+                </div>
               </div>
             ) : null}
 
             {activeTab === "size" ? (
               <div className="settings-block">
                 <span className="settings-label">Размер текста</span>
+                <div className="segment-control">
+                  <button
+                    type="button"
+                    className={`segment-item ${sizeTarget === "title" ? "active" : ""}`}
+                    onClick={() => setSizeTarget("title")}
+                    disabled={disabled}
+                  >
+                    Заголовок
+                  </button>
+                  <button
+                    type="button"
+                    className={`segment-item ${sizeTarget === "body" ? "active" : ""}`}
+                    onClick={() => setSizeTarget("body")}
+                    disabled={disabled}
+                  >
+                    Описание
+                  </button>
+                </div>
+                <span className="field-label">Регистр</span>
+                <div className="mobile-case-grid">
+                  <button
+                    type="button"
+                    className="mobile-case-btn"
+                    onClick={() => onSelectedTextCaseChange("capitalize")}
+                    disabled={disabled || !selectedTextElement}
+                  >
+                    Aa
+                  </button>
+                  <button
+                    type="button"
+                    className="mobile-case-btn"
+                    onClick={() => onSelectedTextCaseChange("uppercase")}
+                    disabled={disabled || !selectedTextElement}
+                  >
+                    AA
+                  </button>
+                  <button
+                    type="button"
+                    className="mobile-case-btn"
+                    onClick={() => onSelectedTextCaseChange("lowercase")}
+                    disabled={disabled || !selectedTextElement}
+                  >
+                    aa
+                  </button>
+                  <button
+                    type="button"
+                    className="mobile-case-btn"
+                    onClick={() => onSelectedTextCaseChange("normal")}
+                    disabled={disabled || !selectedTextElement}
+                  >
+                    Aa
+                  </button>
+                </div>
                 <div className="mobile-size-control">
                   <input
                     type="range"
@@ -447,6 +604,15 @@ export function MobileTools({
                   />
                   <div className="mobile-size-value">{Math.round(selectedTextElement?.fontSize ?? 28)}px</div>
                 </div>
+                <label className="mobile-switch-row">
+                  <span>Применить для всех слайдов</span>
+                  <input
+                    type="checkbox"
+                    checked={applySizeForAll}
+                    onChange={(event) => setApplySizeForAll(event.target.checked)}
+                    disabled={disabled}
+                  />
+                </label>
               </div>
             ) : null}
           </div>

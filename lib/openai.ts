@@ -81,6 +81,7 @@ export async function generateCarouselFromTopic(
                 "Return strict JSON only.",
                 "Write concise, conversational, high-signal Russian copy without fluff.",
                 "Keep each slide self-contained and readable on a mobile card.",
+                "Keep text short: title up to ~7 words, subtitle up to ~14 words, bullets up to ~7 words.",
                 "Do not invent extra fields or extra slide types."
               ].join(" ")
             }
@@ -161,7 +162,8 @@ function buildUserPrompt(topic: string, flow: CarouselSlideRole[], options?: Gen
     "- solution: bullets[]",
     "- example: before, after",
     "- cta: title, subtitle",
-    "Bullets must be short: 1 sentence each, usually 2-4 bullets.",
+    "Bullets must be short: 1 sentence each, 2-4 bullets, no long clauses.",
+    "Avoid long clauses and nested lists.",
     "No markdown, no emojis, no extra commentary."
   ]
     .filter(Boolean)
@@ -174,8 +176,8 @@ function buildResponseSchema(slidesCount: number) {
     additionalProperties: false,
     properties: {
       type: { type: "string", const: "hook" },
-      title: { type: "string", maxLength: 180 },
-      subtitle: { type: "string", maxLength: 280 }
+      title: { type: "string", maxLength: 96 },
+      subtitle: { type: "string", maxLength: 140 }
     },
     required: ["type", "title", "subtitle"]
   };
@@ -185,12 +187,12 @@ function buildResponseSchema(slidesCount: number) {
     additionalProperties: false,
     properties: {
       type: { type: "string", const: "problem" },
-      title: { type: "string", maxLength: 180 },
+      title: { type: "string", maxLength: 92 },
       bullets: {
         type: "array",
         minItems: 1,
-        maxItems: 6,
-        items: { type: "string", maxLength: 200 }
+        maxItems: 4,
+        items: { type: "string", maxLength: 92 }
       }
     },
     required: ["type", "title", "bullets"]
@@ -201,12 +203,12 @@ function buildResponseSchema(slidesCount: number) {
     additionalProperties: false,
     properties: {
       type: { type: "string", const: "amplify" },
-      title: { type: "string", maxLength: 180 },
+      title: { type: "string", maxLength: 92 },
       bullets: {
         type: "array",
         minItems: 1,
-        maxItems: 6,
-        items: { type: "string", maxLength: 200 }
+        maxItems: 4,
+        items: { type: "string", maxLength: 92 }
       }
     },
     required: ["type", "title", "bullets"]
@@ -217,7 +219,7 @@ function buildResponseSchema(slidesCount: number) {
     additionalProperties: false,
     properties: {
       type: { type: "string", const: "mistake" },
-      title: { type: "string", maxLength: 180 }
+      title: { type: "string", maxLength: 104 }
     },
     required: ["type", "title"]
   };
@@ -230,8 +232,8 @@ function buildResponseSchema(slidesCount: number) {
       bullets: {
         type: "array",
         minItems: 1,
-        maxItems: 6,
-        items: { type: "string", maxLength: 200 }
+        maxItems: 4,
+        items: { type: "string", maxLength: 92 }
       }
     },
     required: ["type", "bullets"]
@@ -242,7 +244,7 @@ function buildResponseSchema(slidesCount: number) {
     additionalProperties: false,
     properties: {
       type: { type: "string", const: "shift" },
-      title: { type: "string", maxLength: 180 }
+      title: { type: "string", maxLength: 104 }
     },
     required: ["type", "title"]
   };
@@ -255,8 +257,8 @@ function buildResponseSchema(slidesCount: number) {
       bullets: {
         type: "array",
         minItems: 1,
-        maxItems: 6,
-        items: { type: "string", maxLength: 200 }
+        maxItems: 4,
+        items: { type: "string", maxLength: 92 }
       }
     },
     required: ["type", "bullets"]
@@ -267,8 +269,8 @@ function buildResponseSchema(slidesCount: number) {
     additionalProperties: false,
     properties: {
       type: { type: "string", const: "example" },
-      before: { type: "string", maxLength: 220 },
-      after: { type: "string", maxLength: 220 }
+      before: { type: "string", maxLength: 132 },
+      after: { type: "string", maxLength: 132 }
     },
     required: ["type", "before", "after"]
   };
@@ -278,8 +280,8 @@ function buildResponseSchema(slidesCount: number) {
     additionalProperties: false,
     properties: {
       type: { type: "string", const: "cta" },
-      title: { type: "string", maxLength: 180 },
-      subtitle: { type: "string", maxLength: 280 }
+      title: { type: "string", maxLength: 96 },
+      subtitle: { type: "string", maxLength: 140 }
     },
     required: ["type", "title", "subtitle"]
   };
@@ -376,9 +378,9 @@ function normalizeSlideByType(
   if (expectedType === "hook") {
     return {
       type: "hook",
-      title: normalizeText(safe.title, 120) || `Одна ошибка в теме «${topic}» съедает заявки`,
+      title: normalizeText(safe.title, 92) || `Одна ошибка в теме «${topic}» съедает заявки`,
       subtitle:
-        normalizeText(safe.subtitle, 220) ||
+        normalizeText(safe.subtitle, 138) ||
         "Сейчас коротко покажу, где именно теряются клиенты и как это исправить."
     };
   }
@@ -386,7 +388,7 @@ function normalizeSlideByType(
   if (expectedType === "problem") {
     return {
       type: "problem",
-      title: normalizeText(safe.title, 120) || "Где ломается поток клиентов",
+      title: normalizeText(safe.title, 90) || "Где ломается поток клиентов",
       bullets: normalizeBullets(safe.bullets, [
         "Пишете много, но человек не видит прямую выгоду.",
         "Сообщение выглядит как «ещё одно объявление».",
@@ -398,7 +400,7 @@ function normalizeSlideByType(
   if (expectedType === "amplify") {
     return {
       type: "amplify",
-      title: normalizeText(safe.title, 120) || "Что это стоит на практике",
+      title: normalizeText(safe.title, 90) || "Что это стоит на практике",
       bullets: normalizeBullets(safe.bullets, [
         "Уходят горячие лиды, пока вы «дожимаете» холодных.",
         "Бюджет на продвижение растет, а конверсия почти стоит.",
@@ -411,7 +413,7 @@ function normalizeSlideByType(
     return {
       type: "mistake",
       title:
-        normalizeText(safe.title, 140) ||
+        normalizeText(safe.title, 102) ||
         "Главная ошибка: продавать «услугу», а не конкретный финансовый результат"
     };
   }
@@ -431,7 +433,7 @@ function normalizeSlideByType(
     return {
       type: "shift",
       title:
-        normalizeText(safe.title, 140) ||
+        normalizeText(safe.title, 102) ||
         "Сдвиг: сначала фиксируете выгоду клиента, потом обсуждаете цену"
     };
   }
@@ -450,18 +452,18 @@ function normalizeSlideByType(
   if (expectedType === "example") {
     return {
       type: "example",
-      before: normalizeText(safe.before, 200) || "До: «Мы работаем лучше всех»",
+      before: normalizeText(safe.before, 128) || "До: «Мы работаем лучше всех»",
       after:
-        normalizeText(safe.after, 200) ||
+        normalizeText(safe.after, 128) ||
         "После: «За 30 дней закрыли 12 сделок на 14% выше средней цены района»"
     };
   }
 
   return {
     type: "cta",
-    title: normalizeText(safe.title, 120) || "Нужен такой же разбор под ваш кейс?",
+    title: normalizeText(safe.title, 94) || "Нужен такой же разбор под ваш кейс?",
     subtitle:
-      normalizeText(safe.subtitle, 220) ||
+      normalizeText(safe.subtitle, 138) ||
       "Напишите в директ «КАРУСЕЛЬ» и получите готовую структуру из 9 слайдов."
   };
 }
@@ -476,9 +478,9 @@ function normalizeBullets(value: unknown, fallback: string[]) {
   }
 
   const cleaned = value
-    .map((item) => normalizeText(item, 180))
+    .map((item) => normalizeText(item, 90))
     .filter(Boolean)
-    .slice(0, 5);
+    .slice(0, 4);
 
   return cleaned.length ? cleaned : fallback;
 }
