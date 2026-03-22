@@ -61,12 +61,20 @@ const MOBILE_PREVIEW_MAX_WIDTH: Record<SlideFormat, number> = {
   "4:5": 338,
   "9:16": 312
 };
+const MANAGED_TEXT_META_KEYS = new Set(["managed-title", "managed-body"]);
+const MANAGED_TITLE_META_KEY = "managed-title";
+const MANAGED_TITLE_ACCENT_META_KEY = "managed-title-accent";
+const MANAGED_TITLE_ACCENT_CHIP_META_KEY = "managed-title-accent-chip";
 
 type HistorySnapshot = {
   slides: Slide[];
   activeSlideId: string | null;
   slideFormat: SlideFormat;
 };
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, max));
+}
 
 export function Editor() {
   const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("light", "1:1"));
@@ -450,24 +458,43 @@ export function Editor() {
     updateSlide(activeSlide.id, updater, options);
   };
 
-  const updateElement = (
+  const updateElementBySlide = (
+    slideId: string,
     elementId: string,
     updater: (element: CanvasElement) => CanvasElement,
     options?: { recordHistory?: boolean }
   ) => {
-    updateActiveSlide((slide) => {
+    const targetSlideIndex = slides.findIndex((slide) => slide.id === slideId);
+    if (targetSlideIndex === -1) {
+      return;
+    }
+
+    updateSlide(slideId, (slide) => {
       const previous = slide.elements.find((element) => element.id === elementId);
       const nextElements = slide.elements.map((element) =>
         element.id === elementId ? updater(element) : element
       );
       const next = nextElements.find((element) => element.id === elementId);
 
-      const shouldReflowManagedText =
-        activeSlideIndex !== -1 &&
+      const isManagedTextPair =
         previous?.type === "text" &&
         next?.type === "text" &&
-        previous.text !== next.text &&
-        (next.metaKey === "managed-title" || next.metaKey === "managed-body");
+        Boolean(next.metaKey && MANAGED_TEXT_META_KEYS.has(next.metaKey));
+
+      const shouldReflowManagedText =
+        isManagedTextPair &&
+        (previous.text !== next.text ||
+          previous.x !== next.x ||
+          previous.y !== next.y ||
+          previous.width !== next.width ||
+          previous.fontSize !== next.fontSize ||
+          previous.fontFamily !== next.fontFamily ||
+          previous.fontStyle !== next.fontStyle ||
+          previous.lineHeight !== next.lineHeight ||
+          previous.letterSpacing !== next.letterSpacing ||
+          previous.align !== next.align ||
+          previous.textDecoration !== next.textDecoration ||
+          previous.fill !== next.fill);
 
       if (shouldReflowManagedText) {
         const rebuiltSlide = applyTemplateToSlide(
@@ -476,10 +503,15 @@ export function Editor() {
             elements: nextElements
           },
           slide.templateId ?? "light",
-          activeSlideIndex,
+          targetSlideIndex,
           slides.length,
           slideFormat
         );
+        const rebuiltTitleElement = rebuiltSlide.elements.find(
+          (element): element is TextElement =>
+            element.type === "text" && element.metaKey === MANAGED_TITLE_META_KEY
+        );
+
         const rebuiltWithPinnedPosition = rebuiltSlide.elements.map((element) => {
           if (
             element.type !== "text" ||
@@ -495,17 +527,61 @@ export function Editor() {
             y: next.y,
             width: next.width,
             // Keep visual style/position from edited element, but keep rebuilt auto-height.
+            fontSize: next.fontSize,
             fontFamily: next.fontFamily,
             fontStyle: next.fontStyle,
             fill: next.fill,
             align: next.align,
+            lineHeight: next.lineHeight,
             letterSpacing: next.letterSpacing,
             textDecoration: next.textDecoration
           };
         });
 
+        const rebuiltWithSyncedAccent =
+          next.type === "text" &&
+          next.metaKey === MANAGED_TITLE_META_KEY &&
+          rebuiltTitleElement
+            ? rebuiltWithPinnedPosition.map((element) => {
+                if (
+                  element.type === "text" &&
+                  element.metaKey === MANAGED_TITLE_ACCENT_META_KEY
+                ) {
+                  const widthScale =
+                    rebuiltTitleElement.width > 0 ? next.width / rebuiltTitleElement.width : 1;
+                  return {
+                    ...element,
+                    x: element.x + (next.x - rebuiltTitleElement.x),
+                    y: element.y + (next.y - rebuiltTitleElement.y),
+                    width: clampNumber(Math.round(element.width * widthScale), 24, next.width),
+                    fontSize: next.fontSize,
+                    fontFamily: next.fontFamily,
+                    fontStyle: next.fontStyle,
+                    lineHeight: next.lineHeight,
+                    letterSpacing: next.letterSpacing
+                  };
+                }
+
+                if (
+                  element.type === "shape" &&
+                  element.metaKey === MANAGED_TITLE_ACCENT_CHIP_META_KEY
+                ) {
+                  const widthScale =
+                    rebuiltTitleElement.width > 0 ? next.width / rebuiltTitleElement.width : 1;
+                  return {
+                    ...element,
+                    x: element.x + (next.x - rebuiltTitleElement.x),
+                    y: element.y + (next.y - rebuiltTitleElement.y),
+                    width: clampNumber(Math.round(element.width * widthScale), 30, next.width)
+                  };
+                }
+
+                return element;
+              })
+            : rebuiltWithPinnedPosition;
+
         if (next.metaKey) {
-          const replacement = rebuiltWithPinnedPosition.find(
+          const replacement = rebuiltWithSyncedAccent.find(
             (element) => element.type === next.type && element.metaKey === next.metaKey
           );
 
@@ -520,7 +596,7 @@ export function Editor() {
 
         return {
           ...rebuiltSlide,
-          elements: rebuiltWithPinnedPosition
+          elements: rebuiltWithSyncedAccent
         };
       }
 
@@ -529,6 +605,18 @@ export function Editor() {
         elements: nextElements
       };
     }, options);
+  };
+
+  const updateElement = (
+    elementId: string,
+    updater: (element: CanvasElement) => CanvasElement,
+    options?: { recordHistory?: boolean }
+  ) => {
+    if (!activeSlide) {
+      return;
+    }
+
+    updateElementBySlide(activeSlide.id, elementId, updater, options);
   };
 
   const handleGenerate = async () => {
@@ -1166,12 +1254,7 @@ export function Editor() {
     }
 
     setActiveSlideId(slideId);
-    updateSlide(slideId, (slide) => ({
-      ...slide,
-      elements: slide.elements.map((element) =>
-        element.id === elementId ? { ...element, x, y } : element
-      )
-    }));
+    updateElementBySlide(slideId, elementId, (element) => ({ ...element, x, y }));
   };
 
   const handleTransformElementBySlide = (
@@ -1184,12 +1267,7 @@ export function Editor() {
     }
 
     setActiveSlideId(slideId);
-    updateSlide(slideId, (slide) => ({
-      ...slide,
-      elements: slide.elements.map((element) =>
-        element.id === elementId ? { ...element, ...updates } : element
-      )
-    }));
+    updateElementBySlide(slideId, elementId, (element) => ({ ...element, ...updates }));
   };
 
   const getSlideDataUrl = async (slideId: string) => {

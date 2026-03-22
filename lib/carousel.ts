@@ -206,6 +206,52 @@ function normalizeMultilineText(value: string) {
     .trim();
 }
 
+function normalizeWordTokens(value: string) {
+  return value
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+}
+
+const GENERIC_ERROR_LEAD_RE = /^(одн[а-яё]*\s+)?(типичн[а-яё]*\s+)?(главн[а-яё]*\s+)?ошиб[а-яё]*/iu;
+
+function sanitizeBlueprintText(value: string, maxLength: number, dedupeGlobal = false) {
+  const normalized = normalizeMultilineText(value).replace(/\s+([.,!?;:])/gu, "$1");
+  if (!normalized) {
+    return "";
+  }
+
+  const lines = normalized.split("\n");
+  const resultLines = lines.map((line) => {
+    const words = line.split(" ").filter(Boolean);
+    const compactWords: string[] = [];
+    const seen = new Set<string>();
+    let previousToken = "";
+
+    for (const word of words) {
+      const token = normalizeWordTokens(word)[0] ?? "";
+      if (token && token === previousToken) {
+        continue;
+      }
+      if (dedupeGlobal && token.length >= 5 && seen.has(token)) {
+        continue;
+      }
+
+      if (dedupeGlobal && token.length >= 5) {
+        seen.add(token);
+      }
+
+      compactWords.push(word);
+      previousToken = token || previousToken;
+    }
+
+    return compactWords.join(" ").trim();
+  });
+
+  return compactTextLength(resultLines.join("\n").trim(), maxLength);
+}
+
 function compactTextLength(text: string, maxChars: number) {
   if (text.length <= maxChars) {
     return text;
@@ -433,36 +479,6 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
   };
 }
 
-const ACCENT_STOP_WORDS = new Set([
-  "и",
-  "в",
-  "на",
-  "по",
-  "для",
-  "как",
-  "это",
-  "где",
-  "или",
-  "а",
-  "но",
-  "к",
-  "с",
-  "у",
-  "не",
-  "вы",
-  "мы",
-  "что"
-]);
-
-const IMPACT_WORD_PATTERN =
-  /\b(лид\w*|горяч\w*|стратег\w*|пряч\w*|магнит\w*|сроч\w*|фишк\w*|дешевл\w*|конкурент\w*|выгод\w*|продаж\w*|цен\w*|ошиб\w*|заяв\w*)\b/giu;
-
-type AccentCandidate = {
-  text: string;
-  startIndex: number;
-  score: number;
-};
-
 function trimAccentEdge(raw: string) {
   return raw
     .replace(/^[\s.,;:!?'"«»(){}\[\]—-]+/u, "")
@@ -475,179 +491,20 @@ function resolveTitleAccent(title: string) {
     return null;
   }
 
-  const candidates: AccentCandidate[] = [];
-  const pushCandidate = (rawText: string, startIndex: number, score: number) => {
-    const text = trimAccentEdge(rawText);
-    if (
-      !text ||
-      text.includes(" ") ||
-      text.includes("\n") ||
-      text.length < 4 ||
-      text.length > 22 ||
-      startIndex < 0
-    ) {
-      return;
-    }
-    candidates.push({ text, startIndex, score });
-  };
-
   const tokenPattern = /[\p{L}\p{N}-]+/gu;
   const tokens = Array.from(normalized.matchAll(tokenPattern));
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    const value = token[0];
-    const lower = value.toLocaleLowerCase("ru-RU");
-    const tokenStart = token.index ?? 0;
-
-    if (ACCENT_STOP_WORDS.has(lower)) {
-      continue;
-    }
-
-    let score = 0;
-    IMPACT_WORD_PATTERN.lastIndex = 0;
-    if (IMPACT_WORD_PATTERN.test(value)) {
-      score += 220;
-    }
-    if (value.includes("-")) {
-      score += 28;
-    }
-    if (/[0-9]/u.test(value)) {
-      score += 18;
-    }
-    if (value.length >= 5 && value.length <= 15) {
-      score += 16;
-    } else {
-      score += 8;
-    }
-    if (tokenStart <= 22) {
-      score += 12;
-    } else if (tokenStart <= 42) {
-      score += 4;
-    }
-
-    if (score > 0) {
-      pushCandidate(value, tokenStart, score);
-    }
-  }
-
-  if (!candidates.length) {
-    const fallback = tokens.find((token) => {
-      const value = token[0];
-      if (value.length < 4 || value.length > 18) {
-        return false;
-      }
-      return !ACCENT_STOP_WORDS.has(value.toLocaleLowerCase("ru-RU"));
-    });
-    if (fallback) {
-      return {
-        text: fallback[0],
-        startIndex: fallback.index ?? 0
-      };
-    }
-  }
-
-  if (!candidates.length) {
+  const firstToken = tokens[0];
+  if (!firstToken) {
     return null;
   }
 
-  candidates.sort((left, right) => {
-    if (right.score !== left.score) {
-      return right.score - left.score;
-    }
-    if (left.startIndex !== right.startIndex) {
-      return left.startIndex - right.startIndex;
-    }
-    return right.text.length - left.text.length;
-  });
-
-  const best = candidates[0];
-  return {
-    text: best.text,
-    startIndex: best.startIndex
-  };
-}
-
-function resolveTextOffsetByIndex(
-  sourceText: string,
-  width: number,
-  fontSize: number,
-  lineHeight: number,
-  index: number
-) {
-  if (index <= 0) {
-    return { x: 0, y: 0 };
-  }
-
-  const tokenPattern = /\n|[^\s\n]+|[ \t]+/gu;
-  const tokens = Array.from(sourceText.matchAll(tokenPattern));
-
-  let x = 0;
-  let line = 0;
-
-  const measureTextWidth = (value: string) =>
-    value.split("").reduce((sum, char) => sum + estimateCharWidth(char, fontSize), 0);
-
-  for (const token of tokens) {
-    const tokenText = token[0] ?? "";
-    const tokenStart = token.index ?? 0;
-    const tokenEnd = tokenStart + tokenText.length;
-
-    if (tokenText === "\n") {
-      if (index >= tokenStart && index < tokenEnd) {
-        return {
-          x,
-          y: line * fontSize * lineHeight
-        };
-      }
-      line += 1;
-      x = 0;
-      continue;
-    }
-
-    if (/\S/u.test(tokenText)) {
-      const tokenWidth = measureTextWidth(tokenText);
-      if (x > 0 && x + tokenWidth > width) {
-        line += 1;
-        x = 0;
-      }
-
-      if (index >= tokenStart && index < tokenEnd) {
-        const relativeText = tokenText.slice(0, index - tokenStart);
-        return {
-          x: x + measureTextWidth(relativeText),
-          y: line * fontSize * lineHeight
-        };
-      }
-
-      x += tokenWidth;
-      continue;
-    }
-
-    if (x === 0) {
-      continue;
-    }
-
-    const spaceWidth = measureTextWidth(tokenText);
-    if (x + spaceWidth > width) {
-      line += 1;
-      x = 0;
-      continue;
-    }
-
-    if (index >= tokenStart && index < tokenEnd) {
-      const relativeText = tokenText.slice(0, index - tokenStart);
-      return {
-        x: x + measureTextWidth(relativeText),
-        y: line * fontSize * lineHeight
-      };
-    }
-
-    x += spaceWidth;
+  const best = trimAccentEdge(firstToken[0] ?? "");
+  if (!best || best.length < 2 || best.length > 24) {
+    return null;
   }
 
   return {
-    x,
-    y: line * fontSize * lineHeight
+    text: best
   };
 }
 
@@ -656,7 +513,7 @@ function buildTitleAccentElements(params: {
   palette: SlidePalette;
   template: CarouselTemplate;
 }): CanvasElement[] {
-  const { titleElement, palette, template } = params;
+  const { titleElement, palette } = params;
 
   if (palette.accentMode === "none") {
     return [];
@@ -675,80 +532,48 @@ function buildTitleAccentElements(params: {
   if (accent.text.includes(" ") || accent.text.includes("\n")) {
     return [];
   }
-
-  const { x: offsetX, y: offsetY } = resolveTextOffsetByIndex(
-    titleElement.text,
-    titleElement.width,
-    titleElement.fontSize,
-    titleElement.lineHeight ?? 1.05,
-    accent.startIndex
-  );
-
-  const textX = titleElement.x + offsetX;
-  const textY = titleElement.y + offsetY;
-  const textWidth = Math.ceil(
+  const textX = titleElement.x;
+  const textY = titleElement.y;
+  const accentWidth = Math.ceil(
     accent.text.split("").reduce((sum, char) => sum + estimateCharWidth(char, titleElement.fontSize), 0)
   );
+  const paddedAccentWidth = clampValue(
+    accentWidth + Math.round(titleElement.fontSize * 0.7),
+    34,
+    titleElement.width
+  );
+  const textWidth = Math.ceil(
+    clampValue(paddedAccentWidth, accentWidth, titleElement.width)
+  );
   const textHeight = Math.ceil(titleElement.fontSize * (titleElement.lineHeight ?? 1.05));
-  const maxWidth = titleElement.x + titleElement.width;
-
-  if (textX >= maxWidth - 32 || textWidth > titleElement.width + 40) {
-    return [];
-  }
-
-  if (textX + textWidth > maxWidth - 2) {
-    return [];
-  }
-
-  const clippedWidth = textWidth;
 
   if (palette.accentMode === "chip") {
+    const chipPadX = Math.max(8, Math.round(titleElement.fontSize * 0.14));
+    const chipPadY = Math.max(5, Math.round(titleElement.fontSize * 0.08));
     return [
       createShapeElement({
         metaKey: "managed-title-accent-chip",
-        x: Math.max(titleElement.x, textX - Math.round(titleElement.fontSize * 0.14)),
-        y: textY - Math.round(titleElement.fontSize * 0.08),
-        width: clippedWidth + Math.round(titleElement.fontSize * 0.24),
-        height: textHeight + Math.round(titleElement.fontSize * 0.1),
+        x: textX - chipPadX,
+        y: textY - chipPadY,
+        width: Math.min(titleElement.width, textWidth + chipPadX * 2),
+        height: textHeight + chipPadY * 2,
         fill: palette.accent,
-        opacity: 1,
+        opacity: 0.94,
         cornerRadius: Math.round(titleElement.fontSize * 0.08)
-      }),
-      createTextElement({
-        role: "title",
-        metaKey: "managed-title-accent",
-        text: accent.text,
-        x: textX,
-        y: textY,
-        width: clippedWidth,
-        height: textHeight,
-        fontSize: titleElement.fontSize,
-        fontFamily: titleElement.fontFamily,
-        fontStyle: titleElement.fontStyle,
-        fill: "#f6f8ff",
-        align: "left",
-        lineHeight: titleElement.lineHeight ?? 1.05,
-        letterSpacing: titleElement.letterSpacing ?? 0
       })
     ];
   }
 
   return [
-    createTextElement({
-      role: "title",
-      metaKey: "managed-title-accent",
-      text: accent.text,
-      x: textX,
-      y: textY,
-      width: clippedWidth,
-      height: textHeight,
-      fontSize: titleElement.fontSize,
-      fontFamily: template.titleFont,
-      fontStyle: titleElement.fontStyle,
+    createShapeElement({
+      metaKey: "managed-title-accent-chip",
+      x: textX - 2,
+      y: textY + Math.max(4, Math.round(textHeight * 0.6)),
+      width: Math.min(titleElement.width, textWidth + 4),
+      height: Math.max(8, Math.round(titleElement.fontSize * 0.3)),
       fill: palette.accent,
-      align: "left",
-      lineHeight: titleElement.lineHeight ?? 1.05,
-      letterSpacing: titleElement.letterSpacing ?? 0
+      opacity: 0.9,
+      cornerRadius: Math.max(2, Math.round(titleElement.fontSize * 0.08))
     })
   ];
 }
@@ -858,7 +683,14 @@ function resolveOutlineRole(
 
 function readTitle(role: CarouselSlideRole, outline: OutlineLike) {
   if (typeof outline.title === "string" && outline.title.trim()) {
-    return outline.title.trim();
+    const cleaned = sanitizeBlueprintText(outline.title, role === "hook" ? 84 : 96, true);
+    if (role === "hook" && GENERIC_ERROR_LEAD_RE.test(cleaned)) {
+      return "Разбор по теме без воды";
+    }
+
+    if (cleaned) {
+      return cleaned;
+    }
   }
 
   if (role === "consequence") {
@@ -879,13 +711,16 @@ function readTitle(role: CarouselSlideRole, outline: OutlineLike) {
 function readBody(role: CarouselSlideRole, outline: OutlineLike) {
   if (role === "hook") {
     const subtitle = typeof outline.subtitle === "string" ? outline.subtitle.trim() : "";
-    return subtitle || "Серия покажет, как получать больше заявок без лишнего бюджета.";
+    return sanitizeBlueprintText(
+      subtitle || "Серия покажет, как получать больше заявок без лишнего бюджета.",
+      250
+    );
   }
 
   if (role === "problem" || role === "amplify" || role === "consequence" || role === "solution") {
     const bullets = Array.isArray(outline.bullets)
       ? outline.bullets
-          .map((item) => compactTextLength(String(item).replace(/\s+/g, " ").trim(), 82))
+          .map((item) => sanitizeBlueprintText(String(item), 82))
           .filter(Boolean)
           .slice(0, 4)
       : [];
@@ -895,21 +730,21 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
     }
 
     if (typeof outline.text === "string" && outline.text.trim()) {
-      return outline.text.trim();
+      return sanitizeBlueprintText(outline.text, 260);
     }
 
     if (role === "consequence") {
       return "→ Клиент торгуется по цене\n→ Ценность услуги падает\n→ Сделка уходит конкуренту";
     }
 
-    return "→ Короткий тезис с конкретной выгодой\n→ Один факт вместо абстракции\n→ Ясный следующий шаг";
+      return "→ Короткий тезис с конкретной выгодой\n→ Один факт вместо абстракции\n→ Ясный следующий шаг";
   }
 
   if (role === "example") {
     const before = typeof outline.before === "string" ? outline.before.trim() : "";
     const after = typeof outline.after === "string" ? outline.after.trim() : "";
     if (before || after) {
-      return `До: ${before || "—"}\nПосле: ${after || "—"}`;
+      return sanitizeBlueprintText(`До: ${before || "—"}\nПосле: ${after || "—"}`, 240);
     }
 
     return "До: «Мы лучшие на рынке»\nПосле: «За 30 дней закрыли 12 сделок выше рынка»";
@@ -917,15 +752,15 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
 
   if (role === "cta") {
     const subtitle = typeof outline.subtitle === "string" ? outline.subtitle.trim() : "";
-    return subtitle || "Напишите «ШАБЛОНЫ» и заберите готовую структуру.";
+    return sanitizeBlueprintText(subtitle || "Напишите «ШАБЛОНЫ» и заберите готовую структуру.", 240);
   }
 
   if (typeof outline.text === "string" && outline.text.trim()) {
-    return outline.text.trim();
+    return sanitizeBlueprintText(outline.text, 280);
   }
 
   if (typeof outline.body === "string" && outline.body.trim()) {
-    return outline.body.trim();
+    return sanitizeBlueprintText(outline.body, 280);
   }
 
   return "Добавьте короткий тезис и конкретный шаг.";
@@ -1160,7 +995,7 @@ function buildMainContent(
       lineHeight: 1.03
     });
 
-    return [title, ...buildTitleAccentElements({ titleElement: title, palette, template })];
+    return [...buildTitleAccentElements({ titleElement: title, palette, template }), title];
   }
 
   if (blueprint.slideType === "image_text") {
@@ -1220,8 +1055,8 @@ function buildMainContent(
     });
 
     elements.push(
-      title,
       ...buildTitleAccentElements({ titleElement: title, palette, template }),
+      title,
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
@@ -1255,8 +1090,8 @@ function buildMainContent(
     });
 
     return [
-      title,
       ...buildTitleAccentElements({ titleElement: title, palette, template }),
+      title,
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
@@ -1287,8 +1122,8 @@ function buildMainContent(
   });
 
   return [
-    title,
     ...buildTitleAccentElements({ titleElement: title, palette, template }),
+    title,
     createFittedTextElement({
       role: "body",
       metaKey: "managed-body",
@@ -1473,7 +1308,7 @@ function resolveFallbackOutline(role: CarouselSlideRole): CarouselOutlineSlide {
   if (role === "mistake") {
     return {
       type: "mistake",
-      title: "Ошибка: вы продаёте процесс, а не итог для клиента"
+      title: "Главный разрыв: вы продаёте процесс, а не итог для клиента"
     };
   }
 
@@ -1560,7 +1395,7 @@ export function createStarterSlides(
     },
     {
       type: "mistake",
-      title: "Ошибка: вы пишете «про себя», а не про результат клиента"
+      title: "Ключевой разрыв: вы пишете «про себя», а не про результат клиента"
     },
     {
       type: "consequence",

@@ -40,7 +40,23 @@ const FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
   ]
 };
 
-const MODEL_NAME = process.env.OPENAI_GENERATION_MODEL?.trim() || "gpt-5.3";
+const DEFAULT_MODEL_CANDIDATES = [
+  "gpt-5.3",
+  "gpt-5.3-mini",
+  "gpt-4.1-mini",
+  "gpt-4.1",
+  "gpt-4o-mini"
+] as const;
+
+function resolveModelCandidates() {
+  return [
+    process.env.OPENAI_GENERATION_MODEL?.trim(),
+    process.env.OPENAI_MODEL?.trim(),
+    ...DEFAULT_MODEL_CANDIDATES
+  ]
+    .filter((value): value is string => Boolean(value))
+    .filter((value, index, list) => list.indexOf(value) === index);
+}
 
 let client: OpenAI | null = null;
 
@@ -67,58 +83,90 @@ export async function generateCarouselFromTopic(
 
   try {
     const openai = getOpenAIClient();
-    const response = await openai.responses.create({
-      model: MODEL_NAME,
-      input: [
-        {
-          role: "system",
-          content: [
+    const models = resolveModelCandidates();
+    let lastError: unknown = null;
+
+    for (const model of models) {
+      try {
+        const response = await openai.responses.create({
+          model,
+          input: [
             {
-              type: "input_text",
-              text: [
-                "You generate only text and semantic slide structure for social carousels.",
-                "Never generate design, layout, style, colors, fonts, positions, image prompts or coordinates.",
-                "Return strict JSON only.",
-                "Write concise, conversational, high-signal Russian copy without fluff.",
-                "Keep each slide self-contained and readable on a mobile card.",
-                "Keep text short: title up to ~7 words, subtitle up to ~14 words, bullets up to ~7 words.",
-                "Do not invent extra fields or extra slide types."
-              ].join(" ")
-            }
-          ]
-        },
-        {
-          role: "user",
-          content: [
+              role: "system",
+              content: [
+                {
+                  type: "input_text",
+                  text: [
+                    "You generate only text and semantic slide structure for social carousels.",
+                    "Never generate design, layout, style, colors, fonts, positions, image prompts or coordinates.",
+                    "Return strict JSON only.",
+                    "Write concise, conversational, high-signal Russian copy without fluff.",
+                    "Keep each slide self-contained and readable on a mobile card.",
+                    "Keep text short: title up to ~7 words, subtitle up to ~14 words, bullets up to ~7 words.",
+                    "Start from the provided topic. Avoid generic opener like «Одна ошибка…» unless user requested it.",
+                    "Hook title must be topic-specific and must not start with «ошибка», «одна ошибка», «главная ошибка».",
+                    "Avoid repeated words and broken compounds.",
+                    "Do not invent extra fields or extra slide types."
+                  ].join(" ")
+                }
+              ]
+            },
             {
-              type: "input_text",
-              text: buildUserPrompt(cleanedTopic, expectedFlow, options)
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: buildUserPrompt(cleanedTopic, expectedFlow, options)
+                }
+              ]
             }
-          ]
+          ],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "carousel_text_structure",
+              strict: true,
+              schema: buildResponseSchema(expectedFlow.length)
+            }
+          }
+        });
+
+        const raw = response.output_text?.trim();
+
+        if (!raw) {
+          throw new Error("OpenAI returned empty output.");
         }
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "carousel_text_structure",
-          strict: true,
-          schema: buildResponseSchema(expectedFlow.length)
+
+        const parsed = JSON.parse(raw) as { slides?: unknown[] };
+        const normalizedSlides = normalizeSlides(parsed.slides, expectedFlow, cleanedTopic);
+        const constrainedSlides = enforceTopicAndHookIntegrity(
+          normalizedSlides,
+          expectedFlow,
+          cleanedTopic
+        );
+        const topicRelevantSlides = isOutlineTopicRelevant(constrainedSlides, cleanedTopic)
+          ? constrainedSlides
+          : buildFallbackSlides(cleanedTopic, expectedFlow);
+
+        if (topicRelevantSlides !== normalizedSlides) {
+          console.warn("Generated outline was not topic-aligned. Using deterministic fallback slides.");
         }
+
+        return {
+          slides: topicRelevantSlides
+        };
+      } catch (error) {
+        lastError = error;
+
+        if (!canRetryWithAnotherModel(error)) {
+          throw error;
+        }
+
+        console.warn(`Model "${model}" failed for generation. Trying next candidate.`);
       }
-    });
-
-    const raw = response.output_text?.trim();
-
-    if (!raw) {
-      throw new Error("OpenAI returned empty output.");
     }
 
-    const parsed = JSON.parse(raw) as { slides?: unknown[] };
-    const normalizedSlides = normalizeSlides(parsed.slides, expectedFlow, cleanedTopic);
-
-    return {
-      slides: normalizedSlides
-    };
+    throw lastError ?? new Error("OpenAI generation failed for all model candidates.");
   } catch (error) {
     console.error("AI generation failed. Falling back to deterministic slides:", error);
 
@@ -162,6 +210,8 @@ function buildUserPrompt(topic: string, flow: CarouselSlideRole[], options?: Gen
     "- solution: bullets[]",
     "- example: before, after",
     "- cta: title, subtitle",
+    "Schema note: each slide object must include all fields: type, title, subtitle, bullets, before, after.",
+    "For fields that are not used by the current type, return empty string \"\" or empty array [].",
     "Bullets must be short: 1 sentence each, 2-4 bullets, no long clauses.",
     "Avoid long clauses and nested lists.",
     "No markdown, no emojis, no extra commentary."
@@ -171,121 +221,6 @@ function buildUserPrompt(topic: string, flow: CarouselSlideRole[], options?: Gen
 }
 
 function buildResponseSchema(slidesCount: number) {
-  const hookSchema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      type: { type: "string", const: "hook" },
-      title: { type: "string", maxLength: 96 },
-      subtitle: { type: "string", maxLength: 140 }
-    },
-    required: ["type", "title", "subtitle"]
-  };
-
-  const problemSchema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      type: { type: "string", const: "problem" },
-      title: { type: "string", maxLength: 92 },
-      bullets: {
-        type: "array",
-        minItems: 1,
-        maxItems: 4,
-        items: { type: "string", maxLength: 92 }
-      }
-    },
-    required: ["type", "title", "bullets"]
-  };
-
-  const amplifySchema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      type: { type: "string", const: "amplify" },
-      title: { type: "string", maxLength: 92 },
-      bullets: {
-        type: "array",
-        minItems: 1,
-        maxItems: 4,
-        items: { type: "string", maxLength: 92 }
-      }
-    },
-    required: ["type", "title", "bullets"]
-  };
-
-  const mistakeSchema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      type: { type: "string", const: "mistake" },
-      title: { type: "string", maxLength: 104 }
-    },
-    required: ["type", "title"]
-  };
-
-  const consequenceSchema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      type: { type: "string", const: "consequence" },
-      bullets: {
-        type: "array",
-        minItems: 1,
-        maxItems: 4,
-        items: { type: "string", maxLength: 92 }
-      }
-    },
-    required: ["type", "bullets"]
-  };
-
-  const shiftSchema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      type: { type: "string", const: "shift" },
-      title: { type: "string", maxLength: 104 }
-    },
-    required: ["type", "title"]
-  };
-
-  const solutionSchema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      type: { type: "string", const: "solution" },
-      bullets: {
-        type: "array",
-        minItems: 1,
-        maxItems: 4,
-        items: { type: "string", maxLength: 92 }
-      }
-    },
-    required: ["type", "bullets"]
-  };
-
-  const exampleSchema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      type: { type: "string", const: "example" },
-      before: { type: "string", maxLength: 132 },
-      after: { type: "string", maxLength: 132 }
-    },
-    required: ["type", "before", "after"]
-  };
-
-  const ctaSchema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      type: { type: "string", const: "cta" },
-      title: { type: "string", maxLength: 96 },
-      subtitle: { type: "string", maxLength: 140 }
-    },
-    required: ["type", "title", "subtitle"]
-  };
-
   return {
     type: "object",
     additionalProperties: false,
@@ -295,17 +230,25 @@ function buildResponseSchema(slidesCount: number) {
         minItems: slidesCount,
         maxItems: slidesCount,
         items: {
-          oneOf: [
-            hookSchema,
-            problemSchema,
-            amplifySchema,
-            mistakeSchema,
-            consequenceSchema,
-            shiftSchema,
-            solutionSchema,
-            exampleSchema,
-            ctaSchema
-          ]
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            type: {
+              type: "string",
+              enum: ["hook", "problem", "amplify", "mistake", "consequence", "shift", "solution", "example", "cta"]
+            },
+            title: { type: ["string", "null"], maxLength: 120 },
+            subtitle: { type: ["string", "null"], maxLength: 180 },
+            bullets: {
+              type: ["array", "null"],
+              minItems: 0,
+              maxItems: 4,
+              items: { type: "string", maxLength: 120 }
+            },
+            before: { type: ["string", "null"], maxLength: 160 },
+            after: { type: ["string", "null"], maxLength: 160 }
+          },
+          required: ["type", "title", "subtitle", "bullets", "before", "after"]
         }
       }
     },
@@ -332,6 +275,58 @@ function normalizeSlides(
   });
 }
 
+function enforceTopicAndHookIntegrity(
+  slides: CarouselOutlineSlide[],
+  expectedFlow: CarouselSlideRole[],
+  topic: string
+) {
+  return expectedFlow.map((role, index) => {
+    const current = slides[index];
+    const fallback = normalizeSlideByType(role, null, topic, index);
+
+    if (!current) {
+      return fallback;
+    }
+
+    const normalizedTitle =
+      "title" in current && typeof current.title === "string"
+        ? sanitizeTitleValue(current.title, 96)
+        : "";
+    const hasGenericMistakeLead =
+      role !== "mistake" && normalizedTitle ? startsWithGenericMistakeLead(normalizedTitle) : false;
+    const hasTopicMismatch =
+      role === "hook" && normalizedTitle ? !isTopicAligned(normalizedTitle, topic) : false;
+
+    if (role === "hook" && (!normalizedTitle || hasGenericMistakeLead || hasTopicMismatch)) {
+      return {
+        ...current,
+        title: buildHookFallbackTitle(topic),
+        subtitle:
+          "subtitle" in current && typeof current.subtitle === "string" && current.subtitle.trim()
+            ? sanitizeCopyText(normalizeText(current.subtitle, 138), 132) ||
+              "Коротко разберём, что мешает заявкам и какие шаги дают рост."
+            : "Коротко разберём, что мешает заявкам и какие шаги дают рост."
+      };
+    }
+
+    if (hasGenericMistakeLead) {
+      return {
+        ...current,
+        ...(fallback as CarouselOutlineSlide)
+      };
+    }
+
+    if ("title" in current && normalizedTitle) {
+      return {
+        ...current,
+        title: normalizedTitle
+      };
+    }
+
+    return current;
+  });
+}
+
 function pickCandidateIndex(
   source: unknown[],
   expectedType: CarouselSlideRole,
@@ -343,10 +338,17 @@ function pickCandidateIndex(
     preferred &&
     typeof preferred === "object" &&
     !Array.isArray(preferred) &&
-    (preferred as { type?: unknown }).type === expectedType &&
     !usedIndexes.has(preferredIndex)
   ) {
-    return preferredIndex;
+    const preferredType = (preferred as { type?: unknown }).type;
+    if (preferredType === expectedType) {
+      return preferredIndex;
+    }
+
+    // Backward compatibility for legacy payloads without `type`.
+    if (typeof preferredType !== "string") {
+      return preferredIndex;
+    }
   }
 
   for (let index = 0; index < source.length; index += 1) {
@@ -364,7 +366,22 @@ function pickCandidateIndex(
     }
   }
 
-  return usedIndexes.has(preferredIndex) ? -1 : preferredIndex < source.length ? preferredIndex : -1;
+  for (let index = 0; index < source.length; index += 1) {
+    if (usedIndexes.has(index)) {
+      continue;
+    }
+
+    const item = source[index];
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+
+    if (typeof (item as { type?: unknown }).type !== "string") {
+      return index;
+    }
+  }
+
+  return -1;
 }
 
 function normalizeSlideByType(
@@ -374,21 +391,30 @@ function normalizeSlideByType(
   index: number
 ): CarouselOutlineSlide {
   const safe = toRecord(rawSlide);
+  const topicFocus = buildTopicFocus(topic);
 
   if (expectedType === "hook") {
+    const rawTitle = sanitizeTitleValue(safe.title, 84);
+    const normalizedTitle =
+      rawTitle && !startsWithGenericMistakeLead(rawTitle) && isTopicAligned(rawTitle, topic)
+        ? rawTitle
+        : "";
     return {
       type: "hook",
-      title: normalizeText(safe.title, 92) || `Одна ошибка в теме «${topic}» съедает заявки`,
+      title: normalizedTitle || buildHookFallbackTitle(topic),
       subtitle:
-        normalizeText(safe.subtitle, 138) ||
-        "Сейчас коротко покажу, где именно теряются клиенты и как это исправить."
+        sanitizeCopyText(normalizeText(safe.subtitle, 138), 132) ||
+        "Коротко разберём, что мешает заявкам и какие шаги дают рост."
     };
   }
 
   if (expectedType === "problem") {
+    const rawTitle = sanitizeTitleValue(safe.title, 80);
     return {
       type: "problem",
-      title: normalizeText(safe.title, 90) || "Где ломается поток клиентов",
+      title:
+        (rawTitle && isTopicAligned(rawTitle, topic) ? rawTitle : "") ||
+        `Где ломается поток в теме «${topicFocus}»`,
       bullets: normalizeBullets(safe.bullets, [
         "Пишете много, но человек не видит прямую выгоду.",
         "Сообщение выглядит как «ещё одно объявление».",
@@ -398,9 +424,12 @@ function normalizeSlideByType(
   }
 
   if (expectedType === "amplify") {
+    const rawTitle = sanitizeTitleValue(safe.title, 80);
     return {
       type: "amplify",
-      title: normalizeText(safe.title, 90) || "Что это стоит на практике",
+      title:
+        (rawTitle && isTopicAligned(rawTitle, topic) ? rawTitle : "") ||
+        `Что это стоит в теме «${topicFocus}»`,
       bullets: normalizeBullets(safe.bullets, [
         "Уходят горячие лиды, пока вы «дожимаете» холодных.",
         "Бюджет на продвижение растет, а конверсия почти стоит.",
@@ -410,11 +439,12 @@ function normalizeSlideByType(
   }
 
   if (expectedType === "mistake") {
+    const rawTitle = sanitizeTitleValue(safe.title, 92);
     return {
       type: "mistake",
       title:
-        normalizeText(safe.title, 102) ||
-        "Главная ошибка: продавать «услугу», а не конкретный финансовый результат"
+        (rawTitle && isTopicAligned(rawTitle, topic) ? rawTitle : "") ||
+        `Ключевой разрыв в теме «${topicFocus}»`
     };
   }
 
@@ -430,11 +460,12 @@ function normalizeSlideByType(
   }
 
   if (expectedType === "shift") {
+    const rawTitle = sanitizeTitleValue(safe.title, 92);
     return {
       type: "shift",
       title:
-        normalizeText(safe.title, 102) ||
-        "Сдвиг: сначала фиксируете выгоду клиента, потом обсуждаете цену"
+        (rawTitle && isTopicAligned(rawTitle, topic) ? rawTitle : "") ||
+        `Сдвиг по теме «${topicFocus}»: сначала выгода, потом цена`
     };
   }
 
@@ -452,18 +483,19 @@ function normalizeSlideByType(
   if (expectedType === "example") {
     return {
       type: "example",
-      before: normalizeText(safe.before, 128) || "До: «Мы работаем лучше всех»",
+      before: sanitizeCopyText(normalizeText(safe.before, 128), 122) || "До: «Мы работаем лучше всех»",
       after:
-        normalizeText(safe.after, 128) ||
+        sanitizeCopyText(normalizeText(safe.after, 128), 122) ||
         "После: «За 30 дней закрыли 12 сделок на 14% выше средней цены района»"
     };
   }
 
+  const ctaTitle = sanitizeTitleValue(safe.title, 84);
   return {
     type: "cta",
-    title: normalizeText(safe.title, 94) || "Нужен такой же разбор под ваш кейс?",
+    title: ctaTitle || "Нужен такой же разбор под ваш кейс?",
     subtitle:
-      normalizeText(safe.subtitle, 138) ||
+      sanitizeCopyText(normalizeText(safe.subtitle, 138), 132) ||
       "Напишите в директ «КАРУСЕЛЬ» и получите готовую структуру из 9 слайдов."
   };
 }
@@ -477,10 +509,27 @@ function normalizeBullets(value: unknown, fallback: string[]) {
     return fallback;
   }
 
-  const cleaned = value
-    .map((item) => normalizeText(item, 90))
-    .filter(Boolean)
-    .slice(0, 4);
+  const dedupe = new Set<string>();
+  const cleaned: string[] = [];
+
+  for (const item of value) {
+    const normalized = sanitizeCopyText(normalizeText(item, 90), 86);
+    if (!normalized) {
+      continue;
+    }
+
+    const fingerprint = normalizeWordTokens(normalized).join(" ");
+    if (!fingerprint || dedupe.has(fingerprint)) {
+      continue;
+    }
+
+    dedupe.add(fingerprint);
+    cleaned.push(normalized);
+
+    if (cleaned.length >= 4) {
+      break;
+    }
+  }
 
   return cleaned.length ? cleaned : fallback;
 }
@@ -496,6 +545,298 @@ function normalizeText(value: unknown, maxLength: number) {
   }
 
   return normalized.slice(0, maxLength);
+}
+
+function buildHookFallbackTitle(topic: string) {
+  const cleanTopic = normalizeText(topic, 84);
+
+  if (!cleanTopic) {
+    return "Как усилить входящий поток заявок";
+  }
+
+  if (/^(как|почему|когда|зачем|что)\b/iu.test(cleanTopic)) {
+    return trimToWordBoundary(cleanTopic, 72);
+  }
+
+  return trimToWordBoundary(`Разбор темы: ${buildTopicFocus(cleanTopic)}`, 72);
+}
+
+function buildTopicFocus(topic: string) {
+  const cleaned = normalizeText(topic, 84)
+    .replace(/^как\s+/iu, "")
+    .replace(/[.?!…]+$/u, "")
+    .trim();
+
+  if (!cleaned) {
+    return "этой теме";
+  }
+
+  if (cleaned.length <= 52) {
+    return cleaned;
+  }
+
+  const sliced = cleaned.slice(0, 52).trimEnd();
+  const lastSpace = sliced.lastIndexOf(" ");
+  return (lastSpace > 26 ? sliced.slice(0, lastSpace) : sliced).trimEnd();
+}
+
+function sanitizeCopyText(value: string, maxLength: number) {
+  if (!value) {
+    return "";
+  }
+
+  const noDoubleSpaces = value
+    .replace(/\s+([.,!?;:])/gu, "$1")
+    .replace(/([«„])\s+/gu, "$1")
+    .replace(/\s+([»”])/gu, "$1")
+    .replace(/\s+/gu, " ")
+    .trim();
+
+  if (!noDoubleSpaces) {
+    return "";
+  }
+
+  const words = noDoubleSpaces.split(" ");
+  const compactWords: string[] = [];
+  let previousNormalized = "";
+  const seenContentWords = new Set<string>();
+
+  for (const word of words) {
+    const normalizedWord = normalizeWordTokens(word)[0] ?? "";
+    if (normalizedWord && normalizedWord === previousNormalized) {
+      continue;
+    }
+    const shouldDedupeGlobal = normalizedWord.length >= 5 && !TOPIC_STOP_WORDS.has(normalizedWord);
+    if (shouldDedupeGlobal && seenContentWords.has(normalizedWord)) {
+      continue;
+    }
+
+    if (shouldDedupeGlobal) {
+      seenContentWords.add(normalizedWord);
+    }
+
+    compactWords.push(word);
+    previousNormalized = normalizedWord || previousNormalized;
+  }
+
+  const cleaned = compactWords.join(" ").trim();
+  if (!cleaned) {
+    return "";
+  }
+
+  return trimToWordBoundary(cleaned, maxLength);
+}
+
+function normalizeWordTokens(value: string) {
+  return value
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+}
+
+function startsWithGenericMistakeLead(value: string) {
+  const normalizedLead = value
+    .replace(/^[\s"'`«»“”„(){}\[\].,;:!?—–-]+/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+
+  if (!normalizedLead) {
+    return false;
+  }
+
+  return /^(одн[а-яё]*\s+)?(типичн[а-яё]*\s+)?(главн[а-яё]*\s+)?ошиб[а-яё]*/iu.test(normalizedLead);
+}
+
+function sanitizeTitleValue(value: unknown, maxLength: number) {
+  const rawTitle = sanitizeCopyText(normalizeText(value, maxLength + 20), maxLength);
+  if (!rawTitle) {
+    return "";
+  }
+
+  const words = rawTitle.split(" ").filter(Boolean);
+  if (words.length <= 2) {
+    return rawTitle;
+  }
+
+  const seen = new Set<string>();
+  const compactWords: string[] = [];
+
+  for (const word of words) {
+    const token = normalizeWordTokens(word)[0] ?? "";
+    const shouldDeduplicate = token.length >= 4 && !TOPIC_STOP_WORDS.has(token);
+
+    if (shouldDeduplicate && seen.has(token)) {
+      continue;
+    }
+
+    if (shouldDeduplicate) {
+      seen.add(token);
+    }
+
+    compactWords.push(word);
+  }
+
+  return sanitizeCopyText(compactWords.join(" "), maxLength);
+}
+
+const TOPIC_STOP_WORDS = new Set([
+  "как",
+  "что",
+  "это",
+  "или",
+  "для",
+  "про",
+  "под",
+  "без",
+  "при",
+  "где",
+  "надо",
+  "нужно",
+  "тема",
+  "теме",
+  "почему",
+  "когда",
+  "чтобы",
+  "если",
+  "так",
+  "еще",
+  "ещё"
+]);
+
+function isTopicAligned(copy: string, topic: string) {
+  const topicTokens = normalizeWordTokens(buildTopicFocus(topic)).filter(
+    (token) => token.length >= 4 && !TOPIC_STOP_WORDS.has(token)
+  );
+
+  if (topicTokens.length === 0) {
+    return true;
+  }
+
+  const copyTokens = new Set(
+    normalizeWordTokens(copy).filter((token) => token.length >= 4 && !TOPIC_STOP_WORDS.has(token))
+  );
+
+  if (copyTokens.size === 0) {
+    return false;
+  }
+
+  for (const token of topicTokens) {
+    if (copyTokens.has(token)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isOutlineTopicRelevant(slides: CarouselOutlineSlide[], topic: string) {
+  const topicTokens = normalizeWordTokens(buildTopicFocus(topic)).filter(
+    (token) => token.length >= 4 && !TOPIC_STOP_WORDS.has(token)
+  );
+
+  if (topicTokens.length === 0) {
+    return true;
+  }
+
+  const topicTokenSet = new Set(topicTokens);
+  const minSlidesWithTopic = Math.max(4, Math.ceil(slides.length * 0.45));
+
+  const slideHasTopic = (slide: CarouselOutlineSlide) => {
+    const parts: string[] = [];
+
+    if ("title" in slide && slide.title) {
+      parts.push(slide.title);
+    }
+    if ("subtitle" in slide && slide.subtitle) {
+      parts.push(slide.subtitle);
+    }
+    if ("before" in slide && slide.before) {
+      parts.push(slide.before);
+    }
+    if ("after" in slide && slide.after) {
+      parts.push(slide.after);
+    }
+    if ("bullets" in slide && Array.isArray(slide.bullets)) {
+      parts.push(...slide.bullets);
+    }
+
+    const merged = sanitizeCopyText(parts.join(" "), 420);
+    if (!merged) {
+      return false;
+    }
+
+    return normalizeWordTokens(merged).some((token) => topicTokenSet.has(token));
+  };
+
+  const slidesWithTopic = slides.reduce(
+    (count, slide) => (slideHasTopic(slide) ? count + 1 : count),
+    0
+  );
+
+  const supportingSlideTypes: CarouselSlideRole[] = [
+    "problem",
+    "amplify",
+    "mistake",
+    "shift",
+    "solution",
+    "cta"
+  ];
+  const supportingSlidesWithTopic = slides.reduce((count, slide) => {
+    if (!supportingSlideTypes.includes(slide.type)) {
+      return count;
+    }
+    return slideHasTopic(slide) ? count + 1 : count;
+  }, 0);
+
+  const hook = slides.find((slide) => slide.type === "hook");
+  const hookTitle = hook?.title?.trim() ?? "";
+  const hookLooksBad = !hookTitle || startsWithGenericMistakeLead(hookTitle) || !isTopicAligned(hookTitle, topic);
+  const repeatedGenericMistakes = slides.filter((slide) => {
+    if (!("title" in slide) || !slide.title) {
+      return false;
+    }
+    return startsWithGenericMistakeLead(slide.title);
+  }).length;
+
+  return (
+    !hookLooksBad &&
+    slidesWithTopic >= minSlidesWithTopic &&
+    supportingSlidesWithTopic >= 2 &&
+    repeatedGenericMistakes <= 1
+  );
+}
+
+function trimToWordBoundary(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value.trim();
+  }
+
+  const sliced = value.slice(0, maxLength).trimEnd();
+  const lastSpace = sliced.lastIndexOf(" ");
+  return (lastSpace > Math.floor(maxLength * 0.55) ? sliced.slice(0, lastSpace) : sliced).trim();
+}
+
+function canRetryWithAnotherModel(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const status = typeof (error as { status?: unknown }).status === "number"
+    ? (error as { status?: number }).status
+    : null;
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof (error as { message?: unknown }).message === "string"
+        ? String((error as { message?: unknown }).message)
+        : "";
+
+  if (status !== 400 && status !== 404) {
+    return false;
+  }
+
+  return /\bmodel\b|does not exist|unknown model|unsupported model|not found/i.test(message);
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
