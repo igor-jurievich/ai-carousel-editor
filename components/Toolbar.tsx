@@ -9,8 +9,6 @@ type ToolbarProps = {
   status: string;
   onTopicChange: (value: string) => void;
   onSlidesCountChange: (value: number) => void;
-  useInternetImages: boolean;
-  onUseInternetImagesChange: (value: boolean) => void;
   onGenerate: () => void;
   isGenerating: boolean;
   disabled?: boolean;
@@ -23,8 +21,6 @@ export function Toolbar({
   status,
   onTopicChange,
   onSlidesCountChange,
-  useInternetImages,
-  onUseInternetImagesChange,
   onGenerate,
   isGenerating,
   disabled = false
@@ -33,7 +29,7 @@ export function Toolbar({
     <header className="prompt-shell">
       <div className="prompt-brand">
         <span className="prompt-eyebrow">AI Carousel Editor</span>
-        <h1>Из идеи в готовую карусель за 5 минут</h1>
+        <h1>Из идеи в готовую карусель</h1>
       </div>
 
       <div className="prompt-composer">
@@ -59,18 +55,6 @@ export function Toolbar({
               </option>
             ))}
           </select>
-        </label>
-        <label className="prompt-toggle-field">
-          <input
-            type="checkbox"
-            checked={useInternetImages}
-            onChange={(event) => onUseInternetImagesChange(event.target.checked)}
-            disabled={disabled}
-          />
-          <span>
-            Подбирать картинки из интернета
-            <small>Добавим до 3 релевантных фото, если они реально усиливают серию</small>
-          </span>
         </label>
         <button className="btn" type="button" onClick={onGenerate} disabled={isGenerating || disabled}>
           {isGenerating ? "Генерирую..." : "Сгенерировать"}

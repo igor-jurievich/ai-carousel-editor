@@ -31,7 +31,7 @@ type CanvasEditorProps = {
     elementId: string,
     updates: Record<string, number>
   ) => void;
-  onInsertSlideAt: (index: number) => void;
+  onInsertSlideAt: (index: number, slideType?: "text" | "image_text" | "big_text") => void;
   onAddTextToSlide: (slideId: string) => void;
   onAddImageToSlide: (slideId: string) => void;
   onDeleteSelectedElement: () => void;

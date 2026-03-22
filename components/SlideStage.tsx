@@ -92,10 +92,8 @@ function resolveDragBounds(
   const safeMaxY = Math.min(canvasHeight - effectiveHeight, safeArea.bottom - effectiveHeight + textBleedY);
   const safeWidth = Math.max(60, safeArea.right - safeArea.left);
   const safeHeight = Math.max(40, safeArea.bottom - safeArea.top);
-  const forceCanvasBounds =
-    element.type === "image" && element.metaKey === "background-image";
-  const useCanvasX = forceCanvasBounds || width > safeWidth + textBleedX * 2;
-  const useCanvasY = forceCanvasBounds || effectiveHeight > safeHeight + textBleedY * 2;
+  const useCanvasX = width > safeWidth + textBleedX * 2;
+  const useCanvasY = effectiveHeight > safeHeight + textBleedY * 2;
 
   const minX = useCanvasX ? 0 : safeMinX;
   const maxX = useCanvasX ? Math.max(0, canvasWidth - width) : Math.max(minX, safeMaxX);
@@ -198,51 +196,6 @@ function getCoverCrop(
   };
 }
 
-function resolveBackgroundPlacement(
-  element: ImageElement,
-  sourceWidth: number,
-  sourceHeight: number
-) {
-  const fitMode = element.fitMode ?? "cover";
-  const zoom = clamp(element.zoom ?? 1, 0.4, 4);
-  const offsetX = element.offsetX ?? 0;
-  const offsetY = element.offsetY ?? 0;
-
-  if (fitMode === "cover") {
-    return {
-      x: element.x,
-      y: element.y,
-      width: element.width,
-      height: element.height,
-      crop: getCoverCrop(
-        sourceWidth,
-        sourceHeight,
-        element.width,
-        element.height,
-        zoom,
-        offsetX,
-        offsetY
-      )
-    };
-  }
-
-  const baseScale =
-    fitMode === "contain"
-      ? Math.min(element.width / sourceWidth, element.height / sourceHeight)
-      : 1;
-  const scale = Math.max(0.02, baseScale * zoom);
-  const renderWidth = sourceWidth * scale;
-  const renderHeight = sourceHeight * scale;
-
-  return {
-    x: element.x + (element.width - renderWidth) / 2 + offsetX,
-    y: element.y + (element.height - renderHeight) / 2 + offsetY,
-    width: renderWidth,
-    height: renderHeight,
-    crop: null
-  };
-}
-
 function snapRotationAngle(value: number) {
   const normalized = ((value % 360) + 360) % 360;
   const signed = normalized > 180 ? normalized - 360 : normalized;
@@ -338,21 +291,13 @@ function SlideImageNode({
   dragBoundFunc?: (position: { x: number; y: number }) => { x: number; y: number };
 }) {
   const [image] = useImage(element.src, "anonymous");
-  const isBackground = element.metaKey === "background-image";
-  const isManagedImageBlock = element.metaKey === "internet-image-top";
+  const isManagedImageBlock = element.metaKey === "image-top";
   const sourceWidth = image?.naturalWidth || image?.width || 0;
   const sourceHeight = image?.naturalHeight || image?.height || 0;
-  const backgroundPlacement =
-    isBackground && sourceWidth > 0 && sourceHeight > 0
-      ? resolveBackgroundPlacement(element, sourceWidth, sourceHeight)
-      : null;
   const shouldCrop =
-    !backgroundPlacement &&
     sourceWidth > 0 &&
     sourceHeight > 0 &&
-    ((element.fitMode ?? "cover") === "cover" ||
-      element.metaKey === "internet-image-top" ||
-      element.metaKey === "background-image");
+    ((element.fitMode ?? "cover") === "cover" || element.metaKey === "image-top");
   const coverCrop = shouldCrop
     ? getCoverCrop(
         sourceWidth,
@@ -364,10 +309,10 @@ function SlideImageNode({
         element.offsetY ?? 0
       )
     : null;
-  const drawX = backgroundPlacement?.x ?? element.x;
-  const drawY = backgroundPlacement?.y ?? element.y;
-  const drawWidth = backgroundPlacement?.width ?? element.width;
-  const drawHeight = backgroundPlacement?.height ?? element.height;
+  const drawX = element.x;
+  const drawY = element.y;
+  const drawWidth = element.width;
+  const drawHeight = element.height;
   const darken = clamp(element.darken ?? 0, 0, 1);
   const outlineStroke =
     selected
@@ -389,24 +334,22 @@ function SlideImageNode({
         opacity={element.opacity}
         rotation={element.rotation}
         cornerRadius={element.cornerRadius}
-        cropX={backgroundPlacement?.crop?.x ?? coverCrop?.x}
-        cropY={backgroundPlacement?.crop?.y ?? coverCrop?.y}
-        cropWidth={backgroundPlacement?.crop?.width ?? coverCrop?.width}
-        cropHeight={backgroundPlacement?.crop?.height ?? coverCrop?.height}
-        listening={!isBackground}
-        draggable={interactive && selected && !isBackground && !isManagedImageBlock}
+        cropX={coverCrop?.x}
+        cropY={coverCrop?.y}
+        cropWidth={coverCrop?.width}
+        cropHeight={coverCrop?.height}
+        listening
+        draggable={interactive && selected && !isManagedImageBlock}
         dragDistance={10}
-        dragBoundFunc={isBackground || isManagedImageBlock ? undefined : dragBoundFunc}
-        onClick={isBackground ? undefined : onSelect}
-        onTap={isBackground ? undefined : onSelect}
+        dragBoundFunc={isManagedImageBlock ? undefined : dragBoundFunc}
+        onClick={onSelect}
+        onTap={onSelect}
         onDragEnd={
-          isBackground || isManagedImageBlock
+          isManagedImageBlock
             ? undefined
             : (event) => onDragEnd?.(event.target.x(), event.target.y())
         }
-        onTransformEnd={
-          isBackground ? undefined : (event) => onTransformEnd?.(event.target as Konva.Image)
-        }
+        onTransformEnd={(event) => onTransformEnd?.(event.target as Konva.Image)}
         stroke={outlineStroke}
         strokeWidth={outlineWidth}
         shadowBlur={selected ? 18 : 0}
@@ -637,7 +580,7 @@ export function SlideStage({
       maxHeight
     );
 
-    if (element.type === "image" && element.metaKey !== "internet-image-top") {
+    if (element.type === "image" && element.metaKey !== "image-top") {
       const aspect = element.width / Math.max(1, element.height);
       if (Math.abs(scaleX - 1) >= Math.abs(scaleY - 1)) {
         nextHeight = clamp(nextWidth / aspect, 24, maxHeight);
@@ -884,13 +827,13 @@ export function SlideStage({
             flipEnabled={false}
             keepRatio={
               selectedElement?.type === "image" &&
-              selectedElement.metaKey !== "internet-image-top"
+              selectedElement.metaKey !== "image-top"
             }
             enabledAnchors={
               selectedElement?.type === "text"
                 ? ["middle-left", "middle-right"]
                 : selectedElement?.type === "image" &&
-                    selectedElement.metaKey === "internet-image-top"
+                    selectedElement.metaKey === "image-top"
                   ? ["top-center", "bottom-center"]
                 : ["top-left", "top-right", "bottom-left", "bottom-right"]
             }

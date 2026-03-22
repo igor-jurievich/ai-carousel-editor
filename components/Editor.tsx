@@ -12,7 +12,6 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import { SlideStage } from "@/components/SlideStage";
 import { Toolbar } from "@/components/Toolbar";
 import {
-  applyStylePresetToSlides,
   applyTemplateToSlide,
   applyTemplateToSlides,
   createBlankSlide,
@@ -24,13 +23,9 @@ import {
   projectTitleFromTopic,
   relayoutSlidesForFormat,
   reorderSlides,
-  setSlideBackgroundImageStyle,
-  setSlideFrameColor,
   SLIDE_FORMAT_DIMENSIONS,
-  STYLE_PRESETS,
   setSlideBackgroundImage,
   syncSlideOrderMeta,
-  type StylePresetId,
   updateSlideFooter
 } from "@/lib/carousel";
 import {
@@ -42,10 +37,8 @@ import type {
   CanvasElement,
   CarouselOutlineSlide,
   CarouselTemplateId,
-  FooterVariantId,
   Slide,
   SlideFormat,
-  TemplateCategoryId,
   TextElement
 } from "@/types/editor";
 
@@ -56,24 +49,8 @@ const MAX_TOPIC_CHARS = 4000;
 const MIN_TOPIC_CHARS = 3;
 const EXPORT_LOCK_STATUS = "Дождитесь завершения экспорта и повторите действие.";
 const GENERATE_LOCK_STATUS = "Дождитесь завершения генерации и повторите действие.";
-const IMAGE_MODE_TEMPLATE_ROTATION: CarouselTemplateId[] = [
-  "technology",
-  "editorial",
-  "business-light"
-];
-const DECOR_BACKGROUND_META_KEYS = new Set([
-  "decor-bg",
-  "decor-paper",
-  "decor-dots-bg",
-  "decor-lines-bg",
-  "decor-bolts-bg"
-]);
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
-type GlobalTypography = {
-  titleFont: string | null;
-  bodyFont: string | null;
-};
 const HISTORY_LIMIT = 40;
 const EXPORT_ATTEMPTS_MAX = 3;
 const EXPORT_CAPTURE_ATTEMPTS = 3;
@@ -90,14 +67,11 @@ type HistorySnapshot = {
 };
 
 export function Editor() {
-  const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("minimal", "1:1"));
+  const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("light", "1:1"));
   const [topic, setTopic] = useState("");
   const [slidesCount, setSlidesCount] = useState(DEFAULT_SLIDES_COUNT);
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
   const [slideFormat, setSlideFormat] = useState<SlideFormat>("1:1");
-  const [activeTemplateCategory, setActiveTemplateCategory] =
-    useState<TemplateCategoryId>("light");
-  const [templateScope, setTemplateScope] = useState<"slide" | "all">("slide");
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [displaySize, setDisplaySize] = useState(596);
   const [status, setStatus] = useState(DEFAULT_STATUS);
@@ -111,13 +85,7 @@ export function Editor() {
   const [pendingImageSlideId, setPendingImageSlideId] = useState<string | null>(null);
   const [pendingBackgroundSlideId, setPendingBackgroundSlideId] = useState<string | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
-  const [showSlideBadge, setShowSlideBadge] = useState(false);
-  const [useInternetImages, setUseInternetImages] = useState(false);
   const [fontsReady, setFontsReady] = useState(false);
-  const [globalTypography, setGlobalTypography] = useState<GlobalTypography>({
-    titleFont: null,
-    bodyFont: null
-  });
   const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([]);
   const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([]);
   const desktopCanvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -328,41 +296,7 @@ export function Editor() {
     () => activeSlide?.elements.find((element) => element.id === selectedElementId) ?? null,
     [activeSlide, selectedElementId]
   );
-  const activeImageBlockElement = useMemo(
-    () =>
-      activeSlide?.elements.find(
-        (element): element is Extract<CanvasElement, { type: "image" }> =>
-          element.type === "image" && element.metaKey === "internet-image-top"
-      ) ?? null,
-    [activeSlide]
-  );
-  const hasImageBlockLayout = Boolean(
-    activeSlide?.backgroundImage &&
-      (activeSlide?.imageLayoutMode === "top" || activeSlide?.imageLayoutMode === "bottom")
-  );
-  const activeHasBackgroundImage = useMemo(() => {
-    if (!activeSlide) {
-      return false;
-    }
-    if (Boolean(activeSlide.backgroundImage)) {
-      return true;
-    }
-    return activeSlide.elements.some(
-      (element) =>
-        element.type === "image" &&
-        (element.metaKey === "background-image" || element.metaKey === "internet-image-top")
-    );
-  }, [activeSlide]);
-
-  useEffect(() => {
-    if (
-      selectedElement &&
-      (selectedElement.type === "shape" ||
-        (selectedElement.type === "image" && selectedElement.metaKey === "background-image"))
-    ) {
-      setSelectedElementId(null);
-    }
-  }, [selectedElement]);
+  const activeHasBackgroundImage = Boolean(activeSlide?.backgroundImage);
 
   const editingTextElement = useMemo(() => {
     if (!activeSlide || !editingTextElementId) {
@@ -378,7 +312,7 @@ export function Editor() {
   }, [activeSlide, editingTextElementId]);
 
   const activeTemplateId = useMemo<CarouselTemplateId>(
-    () => activeSlide?.templateId ?? slides[0]?.templateId ?? "technology",
+    () => activeSlide?.templateId ?? slides[0]?.templateId ?? "light",
     [activeSlide, slides]
   );
   const generationLocked = isGenerating || isExportRendering;
@@ -402,10 +336,6 @@ export function Editor() {
     setHistoryPast((current) => [...current.slice(-(HISTORY_LIMIT - 1)), snapshot]);
     setHistoryFuture([]);
   };
-
-  useEffect(() => {
-    setActiveTemplateCategory(getTemplate(activeTemplateId).category);
-  }, [activeTemplateId]);
 
   const handleUndo = () => {
     if (!historyPast.length || generationLocked) {
@@ -518,7 +448,7 @@ export function Editor() {
             ...slide,
             elements: nextElements
           },
-          slide.templateId ?? "technology",
+          slide.templateId ?? "light",
           activeSlideIndex,
           slides.length,
           slideFormat
@@ -574,135 +504,6 @@ export function Editor() {
     }, options);
   };
 
-  const normalizeImageBlockLayout = (
-    slide: Slide,
-    options?: {
-      mode?: "top" | "bottom";
-      imageHeight?: number;
-    }
-  ) => {
-    const card = slide.elements.find(
-      (element): element is Extract<CanvasElement, { type: "shape" }> =>
-        element.type === "shape" && element.metaKey === "image-top-card"
-    );
-    const image = slide.elements.find(
-      (element): element is Extract<CanvasElement, { type: "image" }> =>
-        element.type === "image" && element.metaKey === "internet-image-top"
-    );
-
-    if (!card || !image) {
-      return slide;
-    }
-
-    const mode =
-      options?.mode ??
-      (slide.imageLayoutMode === "bottom" ? "bottom" : "top");
-    const imageHeight = clampValue(
-      options?.imageHeight ?? image.height,
-      slideFormat === "9:16" ? 300 : slideFormat === "4:5" ? 240 : 210,
-      slideFormat === "9:16" ? 760 : slideFormat === "4:5" ? 610 : 500
-    );
-    const cardPadding = 20;
-    const textPadX = 52;
-    const panelPad = 18;
-    const footerReserve = slideFormat === "9:16" ? 194 : slideFormat === "4:5" ? 176 : 166;
-    const maxImageBottom = card.y + card.height - footerReserve;
-    const imageY =
-      mode === "bottom" ? Math.max(card.y + 220, maxImageBottom - imageHeight) : card.y + cardPadding;
-    const imageX = card.x + cardPadding;
-    const imageWidth = card.width - cardPadding * 2;
-    const panelY = mode === "bottom" ? card.y + panelPad : imageY + imageHeight - 2;
-    const panelHeight =
-      mode === "bottom"
-        ? Math.max(170, imageY - panelY - 16)
-        : Math.max(170, card.y + card.height - panelY - 16);
-    const textX = card.x + textPadX;
-    const textWidth = card.width - textPadX * 2;
-    const titleY = panelY + 46;
-    const maxBodyBottom =
-      mode === "bottom"
-        ? imageY - 34
-        : card.y + card.height - (slideFormat === "9:16" ? 170 : 146);
-
-    const nextElements = slide.elements.map((element) => {
-      if (element.type === "image" && element.metaKey === "internet-image-top") {
-        return {
-          ...element,
-          x: imageX,
-          y: imageY,
-          width: imageWidth,
-          height: imageHeight
-        };
-      }
-
-      if (element.type === "shape" && element.metaKey === "image-top-frame") {
-        return {
-          ...element,
-          x: imageX - 2,
-          y: imageY - 2,
-          width: imageWidth + 4,
-          height: imageHeight + 4
-        };
-      }
-
-      if (element.type === "shape" && element.metaKey === "image-top-text-panel") {
-        return {
-          ...element,
-          x: card.x + panelPad,
-          y: panelY,
-          width: card.width - panelPad * 2,
-          height: panelHeight
-        };
-      }
-
-      if (element.type === "shape" && element.metaKey === "image-top-divider") {
-        return {
-          ...element,
-          x: textX,
-          y: panelY + 20
-        };
-      }
-
-      if (element.type === "text" && element.metaKey === "managed-title") {
-        const titleHeight = clampValue(element.height, 54, Math.max(84, panelHeight - 120));
-        return {
-          ...element,
-          x: textX,
-          y: titleY,
-          width: textWidth,
-          height: titleHeight
-        };
-      }
-
-      if (element.type === "text" && element.metaKey === "managed-body") {
-        const titleElement = slide.elements.find(
-          (item): item is Extract<CanvasElement, { type: "text" }> =>
-            item.type === "text" && item.metaKey === "managed-title"
-        );
-        const nextBodyY =
-          titleY +
-          clampValue(titleElement?.height ?? 92, 52, Math.max(84, panelHeight - 120)) +
-          24;
-        const maxHeight = Math.max(42, maxBodyBottom - nextBodyY);
-        return {
-          ...element,
-          x: textX,
-          y: nextBodyY,
-          width: textWidth,
-          height: clampValue(element.height, 42, maxHeight)
-        };
-      }
-
-      return element;
-    });
-
-    return {
-      ...slide,
-      imageLayoutMode: mode,
-      elements: nextElements
-    };
-  };
-
   const handleGenerate = async () => {
     if (isGenerating) {
       return;
@@ -737,9 +538,7 @@ export function Editor() {
     try {
       setIsGenerating(true);
       setStatus(
-        useInternetImages
-          ? `Генерирую ${requestedSlidesCount} слайдов и подбираю интернет-фото...`
-          : `Генерирую структуру через OpenAI (${requestedSlidesCount} слайдов, формат ${slideFormat})...`
+        `Генерирую структуру через OpenAI (${requestedSlidesCount} слайдов, формат ${slideFormat})...`
       );
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 70000);
@@ -751,8 +550,7 @@ export function Editor() {
         },
         body: JSON.stringify({
           topic: normalizedTopic,
-          slidesCount: requestedSlidesCount,
-          useInternetImages
+          slidesCount: requestedSlidesCount
         }),
         signal: controller.signal
       }).finally(() => {
@@ -761,25 +559,11 @@ export function Editor() {
 
       let data: {
         slides?: CarouselOutlineSlide[];
-        internetImages?: Array<{
-          slideIndex: number;
-          imageUrl: string;
-          relevanceScore?: number;
-          source?: string;
-          query?: string;
-        }>;
         error?: string;
       };
       try {
         data = (await response.json()) as {
           slides?: CarouselOutlineSlide[];
-          internetImages?: Array<{
-            slideIndex: number;
-            imageUrl: string;
-            relevanceScore?: number;
-            source?: string;
-            query?: string;
-          }>;
           error?: string;
         };
       } catch {
@@ -800,29 +584,12 @@ export function Editor() {
         slideFormat,
         requestedSlidesCount
       );
-      const withInternetImages = useInternetImages
-        ? applyInternetImagesToSlides(nextSlides, data.internetImages ?? [], slideFormat)
-        : nextSlides;
-      const withTypography = applyGlobalTypographyToSlides(
-        withInternetImages,
-        globalTypography.titleFont,
-        globalTypography.bodyFont
-      );
-      const addedInternetImages =
-        withInternetImages.filter((slide) => Boolean(slide.backgroundImage)).length -
-        nextSlides.filter((slide) => Boolean(slide.backgroundImage)).length;
       pushHistorySnapshot(true);
-      setSlides(withTypography);
-      setActiveSlideId(withTypography[0]?.id ?? null);
+      setSlides(nextSlides);
+      setActiveSlideId(nextSlides[0]?.id ?? null);
       setSelectedElementId(null);
       setEditingTextElementId(null);
-      setStatus(
-        addedInternetImages > 0
-          ? `Создано ${withInternetImages.length} слайдов, добавлено ${addedInternetImages} интернет-фото.`
-          : useInternetImages
-            ? `Создано ${withInternetImages.length} слайдов. Релевантные интернет-фото не найдены, оставлен текстовый layout.`
-            : `Создано ${withInternetImages.length} слайдов в формате ${slideFormat}.`
-      );
+      setStatus(`Создано ${nextSlides.length} слайдов в формате ${slideFormat}.`);
     } catch (error) {
       if (requestId === generateRequestRef.current) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -838,158 +605,21 @@ export function Editor() {
     }
   };
 
-  const handleBackgroundChange = (color: string) => {
-    if (generationLocked) {
-      setStatus(GENERATE_LOCK_STATUS);
-      return;
-    }
-
-    updateActiveSlide((slide) => ({
-      ...slide,
-      background: color,
-      elements: slide.elements.map((element) => {
-        if (
-          element.type === "shape" &&
-          element.metaKey &&
-          DECOR_BACKGROUND_META_KEYS.has(element.metaKey)
-        ) {
-          return {
-            ...element,
-            fill: color
-          };
-        }
-
-        return element;
-      })
-    }));
-    setStatus("Фон слайда обновлён.");
-  };
-
-  const handleFrameColorChange = (color: string) => {
-    if (generationLocked) {
-      return;
-    }
-
-    if (!activeSlide || activeSlideIndex === -1) {
-      return;
-    }
-
-    updateSlide(activeSlide.id, (slide) =>
-      setSlideFrameColor(slide, color, activeSlideIndex, slides.length, slideFormat)
-    );
-    setStatus("Цвет рамки обновлён.");
-  };
-
-  const handleUpdateBackgroundImageStyle = (updates: {
-    fitMode?: "cover" | "contain" | "original";
-    zoom?: number;
-    offsetX?: number;
-    offsetY?: number;
-    darken?: number;
-  }) => {
-    if (generationLocked) {
-      return;
-    }
-
-    if (!activeSlide || activeSlideIndex === -1 || !activeSlide.backgroundImage) {
-      return;
-    }
-
-    updateSlide(activeSlide.id, (slide) =>
-      setSlideBackgroundImageStyle(slide, updates, activeSlideIndex, slides.length, slideFormat)
-    );
-  };
-
-  const handleApplyGlobalTypography = (titleFont: string, bodyFont: string) => {
-    if (generationLocked) {
-      return;
-    }
-
-    setGlobalTypography({
-      titleFont,
-      bodyFont
-    });
-    pushHistorySnapshot(true);
-    setSlides((current) => applyGlobalTypographyToSlides(current, titleFont, bodyFont));
-    setStatus("Глобальная типографика применена ко всей карусели.");
-  };
-
-  const handleToggleImageBlockPosition = () => {
-    if (generationLocked || !activeSlide || activeSlideIndex === -1 || !hasImageBlockLayout) {
-      return;
-    }
-
-    const nextMode = activeSlide.imageLayoutMode === "bottom" ? "top" : "bottom";
-    updateSlide(activeSlide.id, (slide) => normalizeImageBlockLayout(slide, { mode: nextMode }));
-    setStatus(
-      nextMode === "bottom"
-        ? "Блок изображения перемещён вниз."
-        : "Блок изображения перемещён вверх."
-    );
-  };
-
-  const handleSetImageBlockHeight = (height: number) => {
-    if (generationLocked || !activeSlide || activeSlideIndex === -1 || !hasImageBlockLayout) {
-      return;
-    }
-
-    updateSlide(activeSlide.id, (slide) =>
-      normalizeImageBlockLayout(slide, {
-        imageHeight: height
-      })
-    );
-  };
-
-  const handleResetSelectedRotation = () => {
-    if (generationLocked || !selectedElementId) {
-      return;
-    }
-
-    if (!selectedElement || Math.abs(selectedElement.rotation) < 0.01) {
-      setStatus("Поворот уже равен 0°.");
-      return;
-    }
-
-    updateElement(selectedElementId, (element) => ({
-      ...element,
-      rotation: 0
-    }));
-    setStatus("Поворот элемента сброшен.");
-  };
-
-  const handleUpdateElementPosition = (elementId: string, x: number, y: number) => {
-    if (generationLocked) {
-      return;
-    }
-
-    updateElement(elementId, (element) => ({
-      ...element,
-      x,
-      y
-    }));
-  };
-
-  const handleTransformElement = (elementId: string, updates: Record<string, number>) => {
-    if (generationLocked) {
-      return;
-    }
-
-    updateElement(elementId, (element) => ({
-      ...element,
-      ...updates
-    }));
-  };
-
-  const handleInsertSlideAt = (index: number) => {
+  const handleInsertSlideAt = (
+    index: number,
+    slideType: "text" | "image_text" | "big_text" = "text"
+  ) => {
     if (generationLocked) {
       setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
       return;
     }
 
-    const nextSlide = applyGlobalTypographyToSlide(
-      createBlankSlide(index, activeTemplateId, slideFormat, slides.length + 1),
-      globalTypography.titleFont,
-      globalTypography.bodyFont
+    const nextSlide = createBlankSlide(
+      index,
+      activeTemplateId,
+      slideFormat,
+      slides.length + 1,
+      slideType
     );
     pushHistorySnapshot(true);
     setSlides((current) => {
@@ -1063,7 +693,7 @@ export function Editor() {
       height: 140,
       fontSize: slideFormat === "9:16" ? 34 : 36,
       fill: "#1f2a2d",
-      fontFamily: globalTypography.bodyFont ?? "Inter"
+      fontFamily: "Inter"
     });
 
     updateSlide(slideId, (slide) => ({
@@ -1199,51 +829,11 @@ export function Editor() {
     const templateName = getTemplate(templateId).name;
 
     pushHistorySnapshot(true);
-    if (templateScope === "all") {
-      setSlides((current) =>
-        applyGlobalTypographyToSlides(
-          applyTemplateToSlides(current, templateId, slideFormat),
-          globalTypography.titleFont,
-          globalTypography.bodyFont
-        )
-      );
-      setStatus(`Шаблон «${templateName}» применён ко всей карусели.`);
-    } else {
-      if (!activeSlide || activeSlideIndex === -1) {
-        return;
-      }
-
-      updateSlide(activeSlide.id, (slide) =>
-        applyGlobalTypographyToSlide(
-          applyTemplateToSlide(slide, templateId, activeSlideIndex, slides.length, slideFormat),
-          globalTypography.titleFont,
-          globalTypography.bodyFont
-        )
-      );
-      setStatus(`Шаблон «${templateName}» применён к текущему слайду.`);
-    }
+    setSlides((current) => applyTemplateToSlides(current, templateId, slideFormat));
+    setStatus(`Шаблон «${templateName}» применён ко всей карусели.`);
 
     setSelectedElementId(null);
     setEditingTextElementId(null);
-  };
-
-  const handleApplyStylePreset = (presetId: StylePresetId) => {
-    if (generationLocked) {
-      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
-      return;
-    }
-
-    pushHistorySnapshot(true);
-    setSlides((current) =>
-      applyGlobalTypographyToSlides(
-        applyStylePresetToSlides(current, presetId, slideFormat),
-        globalTypography.titleFont,
-        globalTypography.bodyFont
-      )
-    );
-    setSelectedElementId(null);
-    setEditingTextElementId(null);
-    setStatus(`Пресет «${getStylePresetLabel(presetId)}» применён ко всей серии.`);
   };
 
   const handleFormatChange = (format: SlideFormat) => {
@@ -1257,13 +847,7 @@ export function Editor() {
     }
 
     pushHistorySnapshot(true);
-    setSlides((current) =>
-      applyGlobalTypographyToSlides(
-        relayoutSlidesForFormat(current, slideFormat, format),
-        globalTypography.titleFont,
-        globalTypography.bodyFont
-      )
-    );
+    setSlides((current) => relayoutSlidesForFormat(current, slideFormat, format));
     setSlideFormat(format);
     setSelectedElementId(null);
     setEditingTextElementId(null);
@@ -1271,7 +855,7 @@ export function Editor() {
   };
 
   const handleUpdateFooter = (
-    updates: Partial<Pick<Slide, "profileHandle" | "profileSubtitle" | "footerVariant">>
+    updates: Partial<Pick<Slide, "profileHandle" | "profileSubtitle">>
   ) => {
     if (generationLocked) {
       return;
@@ -1387,7 +971,7 @@ export function Editor() {
       return;
     }
 
-    const starterSlides = createStarterSlides("minimal", slideFormat);
+    const starterSlides = createStarterSlides("light", slideFormat);
     pushHistorySnapshot(true);
     setSlides(starterSlides);
     setTopic("");
@@ -1398,11 +982,6 @@ export function Editor() {
     setEditingValue("");
     setMobileToolTab(null);
     setExportMode("zip");
-    setUseInternetImages(false);
-    setGlobalTypography({
-      titleFont: null,
-      bodyFont: null
-    });
     setStatus(DEFAULT_STATUS);
   };
 
@@ -1436,12 +1015,10 @@ export function Editor() {
 
     setActiveSlideId(slideId);
     updateSlide(slideId, (slide) => ({
-      ...normalizeImageBlockLayout({
-        ...slide,
-        elements: slide.elements.map((element) =>
-          element.id === elementId ? { ...element, ...updates } : element
-        )
-      })
+      ...slide,
+      elements: slide.elements.map((element) =>
+        element.id === elementId ? { ...element, ...updates } : element
+      )
     }));
   };
 
@@ -1649,8 +1226,6 @@ export function Editor() {
             status={status}
             onTopicChange={setTopic}
             onSlidesCountChange={(value) => setSlidesCount(clampSlidesCount(value))}
-            useInternetImages={useInternetImages}
-            onUseInternetImagesChange={setUseInternetImages}
             onGenerate={handleGenerate}
             isGenerating={isGenerating}
             disabled={generationLocked}
@@ -1725,7 +1300,7 @@ export function Editor() {
                 onDeleteSlide={handleDeleteSlide}
                 disabled={generationLocked}
                 previewMode={isPreviewMode}
-                showSlideBadge={showSlideBadge}
+                showSlideBadge={false}
                 fontsReady={fontsReady}
               />
             </section>
@@ -1738,12 +1313,8 @@ export function Editor() {
                   slide={activeSlide}
                   slideIndex={activeSlideIndex}
                   totalSlides={slides.length}
-                  selectedElement={selectedElement}
                   activeTemplateId={activeTemplateId}
-                  activeTemplateCategory={activeTemplateCategory}
-                  templateScope={templateScope}
                   activeFormat={slideFormat}
-                  footerVariant={activeSlide.footerVariant ?? "v1"}
                   profileHandle={activeSlide.profileHandle ?? ""}
                   profileSubtitle={activeSlide.profileSubtitle ?? ""}
                   hasBackgroundImage={activeHasBackgroundImage}
@@ -1752,20 +1323,6 @@ export function Editor() {
                   isExporting={isExportRendering}
                   onExportModeChange={setExportMode}
                   onExport={handleExport}
-                  onBackgroundChange={handleBackgroundChange}
-                  frameColor={activeSlide.frameColor ?? "#ffffff"}
-                  onFrameColorChange={handleFrameColorChange}
-                  onUpdateBackgroundImageStyle={handleUpdateBackgroundImageStyle}
-                  backgroundImageFitMode={activeSlide.backgroundImageFitMode ?? "cover"}
-                  backgroundImageZoom={activeSlide.backgroundImageZoom ?? 1}
-                  backgroundImageOffsetX={activeSlide.backgroundImageOffsetX ?? 0}
-                  backgroundImageOffsetY={activeSlide.backgroundImageOffsetY ?? 0}
-                  backgroundImageDarken={activeSlide.backgroundImageDarken ?? 0}
-                  hasImageBlockLayout={hasImageBlockLayout}
-                  imageBlockPosition={activeSlide.imageLayoutMode ?? "background"}
-                  imageBlockHeight={activeImageBlockElement?.height ?? 360}
-                  onToggleImageBlockPosition={handleToggleImageBlockPosition}
-                  onImageBlockHeightChange={handleSetImageBlockHeight}
                   onUploadBackgroundImage={() => handleAddBackgroundImage(activeSlide.id)}
                   onRemoveBackgroundImage={() => {
                     if (activeSlideIndex === -1) {
@@ -1779,25 +1336,14 @@ export function Editor() {
                     setStatus("Фоновое изображение удалено.");
                   }}
                   onFormatChange={handleFormatChange}
-                  onTemplateCategoryChange={setActiveTemplateCategory}
-                  onTemplateScopeChange={setTemplateScope}
                   onApplyTemplate={handleApplyTemplate}
-                  onApplyStylePreset={handleApplyStylePreset}
                   onSelectSlide={handleSelectSlide}
                   onInsertSlideAt={handleInsertSlideAt}
                   onDeleteSlide={handleDeleteSlide}
                   onProfileHandleChange={(value) => handleUpdateFooter({ profileHandle: value })}
                   onProfileSubtitleChange={(value) => handleUpdateFooter({ profileSubtitle: value })}
-                  onFooterVariantChange={(value) =>
-                    handleUpdateFooter({ footerVariant: value as FooterVariantId })
-                  }
-                  onUpdateElement={updateElement}
-                  onApplyGlobalTypography={handleApplyGlobalTypography}
-                  onResetElementRotation={handleResetSelectedRotation}
                   disabled={generationLocked}
                   previewMode={isPreviewMode}
-                  showSlideBadge={showSlideBadge}
-                  onToggleSlideBadge={() => setShowSlideBadge((value) => !value)}
                 />
               ) : null}
             </aside>
@@ -1921,18 +1467,6 @@ export function Editor() {
                   {isGenerating ? "Генерирую..." : "Сгенерировать"}
                 </button>
               </div>
-              <label className="mobile-generate-toggle">
-                <input
-                  type="checkbox"
-                  checked={useInternetImages}
-                  onChange={(event) => setUseInternetImages(event.target.checked)}
-                  disabled={generationLocked}
-                />
-                <span>
-                  Использовать картинки из интернета
-                  <small>Автоподбор 1-3 фото. Если релевантных нет — останется чистый текстовый layout.</small>
-                </span>
-              </label>
             </div>
           </details>
 
@@ -1968,7 +1502,7 @@ export function Editor() {
               onDeleteSlide={handleDeleteSlide}
               disabled={generationLocked}
               previewMode={isPreviewMode}
-              showSlideBadge={showSlideBadge}
+              showSlideBadge={false}
               fontsReady={fontsReady}
             />
           </section>
@@ -1977,29 +1511,11 @@ export function Editor() {
             <MobileTools
               activeTab={mobileToolTab}
               onTabChange={setMobileToolTab}
-              slide={activeSlide}
               selectedElement={selectedElement}
               activeTemplateId={activeTemplateId}
-              activeTemplateCategory={activeTemplateCategory}
-              templateScope={templateScope}
-              footerVariant={activeSlide.footerVariant ?? "v1"}
               profileHandle={activeSlide.profileHandle ?? ""}
               profileSubtitle={activeSlide.profileSubtitle ?? ""}
               hasBackgroundImage={activeHasBackgroundImage}
-              onBackgroundChange={handleBackgroundChange}
-              frameColor={activeSlide.frameColor ?? "#ffffff"}
-              onFrameColorChange={handleFrameColorChange}
-              onUpdateBackgroundImageStyle={handleUpdateBackgroundImageStyle}
-              backgroundImageFitMode={activeSlide.backgroundImageFitMode ?? "cover"}
-              backgroundImageZoom={activeSlide.backgroundImageZoom ?? 1}
-              backgroundImageOffsetX={activeSlide.backgroundImageOffsetX ?? 0}
-              backgroundImageOffsetY={activeSlide.backgroundImageOffsetY ?? 0}
-              backgroundImageDarken={activeSlide.backgroundImageDarken ?? 0}
-              hasImageBlockLayout={hasImageBlockLayout}
-              imageBlockPosition={activeSlide.imageLayoutMode ?? "background"}
-              imageBlockHeight={activeImageBlockElement?.height ?? 360}
-              onToggleImageBlockPosition={handleToggleImageBlockPosition}
-              onImageBlockHeightChange={handleSetImageBlockHeight}
               onUploadBackgroundImage={() => handleAddBackgroundImage(activeSlide.id)}
               onRemoveBackgroundImage={() => {
                 if (activeSlideIndex === -1) {
@@ -2012,22 +1528,13 @@ export function Editor() {
                 setEditingTextElementId(null);
                 setStatus("Фоновое изображение удалено.");
               }}
-              onTemplateCategoryChange={setActiveTemplateCategory}
-              onTemplateScopeChange={setTemplateScope}
               onApplyTemplate={handleApplyTemplate}
-              onApplyStylePreset={handleApplyStylePreset}
               onProfileHandleChange={(value) => handleUpdateFooter({ profileHandle: value })}
               onProfileSubtitleChange={(value) => handleUpdateFooter({ profileSubtitle: value })}
-              onFooterVariantChange={(value) => handleUpdateFooter({ footerVariant: value })}
-              onUpdateElement={updateElement}
-              onApplyGlobalTypography={handleApplyGlobalTypography}
-              onResetElementRotation={handleResetSelectedRotation}
               toolbarRef={mobileToolbarRef}
               toolSheetRef={mobileToolSheetRef}
               disabled={generationLocked}
               previewMode={isPreviewMode}
-              showSlideBadge={showSlideBadge}
-              onToggleSlideBadge={() => setShowSlideBadge((value) => !value)}
             />
           ) : null}
         </div>
@@ -2068,72 +1575,6 @@ export function Editor() {
       ) : null}
     </main>
   );
-}
-
-function applyInternetImagesToSlides(
-  slides: Slide[],
-  suggestions: Array<{
-    slideIndex: number;
-    imageUrl: string;
-    relevanceScore?: number;
-    source?: string;
-    query?: string;
-  }>,
-  format: SlideFormat
-) {
-  if (!suggestions.length) {
-    return slides;
-  }
-
-  const nextSlides = cloneSlides(slides);
-  const maxSuggestions = Math.min(3, suggestions.length);
-  const usedSlides = new Set<number>();
-
-  for (let index = 0; index < maxSuggestions; index += 1) {
-    const suggestion = suggestions[index];
-    if (
-      !suggestion ||
-      !suggestion.imageUrl ||
-      (typeof suggestion.relevanceScore === "number" && suggestion.relevanceScore < 0.38)
-    ) {
-      continue;
-    }
-
-    const safeSlideIndex = clampValue(
-      Number.isFinite(suggestion.slideIndex) ? Math.round(suggestion.slideIndex) : 0,
-      0,
-      nextSlides.length - 1
-    );
-    if (usedSlides.has(safeSlideIndex)) {
-      continue;
-    }
-    const targetSlide = nextSlides[safeSlideIndex];
-
-    if (!targetSlide) {
-      continue;
-    }
-
-    const fallbackTemplateId = IMAGE_MODE_TEMPLATE_ROTATION[index % IMAGE_MODE_TEMPLATE_ROTATION.length];
-    const templateId =
-      typeof targetSlide.templateId === "string" && targetSlide.templateId.trim()
-        ? targetSlide.templateId
-        : fallbackTemplateId;
-    const withImage = setSlideBackgroundImage(
-      targetSlide,
-      suggestion.imageUrl,
-      safeSlideIndex,
-      nextSlides.length,
-      format,
-      "top"
-    );
-    nextSlides[safeSlideIndex] =
-      withImage.templateId === templateId
-        ? withImage
-        : applyTemplateToSlide(withImage, templateId, safeSlideIndex, nextSlides.length, format);
-    usedSlides.add(safeSlideIndex);
-  }
-
-  return nextSlides;
 }
 
 function isTextEntryElement(element: Element | null) {
@@ -2189,59 +1630,6 @@ function cloneSlides(slides: Slide[]) {
   }));
 }
 
-function applyGlobalTypographyToSlide(
-  slide: Slide,
-  titleFont: string | null,
-  bodyFont: string | null
-) {
-  if (!titleFont && !bodyFont) {
-    return slide;
-  }
-
-  return {
-    ...slide,
-    elements: slide.elements.map((element) => {
-      if (element.type !== "text") {
-        return element;
-      }
-
-      if ((element.metaKey === "managed-title" || element.role === "title") && titleFont) {
-        return {
-          ...element,
-          fontFamily: titleFont
-        };
-      }
-
-      if (
-        bodyFont &&
-        (element.metaKey === "managed-body" ||
-          element.role === "body" ||
-          element.metaKey === "profile-handle" ||
-          element.metaKey === "profile-subtitle")
-      ) {
-        return {
-          ...element,
-          fontFamily: bodyFont
-        };
-      }
-
-      return element;
-    })
-  };
-}
-
-function applyGlobalTypographyToSlides(
-  slides: Slide[],
-  titleFont: string | null,
-  bodyFont: string | null
-) {
-  if (!titleFont && !bodyFont) {
-    return slides;
-  }
-
-  return slides.map((slide) => applyGlobalTypographyToSlide(slide, titleFont, bodyFont));
-}
-
 function areStageImagesReady(stage: Konva.Stage) {
   const found = stage.find("Image") as unknown;
   const imageNodes = (
@@ -2290,10 +1678,6 @@ function getExportModeLabel(mode: ExportMode) {
     return "PDF";
   }
   return "ZIP";
-}
-
-function getStylePresetLabel(presetId: StylePresetId) {
-  return STYLE_PRESETS.find((preset) => preset.id === presetId)?.label ?? presetId;
 }
 
 function resolveUserFacingError(error: unknown, fallback: string) {
@@ -2379,10 +1763,6 @@ function slugify(value: string) {
     .replace(/[^a-z0-9а-яё]+/gi, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
-}
-
-function clampValue(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
 }
 
 async function downscaleDataUrl(dataUrl: string, maxSide: number) {

@@ -1,52 +1,21 @@
 export type TextRole = "title" | "body" | "caption";
-export type CarouselTemplateId = string;
+export type CarouselTemplateId = "dark" | "light" | "color";
 export type SlideFormat = "1:1" | "4:5" | "9:16";
-export type FooterVariantId = "v1" | "v2" | "v3" | "v4";
-export type TemplateCategoryId = "dark" | "light" | "color";
 export type ElementMetaKey = string;
 export type ImageFitMode = "cover" | "contain" | "original";
+
 export type CarouselSlideRole =
   | "hook"
-  | "cover"
   | "problem"
   | "amplify"
-  | "myth"
   | "mistake"
   | "consequence"
   | "shift"
   | "solution"
-  | "structure"
-  | "tip"
-  | "steps"
-  | "checklist"
   | "example"
-  | "case"
-  | "comparison"
-  | "summary"
   | "cta";
-export type CarouselLayoutType =
-  | "hero"
-  | "statement"
-  | "list"
-  | "split"
-  | "card"
-  | "dark-slide"
-  | "cover-hero"
-  | "title-body"
-  | "bullets"
-  | "steps"
-  | "checklist"
-  | "case-split"
-  | "comparison"
-  | "summary"
-  | "cta"
-  | "image-top";
-export type CarouselImageIntent =
-  | "none"
-  | "subject-photo"
-  | "people-photo"
-  | "object-photo"
-  | "conceptual-photo";
+
+export type CanvasSlideType = "text" | "list" | "big_text" | "image_text" | "cta";
 
 export type TextElement = {
   id: string;
@@ -119,34 +88,74 @@ export type Slide = {
   background: string;
   elements: CanvasElement[];
   templateId?: CarouselTemplateId;
-  footerVariant?: FooterVariantId;
   profileHandle?: string;
   profileSubtitle?: string;
   backgroundImage?: string | null;
-  imageLayoutMode?: "background" | "top" | "bottom";
-  backgroundImageFitMode?: ImageFitMode;
-  backgroundImageZoom?: number;
-  backgroundImageOffsetX?: number;
-  backgroundImageOffsetY?: number;
-  backgroundImageDarken?: number;
-  frameColor?: string;
   generationRole?: CarouselSlideRole;
+  slideType?: CanvasSlideType;
   generationCoreIdea?: string;
-  layoutType?: CarouselLayoutType;
-  imageIntent?: CarouselImageIntent;
-  imageQueryDraft?: string;
 };
 
-export type CarouselOutlineSlide = {
+export type HookOutlineSlide = {
+  type: "hook";
   title: string;
-  text: string;
-  role?: CarouselSlideRole;
-  coreIdea?: string;
-  layoutType?: CarouselLayoutType;
-  imageIntent?: CarouselImageIntent;
-  imageQueryDraft?: string;
-  templateId?: CarouselTemplateId;
+  subtitle: string;
 };
+
+export type ProblemOutlineSlide = {
+  type: "problem";
+  title: string;
+  bullets: string[];
+};
+
+export type AmplifyOutlineSlide = {
+  type: "amplify";
+  title: string;
+  bullets: string[];
+};
+
+export type MistakeOutlineSlide = {
+  type: "mistake";
+  title: string;
+};
+
+export type ConsequenceOutlineSlide = {
+  type: "consequence";
+  bullets: string[];
+};
+
+export type ShiftOutlineSlide = {
+  type: "shift";
+  title: string;
+};
+
+export type SolutionOutlineSlide = {
+  type: "solution";
+  bullets: string[];
+};
+
+export type ExampleOutlineSlide = {
+  type: "example";
+  before: string;
+  after: string;
+};
+
+export type CtaOutlineSlide = {
+  type: "cta";
+  title: string;
+  subtitle: string;
+};
+
+export type CarouselOutlineSlide =
+  | HookOutlineSlide
+  | ProblemOutlineSlide
+  | AmplifyOutlineSlide
+  | MistakeOutlineSlide
+  | ConsequenceOutlineSlide
+  | ShiftOutlineSlide
+  | SolutionOutlineSlide
+  | ExampleOutlineSlide
+  | CtaOutlineSlide;
 
 export type CarouselProjectSummary = {
   id: string;
@@ -164,7 +173,6 @@ export type CarouselProject = {
 
 export type CarouselTemplate = {
   id: CarouselTemplateId;
-  category: TemplateCategoryId;
   name: string;
   description: string;
   accent: string;
@@ -175,12 +183,12 @@ export type CarouselTemplate = {
   bodyColor: string;
   titleFont: string;
   bodyFont: string;
-  titleOffsetY: number;
-  bodyOffsetY: number;
+  titleOffsetY?: number;
+  bodyOffsetY?: number;
   titleWidth?: number;
   bodyWidth?: number;
   bodyHeight?: number;
-  chipStyle: "solid" | "outline";
-  decoration: "band" | "grid" | "glow" | "paper" | "dots" | "lines" | "bolts" | "none";
+  chipStyle?: "solid" | "outline";
+  decoration?: "grid" | "none";
   preview?: string;
 };

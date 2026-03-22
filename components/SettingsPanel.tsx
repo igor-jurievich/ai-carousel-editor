@@ -1,28 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  BACKGROUND_STYLE_PRESETS,
-  FOOTER_VARIANTS,
-  FONT_OPTIONS,
-  getPrimaryTemplates,
-  STYLE_PRESETS,
-  getTemplatesByCategory,
-  type StylePresetId,
-  TEMPLATE_CATEGORY_LABELS
-} from "@/lib/carousel";
+import { getPrimaryTemplates } from "@/lib/carousel";
 import { AppIcon } from "@/components/icons";
 import type {
-  CanvasElement,
   CarouselTemplateId,
-  FooterVariantId,
   Slide,
-  SlideFormat,
-  TemplateCategoryId
+  SlideFormat
 } from "@/types/editor";
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
-type ExportPresetId = "instagram" | "instagram-stories" | "tiktok";
 
 type SettingsPanelProps = {
   slides: Slide[];
@@ -30,12 +16,8 @@ type SettingsPanelProps = {
   slide: Slide;
   slideIndex: number;
   totalSlides: number;
-  selectedElement: CanvasElement | null;
   activeTemplateId: CarouselTemplateId;
-  activeTemplateCategory: TemplateCategoryId;
-  templateScope: "slide" | "all";
   activeFormat: SlideFormat;
-  footerVariant: FooterVariantId;
   profileHandle: string;
   profileSubtitle: string;
   hasBackgroundImage: boolean;
@@ -44,44 +26,15 @@ type SettingsPanelProps = {
   isExporting?: boolean;
   onExportModeChange: (mode: ExportMode) => void;
   onExport: () => void;
-  onBackgroundChange: (color: string) => void;
   onUploadBackgroundImage: () => void;
   onRemoveBackgroundImage: () => void;
   onFormatChange: (format: SlideFormat) => void;
-  onTemplateCategoryChange: (category: TemplateCategoryId) => void;
-  onTemplateScopeChange: (scope: "slide" | "all") => void;
   onApplyTemplate: (templateId: CarouselTemplateId) => void;
-  onApplyStylePreset: (presetId: StylePresetId) => void;
   onSelectSlide: (slideId: string) => void;
-  onInsertSlideAt: (index: number) => void;
+  onInsertSlideAt: (index: number, slideType?: "text" | "image_text" | "big_text") => void;
   onDeleteSlide: (slideId: string) => void;
   onProfileHandleChange: (value: string) => void;
   onProfileSubtitleChange: (value: string) => void;
-  onFooterVariantChange: (value: FooterVariantId) => void;
-  onUpdateElement: (elementId: string, updater: (element: CanvasElement) => CanvasElement) => void;
-  onApplyGlobalTypography: (titleFont: string, bodyFont: string) => void;
-  frameColor: string;
-  onFrameColorChange: (value: string) => void;
-  onUpdateBackgroundImageStyle: (updates: {
-    fitMode?: "cover" | "contain" | "original";
-    zoom?: number;
-    offsetX?: number;
-    offsetY?: number;
-    darken?: number;
-  }) => void;
-  backgroundImageFitMode: "cover" | "contain" | "original";
-  backgroundImageZoom: number;
-  backgroundImageOffsetX: number;
-  backgroundImageOffsetY: number;
-  backgroundImageDarken: number;
-  hasImageBlockLayout: boolean;
-  imageBlockPosition: "top" | "bottom" | "background";
-  imageBlockHeight: number;
-  onToggleImageBlockPosition: () => void;
-  onImageBlockHeightChange: (height: number) => void;
-  onResetElementRotation: () => void;
-  showSlideBadge: boolean;
-  onToggleSlideBadge: () => void;
   disabled?: boolean;
   previewMode?: boolean;
 };
@@ -92,12 +45,8 @@ export function SettingsPanel({
   slide,
   slideIndex,
   totalSlides,
-  selectedElement,
   activeTemplateId,
-  activeTemplateCategory,
-  templateScope,
   activeFormat,
-  footerVariant,
   profileHandle,
   profileSubtitle,
   hasBackgroundImage,
@@ -106,137 +55,22 @@ export function SettingsPanel({
   isExporting = false,
   onExportModeChange,
   onExport,
-  onBackgroundChange,
   onUploadBackgroundImage,
   onRemoveBackgroundImage,
   onFormatChange,
-  onTemplateCategoryChange,
-  onTemplateScopeChange,
   onApplyTemplate,
-  onApplyStylePreset,
   onSelectSlide,
   onInsertSlideAt,
   onDeleteSlide,
   onProfileHandleChange,
   onProfileSubtitleChange,
-  onFooterVariantChange,
-  onUpdateElement,
-  onApplyGlobalTypography,
-  frameColor,
-  onFrameColorChange,
-  onUpdateBackgroundImageStyle,
-  backgroundImageFitMode,
-  backgroundImageZoom,
-  backgroundImageOffsetX,
-  backgroundImageOffsetY,
-  backgroundImageDarken,
-  hasImageBlockLayout,
-  imageBlockPosition,
-  imageBlockHeight,
-  onToggleImageBlockPosition,
-  onImageBlockHeightChange,
-  onResetElementRotation,
-  showSlideBadge,
-  onToggleSlideBadge,
   disabled = false,
   previewMode = false
 }: SettingsPanelProps) {
-  const [showExtendedTemplates, setShowExtendedTemplates] = useState(false);
-  const visibleTemplates = getTemplatesByCategory(activeTemplateCategory);
-  const primaryTemplates = getPrimaryTemplates();
-  const [templatesOpen, setTemplatesOpen] = useState(false);
-  const [globalTitleFont, setGlobalTitleFont] = useState("");
-  const [globalBodyFont, setGlobalBodyFont] = useState("");
-  const currentTemplate = visibleTemplates.find((template) => template.id === activeTemplateId);
+  const templates = getPrimaryTemplates();
   const activeIndex = Math.max(
     0,
     slides.findIndex((item) => item.id === (activeSlideId ?? slide.id))
-  );
-
-  const updateTextElement = (
-    updater: (
-      element: Extract<CanvasElement, { type: "text" }>
-    ) => Extract<CanvasElement, { type: "text" }>
-  ) => {
-    if (!selectedElement || selectedElement.type !== "text") {
-      return;
-    }
-
-    onUpdateElement(selectedElement.id, (element) =>
-      element.type === "text" ? updater(element) : element
-    );
-  };
-
-  const updateImageElement = (
-    updater: (
-      element: Extract<CanvasElement, { type: "image" }>
-    ) => Extract<CanvasElement, { type: "image" }>
-  ) => {
-    if (!selectedElement || selectedElement.type !== "image") {
-      return;
-    }
-
-    onUpdateElement(selectedElement.id, (element) =>
-      element.type === "image" ? updater(element) : element
-    );
-  };
-  const applyManagedAlign = (target: "title" | "body", align: "left" | "center" | "right") => {
-    const managed = slide.elements.find(
-      (element): element is Extract<CanvasElement, { type: "text" }> =>
-        element.type === "text" && element.metaKey === (target === "title" ? "managed-title" : "managed-body")
-    );
-    if (!managed) {
-      return;
-    }
-
-    onUpdateElement(managed.id, (element) =>
-      element.type === "text"
-        ? {
-            ...element,
-            align
-          }
-        : element
-    );
-  };
-  const exportLabel = getExportLabel(exportMode);
-  const selectedElementLabel = selectedElement
-    ? selectedElement.type === "text"
-      ? "Выбран текст"
-      : selectedElement.type === "image"
-        ? "Выбрано изображение"
-        : "Выбрана фигура"
-    : null;
-  const firstTitleFont = useMemo(
-    () =>
-      slide.elements.find(
-        (element): element is Extract<CanvasElement, { type: "text" }> =>
-          element.type === "text" && (element.metaKey === "managed-title" || element.role === "title")
-      )?.fontFamily ?? "Manrope",
-    [slide.elements]
-  );
-  const firstBodyFont = useMemo(
-    () =>
-      slide.elements.find(
-        (element): element is Extract<CanvasElement, { type: "text" }> =>
-          element.type === "text" && (element.metaKey === "managed-body" || element.role === "body")
-      )?.fontFamily ?? "Inter",
-    [slide.elements]
-  );
-  const managedTitle = useMemo(
-    () =>
-      slide.elements.find(
-        (element): element is Extract<CanvasElement, { type: "text" }> =>
-          element.type === "text" && element.metaKey === "managed-title"
-      ) ?? null,
-    [slide.elements]
-  );
-  const managedBody = useMemo(
-    () =>
-      slide.elements.find(
-        (element): element is Extract<CanvasElement, { type: "text" }> =>
-          element.type === "text" && element.metaKey === "managed-body"
-      ) ?? null,
-    [slide.elements]
   );
 
   if (previewMode) {
@@ -255,1286 +89,184 @@ export function SettingsPanel({
     <>
       <section className="settings-card">
         <div className="settings-card-header">
-          <h2 className="settings-title">Общие настройки</h2>
-          <span className="status-pill">Слайд {slideIndex + 1} / {totalSlides}</span>
+          <h2 className="settings-title">Слайды</h2>
+          <span className="status-pill">
+            Слайд {slideIndex + 1} / {totalSlides}
+          </span>
         </div>
 
-        <div className="settings-block">
-          <div className="settings-inline-head">
-            <span className="settings-label">Слайды</span>
-            <button
-              type="button"
-              className="ghost-chip ghost-chip-small"
-              onClick={() => onInsertSlideAt(activeIndex + 1)}
-              disabled={disabled}
-            >
-              <span className="chip-with-icon">
-                <AppIcon name="plus" size={14} />
-                Добавить
-              </span>
-            </button>
-          </div>
-
-          <div className="slides-list slides-list-compact">
-            {slides.map((item, index) => {
-              const isActive = item.id === activeSlideId;
-              return (
-                <div key={item.id} className="slides-list-row">
-                  <button
-                    type="button"
-                    className={`slides-list-item ${isActive ? "active" : ""}`}
-                    onClick={() => onSelectSlide(item.id)}
-                    disabled={disabled}
-                  >
-                    <span className="slides-list-index">{index + 1}</span>
-                    <span className="slides-list-copy">
-                      <strong>{item.name}</strong>
-                      <span>{item.templateId ?? "custom"}</span>
-                    </span>
-                    <span className="slides-list-arrow">
-                      <AppIcon name="chevron-right" size={14} />
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="slides-list-delete"
-                    onClick={() => onDeleteSlide(item.id)}
-                    title="Удалить слайд"
-                    aria-label={`Удалить слайд ${index + 1}`}
-                    disabled={slides.length <= 1 || disabled}
-                  >
-                    <AppIcon name="trash" size={14} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="settings-block">
-          <span className="settings-label">Быстрый старт: 3 базовых шаблона</span>
-          <div className="template-grid template-grid-primary">
-            {primaryTemplates.map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                className={`template-card ${template.id === activeTemplateId ? "active" : ""}`}
-                onClick={() => onApplyTemplate(template.id)}
-                disabled={disabled}
-              >
-                <span
-                  className="template-preview"
-                  style={{
-                    background:
-                      template.accentAlt
-                        ? `linear-gradient(140deg, ${template.background} 0%, ${template.surface} 56%, ${template.accentAlt} 100%)`
-                        : template.background
-                  }}
-                >
-                  <span className="template-preview-sheen" />
-                  <span
-                    className="template-preview-chip"
-                    style={{ backgroundColor: template.accent }}
-                  />
-                  <span
-                    className="template-preview-title"
-                    style={{ color: template.titleColor }}
-                  >
-                    {getTemplatePreviewHeadline(template)}
-                  </span>
-                  <span className="template-preview-lines">
-                    <span style={{ backgroundColor: template.bodyColor }} />
-                    <span style={{ backgroundColor: template.bodyColor }} />
-                    <span style={{ backgroundColor: template.bodyColor }} />
-                  </span>
-                  <span className="template-preview-footer" style={{ color: template.bodyColor }}>
-                    @creator <strong>→</strong>
-                  </span>
-                </span>
-                <span className="template-card-meta">
-                  <strong>{template.name}</strong>
-                  <span>{getTemplatePreviewCaption(template)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <span className="settings-label">Быстрые пресеты серии</span>
-          <div className="mobile-style-grid">
-            {STYLE_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className="mobile-style-chip"
-                onClick={() => onApplyStylePreset(preset.id)}
-                disabled={disabled}
-                title={preset.hint}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            className="template-disclosure"
-            onClick={() => setShowExtendedTemplates((value) => !value)}
-            disabled={disabled}
-          >
-            <span>
-              <strong>{showExtendedTemplates ? "Скрыть расширенную библиотеку" : "Расширенная библиотека"}</strong>
-              <span>{currentTemplate?.description ?? "Дополнительные шаблоны"}</span>
-            </span>
-            <span>{showExtendedTemplates ? "Свернуть" : "Открыть"}</span>
-          </button>
-
-          {showExtendedTemplates ? (
-            <>
-              <span className="settings-label">Категория шаблонов</span>
-              <div className="segment-control">
-                {(Object.keys(TEMPLATE_CATEGORY_LABELS) as TemplateCategoryId[]).map((category) => (
-                  <button
-                    key={category}
-                    type="button"
-                    className={`segment-item ${activeTemplateCategory === category ? "active" : ""}`}
-                    onClick={() => onTemplateCategoryChange(category)}
-                    disabled={disabled}
-                  >
-                    {TEMPLATE_CATEGORY_LABELS[category]}
-                  </button>
-                ))}
-              </div>
-
-              <span className="settings-label">Применение</span>
-              <div className="segment-control">
+        <div className="slides-list slides-list-compact">
+          {slides.map((item, index) => {
+            const isActive = item.id === activeSlideId;
+            return (
+              <div key={item.id} className="slides-list-row">
                 <button
                   type="button"
-                  className={`segment-item ${templateScope === "slide" ? "active" : ""}`}
-                  onClick={() => onTemplateScopeChange("slide")}
+                  className={`slides-list-item ${isActive ? "active" : ""}`}
+                  onClick={() => onSelectSlide(item.id)}
                   disabled={disabled}
                 >
-                  Этот слайд
+                  <span className="slides-list-index">{index + 1}</span>
+                  <span className="slides-list-copy">
+                    <strong>{item.name}</strong>
+                    <span>{item.slideType ?? "text"}</span>
+                  </span>
+                  <span className="slides-list-arrow">
+                    <AppIcon name="chevron-right" size={14} />
+                  </span>
                 </button>
+
                 <button
                   type="button"
-                  className={`segment-item ${templateScope === "all" ? "active" : ""}`}
-                  onClick={() => onTemplateScopeChange("all")}
-                  disabled={disabled}
+                  className="slides-list-delete"
+                  onClick={() => onDeleteSlide(item.id)}
+                  title="Удалить слайд"
+                  aria-label={`Удалить слайд ${index + 1}`}
+                  disabled={slides.length <= 1 || disabled}
                 >
-                  Вся карусель
+                  <AppIcon name="trash" size={14} />
                 </button>
               </div>
-
-              <button
-                type="button"
-                className="template-disclosure"
-                onClick={() => setTemplatesOpen((value) => !value)}
-                disabled={disabled}
-              >
-                <span>
-                  <strong>{currentTemplate?.name ?? "Выберите шаблон"}</strong>
-                  <span>{currentTemplate?.description ?? "Открыть список шаблонов"}</span>
-                </span>
-                <span>{templatesOpen ? "Скрыть" : "Показать"}</span>
-              </button>
-
-              {templatesOpen ? (
-                <div className="template-grid">
-                  {visibleTemplates.map((template) => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      className={`template-card ${template.id === activeTemplateId ? "active" : ""}`}
-                      onClick={() => {
-                        onApplyTemplate(template.id);
-                        setTemplatesOpen(false);
-                      }}
-                      disabled={disabled}
-                    >
-                      <span
-                        className="template-preview"
-                        style={{
-                          background:
-                            template.accentAlt
-                              ? `linear-gradient(140deg, ${template.background} 0%, ${template.surface} 56%, ${template.accentAlt} 100%)`
-                              : template.background
-                        }}
-                      >
-                        <span className="template-preview-sheen" />
-                        <span
-                          className="template-preview-chip"
-                          style={{ backgroundColor: template.accent }}
-                        />
-                        <span
-                          className="template-preview-title"
-                          style={{ color: template.titleColor }}
-                        >
-                          {getTemplatePreviewHeadline(template)}
-                        </span>
-                        <span className="template-preview-lines">
-                          <span style={{ backgroundColor: template.bodyColor }} />
-                          <span style={{ backgroundColor: template.bodyColor }} />
-                          <span style={{ backgroundColor: template.bodyColor }} />
-                        </span>
-                        <span className="template-preview-footer" style={{ color: template.bodyColor }}>
-                          @creator <strong>→</strong>
-                        </span>
-                      </span>
-                      <span className="template-card-meta">
-                        <strong>{template.name}</strong>
-                        <span>{getTemplatePreviewCaption(template)}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </>
-          ) : null}
+            );
+          })}
         </div>
 
-        <div className="settings-block">
-          <span className="settings-label">Формат</span>
-          <div className="segment-control">
-            {(["1:1", "4:5", "9:16"] as SlideFormat[]).map((format) => (
-              <button
-                key={format}
-                type="button"
-                className={`segment-item ${activeFormat === format ? "active" : ""}`}
-                onClick={() => onFormatChange(format)}
-                disabled={isGenerating || isExporting || disabled}
-              >
-                {format}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="settings-block">
-          <span className="settings-label">Фон слайда</span>
-          <div className="background-preview-card" aria-hidden="true">
-            <div
-              className="background-preview-sample"
-              style={{
-                background: slide.background,
-                borderColor: frameColor
-              }}
-            />
-            <div className="background-preview-copy">
-              <strong>Предпросмотр</strong>
-              <span>Фон: {slide.background}</span>
-              <span>Рамка: {frameColor}</span>
-            </div>
-          </div>
-          <label className="color-row">
-            <input
-              className="color-input"
-              type="color"
-              value={slide.background}
-              onChange={(event) => onBackgroundChange(event.target.value)}
-              disabled={disabled}
-            />
-            <span>Фон карточки • {slide.background}</span>
-          </label>
-          <label className="color-row">
-            <input
-              className="color-input"
-              type="color"
-              value={frameColor}
-              onChange={(event) => onFrameColorChange(event.target.value)}
-              disabled={disabled}
-            />
-            <span>Цвет рамки • {frameColor}</span>
-          </label>
-          <span className="settings-label">Стили фона</span>
-          <div className="mobile-style-grid">
-            {BACKGROUND_STYLE_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className="mobile-style-chip"
-                onClick={() => onApplyTemplate(preset.templateId)}
-                disabled={disabled}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-          <div className="field-row">
-            <button
-              type="button"
-              className="ghost-chip"
-              onClick={onUploadBackgroundImage}
-              disabled={disabled}
-            >
-              Загрузить фон
-            </button>
-            <button
-              type="button"
-              className="ghost-chip ghost-chip-muted"
-              onClick={onRemoveBackgroundImage}
-              disabled={!hasBackgroundImage || disabled}
-            >
-              Удалить фон
-            </button>
-          </div>
-
-          {hasBackgroundImage ? (
-            <>
-              <span className="settings-label">Режим изображения</span>
-              <div className="segment-control">
-                {(["cover", "contain", "original"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={`segment-item ${backgroundImageFitMode === mode ? "active" : ""}`}
-                    onClick={() => onUpdateBackgroundImageStyle({ fitMode: mode })}
-                    disabled={disabled}
-                  >
-                    {getFitModeLabel(mode)}
-                  </button>
-                ))}
-              </div>
-
-              <div className="field-row">
-                <label className="field-label">
-                  Zoom
-                  <input
-                    className="field"
-                    type="number"
-                    min={0.4}
-                    max={4}
-                    step={0.05}
-                    value={backgroundImageZoom}
-                    onChange={(event) =>
-                      onUpdateBackgroundImageStyle({
-                        zoom: Number(event.target.value) || 1
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </label>
-                <label className="field-label">
-                  Darken
-                  <input
-                    className="field"
-                    type="number"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={backgroundImageDarken}
-                    onChange={(event) =>
-                      onUpdateBackgroundImageStyle({
-                        darken: Number(event.target.value) || 0
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </label>
-              </div>
-
-              <div className="field-row">
-                <label className="field-label">
-                  Offset X
-                  <input
-                    className="field"
-                    type="number"
-                    min={-640}
-                    max={640}
-                    step={1}
-                    value={backgroundImageOffsetX}
-                    onChange={(event) =>
-                      onUpdateBackgroundImageStyle({
-                        offsetX: Number(event.target.value) || 0
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </label>
-                <label className="field-label">
-                  Offset Y
-                  <input
-                    className="field"
-                    type="number"
-                    min={-640}
-                    max={640}
-                    step={1}
-                    value={backgroundImageOffsetY}
-                    onChange={(event) =>
-                      onUpdateBackgroundImageStyle({
-                        offsetY: Number(event.target.value) || 0
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </label>
-              </div>
-
-              {hasImageBlockLayout ? (
-                <>
-                  <button
-                    type="button"
-                    className="ghost-chip"
-                    onClick={onToggleImageBlockPosition}
-                    disabled={disabled}
-                  >
-                    {imageBlockPosition === "bottom"
-                      ? "Картинка снизу (переместить вверх)"
-                      : "Картинка сверху (переместить вниз)"}
-                  </button>
-                  <label className="field-label">
-                    Высота блока изображения
-                    <input
-                      className="range"
-                      type="range"
-                      min={180}
-                      max={760}
-                      value={imageBlockHeight}
-                      onChange={(event) =>
-                        onImageBlockHeightChange(Number(event.target.value) || imageBlockHeight)
-                      }
-                      disabled={disabled}
-                    />
-                  </label>
-                </>
-              ) : null}
-            </>
-          ) : null}
-        </div>
-
-        <div className="settings-block">
-          <span className="settings-label">Глобальная типографика</span>
-          <div className="field-row">
-            <label className="field-label">
-              Заголовок
-              <select
-                className="select"
-                value={globalTitleFont || firstTitleFont}
-                onChange={(event) => {
-                  const nextTitleFont = event.target.value;
-                  setGlobalTitleFont(nextTitleFont);
-                  onApplyGlobalTypography(nextTitleFont, globalBodyFont || firstBodyFont);
-                }}
-                disabled={disabled}
-              >
-                {FONT_OPTIONS.map((font) => (
-                  <option key={`global-title-${font}`} value={font}>
-                    {font}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field-label">
-              Описание
-              <select
-                className="select"
-                value={globalBodyFont || firstBodyFont}
-                onChange={(event) => {
-                  const nextBodyFont = event.target.value;
-                  setGlobalBodyFont(nextBodyFont);
-                  onApplyGlobalTypography(globalTitleFont || firstTitleFont, nextBodyFont);
-                }}
-                disabled={disabled}
-              >
-                {FONT_OPTIONS.map((font) => (
-                  <option key={`global-body-${font}`} value={font}>
-                    {font}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+        <div className="field-row" style={{ marginTop: 12 }}>
           <button
             type="button"
             className="ghost-chip"
-            onClick={() =>
-              onApplyGlobalTypography(
-                globalTitleFont || firstTitleFont,
-                globalBodyFont || firstBodyFont
-              )
-            }
+            onClick={() => onInsertSlideAt(activeIndex + 1, "text")}
             disabled={disabled}
           >
-            Применить ко всем слайдам
+            + Текст
           </button>
-          <span className="settings-hint">Шрифты применяются мгновенно ко всей серии.</span>
-          <div className="field-grid">
-            <span className="settings-label">Выравнивание заголовка</span>
-            <div className="icon-segment">
-              <button
-                type="button"
-                className={`icon-segment-item ${managedTitle?.align === "left" ? "active" : ""}`}
-                onClick={() => applyManagedAlign("title", "left")}
-                disabled={disabled || !managedTitle}
-              >
-                <AppIcon name="align-left" size={14} />
-              </button>
-              <button
-                type="button"
-                className={`icon-segment-item ${managedTitle?.align === "center" ? "active" : ""}`}
-                onClick={() => applyManagedAlign("title", "center")}
-                disabled={disabled || !managedTitle}
-              >
-                <AppIcon name="align-center" size={14} />
-              </button>
-              <button
-                type="button"
-                className={`icon-segment-item ${managedTitle?.align === "right" ? "active" : ""}`}
-                onClick={() => applyManagedAlign("title", "right")}
-                disabled={disabled || !managedTitle}
-              >
-                <AppIcon name="align-right" size={14} />
-              </button>
-            </div>
-            <span className="settings-label">Выравнивание описания</span>
-            <div className="icon-segment">
-              <button
-                type="button"
-                className={`icon-segment-item ${managedBody?.align === "left" ? "active" : ""}`}
-                onClick={() => applyManagedAlign("body", "left")}
-                disabled={disabled || !managedBody}
-              >
-                <AppIcon name="align-left" size={14} />
-              </button>
-              <button
-                type="button"
-                className={`icon-segment-item ${managedBody?.align === "center" ? "active" : ""}`}
-                onClick={() => applyManagedAlign("body", "center")}
-                disabled={disabled || !managedBody}
-              >
-                <AppIcon name="align-center" size={14} />
-              </button>
-              <button
-                type="button"
-                className={`icon-segment-item ${managedBody?.align === "right" ? "active" : ""}`}
-                onClick={() => applyManagedAlign("body", "right")}
-                disabled={disabled || !managedBody}
-              >
-                <AppIcon name="align-right" size={14} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="settings-block">
-          <span className="settings-label">Блок профиля на слайде</span>
-          <div className="segment-control">
-            {FOOTER_VARIANTS.map((variant) => (
-              <button
-                key={variant.id}
-                type="button"
-                className={`segment-item ${footerVariant === variant.id ? "active" : ""}`}
-                onClick={() => onFooterVariantChange(variant.id)}
-                disabled={disabled}
-              >
-                {variant.label}
-              </button>
-            ))}
-          </div>
-
-          <label className="field-label">
-            Ник
-            <input
-              className="field"
-              value={profileHandle}
-              onChange={(event) => onProfileHandleChange(event.target.value)}
-              placeholder="@username"
-              disabled={disabled}
-            />
-          </label>
-
-          <label className="field-label">
-            Подпись
-            <input
-              className="field"
-              value={profileSubtitle}
-              onChange={(event) => onProfileSubtitleChange(event.target.value)}
-              placeholder="Подпись"
-              disabled={disabled}
-            />
-          </label>
-
           <button
             type="button"
-            className={`ghost-chip ${showSlideBadge ? "" : "ghost-chip-muted"}`}
-            onClick={onToggleSlideBadge}
+            className="ghost-chip"
+            onClick={() => onInsertSlideAt(activeIndex + 1, "image_text")}
             disabled={disabled}
           >
-            {showSlideBadge ? "Скрыть бейдж слайда" : "Показать бейдж слайда"}
+            + Фото + текст
+          </button>
+          <button
+            type="button"
+            className="ghost-chip"
+            onClick={() => onInsertSlideAt(activeIndex + 1, "big_text")}
+            disabled={disabled}
+          >
+            + Большой текст
           </button>
         </div>
       </section>
 
       <section className="settings-card">
-        <h3>Настройки элемента</h3>
-        {selectedElementLabel ? <div className="settings-selected-pill">{selectedElementLabel}</div> : null}
-
-        {selectedElement ? (
-          <div className="field-grid">
+        <h3>Тема Карусели</h3>
+        <div className="mobile-style-grid">
+          {templates.map((template) => (
             <button
+              key={template.id}
               type="button"
-              className="ghost-chip ghost-chip-muted"
-              onClick={onResetElementRotation}
-              disabled={disabled || Math.abs(selectedElement.rotation) < 0.01}
+              className={`mobile-style-chip ${activeTemplateId === template.id ? "active" : ""}`}
+              onClick={() => onApplyTemplate(template.id)}
+              disabled={disabled}
             >
-              Сбросить поворот (0°)
+              {template.name}
             </button>
+          ))}
+        </div>
+      </section>
 
-            {selectedElement.type === "text" ? (
-              <>
-                <div className="settings-hint">
-                  Чтобы двигать текст: выделите блок и перетащите его на canvas в пределах safe-zone.
-                </div>
-                {isGenerating || isExporting ? (
-                  <div className="settings-warning">
-                    Перемещение временно заблокировано, пока идёт генерация или экспорт.
-                  </div>
-                ) : null}
-                <label className="field-label">
-                  Текст
-                  <textarea
-                    className="textarea"
-                    rows={5}
-                    value={selectedElement.text}
-                    onChange={(event) =>
-                      updateTextElement((element) => ({
-                        ...element,
-                        text: event.target.value
-                      }))
-                    }
-                    disabled={disabled}
-                  />
-                </label>
+      <section className="settings-card">
+        <h3>Формат</h3>
+        <div className="segment-control">
+          {(["1:1", "4:5", "9:16"] as SlideFormat[]).map((format) => (
+            <button
+              key={format}
+              type="button"
+              className={`segment-item ${activeFormat === format ? "active" : ""}`}
+              onClick={() => onFormatChange(format)}
+              disabled={isGenerating || isExporting || disabled}
+            >
+              {format}
+            </button>
+          ))}
+        </div>
+      </section>
 
-                {selectedElement.metaKey === "managed-body" && selectedElement.wasAutoTruncated ? (
-                  <div className="settings-warning">
-                    Текст автоматически сокращён, чтобы не выйти за границы макета. Сократите формулировку,
-                    если нужна полная версия.
-                  </div>
-                ) : null}
+      <section className="settings-card">
+        <h3>Фото</h3>
+        <div className="field-row">
+          <button
+            type="button"
+            className="ghost-chip"
+            onClick={onUploadBackgroundImage}
+            disabled={disabled}
+          >
+            Загрузить
+          </button>
+          <button
+            type="button"
+            className="ghost-chip ghost-chip-muted"
+            onClick={onRemoveBackgroundImage}
+            disabled={!hasBackgroundImage || disabled}
+          >
+            Удалить
+          </button>
+        </div>
+        <div className="settings-hint">
+          Только ручная загрузка изображений. Автопоиск и AI-картинки отключены.
+        </div>
+      </section>
 
-                <div className="field-label">
-                  Форматирование
-                  <div className="icon-segment">
-                    <button
-                      type="button"
-                      className={`icon-segment-item ${
-                        selectedElement.fontStyle?.includes("bold") ? "active" : ""
-                      }`}
-                      onClick={() =>
-                        updateTextElement((element) => ({
-                          ...element,
-                          fontStyle: toggleFontStyleToken(element.fontStyle, "bold")
-                        }))
-                      }
-                      disabled={disabled}
-                    >
-                      <AppIcon name="bold" size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`icon-segment-item ${
-                        selectedElement.fontStyle?.includes("italic") ? "active" : ""
-                      }`}
-                      onClick={() =>
-                        updateTextElement((element) => ({
-                          ...element,
-                          fontStyle: toggleFontStyleToken(element.fontStyle, "italic")
-                        }))
-                      }
-                      disabled={disabled}
-                    >
-                      <AppIcon name="italic" size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`icon-segment-item ${
-                        selectedElement.textDecoration?.includes("underline") ? "active" : ""
-                      }`}
-                      onClick={() =>
-                        updateTextElement((element) => ({
-                          ...element,
-                          textDecoration: toggleTextDecorationToken(
-                            element.textDecoration,
-                            "underline"
-                          )
-                        }))
-                      }
-                      disabled={disabled}
-                    >
-                      <AppIcon name="underline" size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`icon-segment-item ${
-                        selectedElement.textDecoration?.includes("line-through") ? "active" : ""
-                      }`}
-                      onClick={() =>
-                        updateTextElement((element) => ({
-                          ...element,
-                          textDecoration: toggleTextDecorationToken(
-                            element.textDecoration,
-                            "line-through"
-                          )
-                        }))
-                      }
-                      disabled={disabled}
-                    >
-                      <AppIcon name="strike" size={14} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="field-row">
-                  <label className="field-label">
-                    Шрифт
-                    <select
-                      className="select"
-                      value={selectedElement.fontFamily}
-                      onChange={(event) =>
-                        updateTextElement((element) => ({
-                          ...element,
-                          fontFamily: event.target.value
-                        }))
-                      }
-                      disabled={disabled}
-                    >
-                      {FONT_OPTIONS.map((font) => (
-                        <option key={font} value={font}>
-                          {font}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="field-label">
-                    Выравнивание
-                    <select
-                      className="select"
-                      value={selectedElement.align}
-                      onChange={(event) =>
-                        updateTextElement((element) => ({
-                          ...element,
-                          align: event.target.value as "left" | "center" | "right"
-                        }))
-                      }
-                      disabled={disabled}
-                    >
-                      <option value="left">Слева</option>
-                      <option value="center">По центру</option>
-                      <option value="right">Справа</option>
-                    </select>
-                  </label>
-                </div>
-
-                <div className="field-row">
-                  <label className="field-label">
-                    Межстрочный
-                    <input
-                      className="field"
-                      type="number"
-                      min={0.8}
-                      max={2}
-                      step={0.02}
-                      value={selectedElement.lineHeight ?? 1.1}
-                      onChange={(event) =>
-                        updateTextElement((element) => ({
-                          ...element,
-                          lineHeight: Number(event.target.value) || element.lineHeight
-                        }))
-                      }
-                      disabled={disabled}
-                    />
-                  </label>
-
-                  <label className="field-label">
-                    Интервал
-                    <input
-                      className="field"
-                      type="number"
-                      min={-2}
-                      max={12}
-                      step={0.1}
-                      value={selectedElement.letterSpacing ?? 0}
-                      onChange={(event) =>
-                        updateTextElement((element) => ({
-                          ...element,
-                          letterSpacing: Number(event.target.value) || 0
-                        }))
-                      }
-                      disabled={disabled}
-                    />
-                  </label>
-                </div>
-
-                <div className="field-row">
-                  <label className="field-label">
-                    Размер
-                    <input
-                      className="field"
-                      type="number"
-                      min={12}
-                      max={220}
-                      value={selectedElement.fontSize}
-                      onChange={(event) =>
-                        updateTextElement((element) => ({
-                          ...element,
-                          fontSize: Number(event.target.value) || element.fontSize
-                        }))
-                      }
-                      disabled={disabled}
-                    />
-                  </label>
-
-                  <label className="field-label">
-                    Цвет
-                    <input
-                      className="field"
-                      type="color"
-                      value={selectedElement.fill}
-                      onChange={(event) =>
-                        updateTextElement((element) => ({
-                          ...element,
-                          fill: event.target.value
-                        }))
-                      }
-                      disabled={disabled}
-                    />
-                  </label>
-                </div>
-              </>
-            ) : null}
-
-            {selectedElement.type === "image" ? (
-              <>
-                <div className="field-label">
-                  Пресеты изображения
-                  <div className="segment-control">
-                    <button
-                      type="button"
-                      className="segment-item"
-                      onClick={() =>
-                        updateImageElement((element) => ({
-                          ...element,
-                          fitMode: "contain",
-                          cornerRadius: 22
-                        }))
-                      }
-                      disabled={disabled}
-                    >
-                      Карточка
-                    </button>
-                    <button
-                      type="button"
-                      className="segment-item"
-                      onClick={() =>
-                        updateImageElement((element) => ({
-                          ...element,
-                          ...applyImageFitMode(element, "cover"),
-                          fitMode: "cover",
-                          cornerRadius: 0
-                        }))
-                      }
-                      disabled={disabled}
-                    >
-                      Обложка
-                    </button>
-                    <button
-                      type="button"
-                      className="segment-item"
-                      onClick={() =>
-                        updateImageElement((element) => ({
-                          ...element,
-                          fitMode: "cover",
-                          cornerRadius: Math.max(18, Math.min(element.width, element.height) / 2)
-                        }))
-                      }
-                      disabled={disabled}
-                    >
-                      Круг
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className={`ghost-chip ${(selectedElement.strokeWidth ?? 0) > 0 ? "" : "ghost-chip-muted"}`}
-                  onClick={() =>
-                    updateImageElement((element) => ({
-                      ...element,
-                      strokeWidth: (element.strokeWidth ?? 0) > 0 ? 0 : 8,
-                      stroke: element.stroke || "#ffffff"
-                    }))
-                  }
-                  disabled={disabled}
-                >
-                  {(selectedElement.strokeWidth ?? 0) > 0 ? "Убрать рамку" : "Добавить рамку"}
-                </button>
-
-                <label className="field-label">
-                  Ссылка на изображение
-                  <textarea
-                    className="textarea"
-                    rows={4}
-                    value={selectedElement.src}
-                    onChange={(event) =>
-                      updateImageElement((element) => ({
-                        ...element,
-                        src: event.target.value
-                      }))
-                    }
-                    disabled={disabled}
-                  />
-                </label>
-
-                <div className="field-label">
-                  Режим
-                  <div className="segment-control">
-                    {(["cover", "contain", "original"] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        className={`segment-item ${
-                          (selectedElement.fitMode ?? "cover") === mode ? "active" : ""
-                        }`}
-                        onClick={() =>
-                          updateImageElement((element) => ({
-                            ...applyImageFitMode(element, mode),
-                            fitMode: mode
-                          }))
-                        }
-                        disabled={disabled}
-                      >
-                        {getFitModeLabel(mode)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="field-row">
-                  <label className="field-label">
-                    Zoom
-                    <input
-                      className="field"
-                      type="number"
-                      min={0.4}
-                      max={4}
-                      step={0.05}
-                      value={selectedElement.zoom ?? 1}
-                      onChange={(event) =>
-                        updateImageElement((element) => ({
-                          ...element,
-                          zoom: Number(event.target.value) || 1
-                        }))
-                      }
-                      disabled={disabled}
-                    />
-                  </label>
-
-                  <label className="field-label">
-                    Darken
-                    <input
-                      className="field"
-                      type="number"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={selectedElement.darken ?? 0}
-                      onChange={(event) =>
-                        updateImageElement((element) => ({
-                          ...element,
-                          darken: Number(event.target.value) || 0
-                        }))
-                      }
-                      disabled={disabled}
-                    />
-                  </label>
-                </div>
-
-                {(selectedElement.strokeWidth ?? 0) > 0 ? (
-                  <div className="field-row">
-                    <label className="field-label">
-                      Цвет рамки
-                      <input
-                        className="field"
-                        type="color"
-                        value={selectedElement.stroke ?? "#ffffff"}
-                        onChange={(event) =>
-                          updateImageElement((element) => ({
-                            ...element,
-                            stroke: event.target.value
-                          }))
-                        }
-                        disabled={disabled}
-                      />
-                    </label>
-                    <label className="field-label">
-                      Толщина рамки
-                      <input
-                        className="field"
-                        type="number"
-                        min={1}
-                        max={28}
-                        step={1}
-                        value={selectedElement.strokeWidth ?? 8}
-                        onChange={(event) =>
-                          updateImageElement((element) => ({
-                            ...element,
-                            strokeWidth: Number(event.target.value) || 0
-                          }))
-                        }
-                        disabled={disabled}
-                      />
-                    </label>
-                  </div>
-                ) : null}
-
-                <div className="field-row">
-                  <label className="field-label">
-                    Offset X
-                    <input
-                      className="field"
-                      type="number"
-                      min={-640}
-                      max={640}
-                      step={1}
-                      value={selectedElement.offsetX ?? 0}
-                      onChange={(event) =>
-                        updateImageElement((element) => ({
-                          ...element,
-                          offsetX: Number(event.target.value) || 0
-                        }))
-                      }
-                      disabled={disabled}
-                    />
-                  </label>
-
-                  <label className="field-label">
-                    Offset Y
-                    <input
-                      className="field"
-                      type="number"
-                      min={-640}
-                      max={640}
-                      step={1}
-                      value={selectedElement.offsetY ?? 0}
-                      onChange={(event) =>
-                        updateImageElement((element) => ({
-                          ...element,
-                          offsetY: Number(event.target.value) || 0
-                        }))
-                      }
-                      disabled={disabled}
-                    />
-                  </label>
-                </div>
-              </>
-            ) : null}
-          </div>
-        ) : (
-          <div className="settings-empty">
-            Выберите элемент на слайде. Двойной клик по тексту включает редактирование прямо на макете.
-          </div>
-        )}
+      <section className="settings-card">
+        <h3>Подпись</h3>
+        <label className="field-label">
+          Ник
+          <input
+            className="field"
+            value={profileHandle}
+            onChange={(event) => onProfileHandleChange(event.target.value)}
+            placeholder="@username"
+            disabled={disabled}
+          />
+        </label>
+        <label className="field-label">
+          Подпись
+          <input
+            className="field"
+            value={profileSubtitle}
+            onChange={(event) => onProfileSubtitleChange(event.target.value)}
+            placeholder="Надпись"
+            disabled={disabled}
+          />
+        </label>
       </section>
 
       <section className="settings-card">
         <h3>Экспорт</h3>
-        <div className="settings-hint">
-          ZIP, PNG и JPG выгружаются архивом, PDF собирается в один многостраничный файл.
-          {isGenerating ? " Экспорт станет доступен после завершения генерации." : ""}
-        </div>
-
-        <div className="settings-block">
-          <span className="settings-label">Пресеты</span>
-          <div className="segment-control">
-            {EXPORT_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className="segment-item"
-                onClick={() => onFormatChange(preset.format)}
-                disabled={isExporting || isGenerating || disabled}
-                title={preset.hint}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="segment-control">
+        <div className="field-row">
+          <select
+            className="select"
+            value={exportMode}
+            onChange={(event) => onExportModeChange(event.target.value as ExportMode)}
+            disabled={disabled || isExporting}
+          >
+            <option value="zip">ZIP (PNG)</option>
+            <option value="png">PNG</option>
+            <option value="jpg">JPG</option>
+            <option value="pdf">PDF</option>
+          </select>
           <button
             type="button"
-            className={`segment-item ${exportMode === "zip" ? "active" : ""}`}
-            onClick={() => onExportModeChange("zip")}
-            disabled={isExporting || isGenerating || disabled}
+            className="btn"
+            onClick={onExport}
+            disabled={disabled || isExporting || isGenerating}
           >
-            ZIP
-          </button>
-          <button
-            type="button"
-            className={`segment-item ${exportMode === "png" ? "active" : ""}`}
-            onClick={() => onExportModeChange("png")}
-            disabled={isExporting || isGenerating || disabled}
-          >
-            PNG
-          </button>
-          <button
-            type="button"
-            className={`segment-item ${exportMode === "jpg" ? "active" : ""}`}
-            onClick={() => onExportModeChange("jpg")}
-            disabled={isExporting || isGenerating || disabled}
-          >
-            JPG
-          </button>
-          <button
-            type="button"
-            className={`segment-item ${exportMode === "pdf" ? "active" : ""}`}
-            onClick={() => onExportModeChange("pdf")}
-            disabled={isExporting || isGenerating || disabled}
-          >
-            PDF
+            {isExporting ? "Экспорт..." : "Экспорт"}
           </button>
         </div>
-
-        <button
-          className="export-button"
-          type="button"
-          onClick={onExport}
-          disabled={isExporting || isGenerating || disabled}
-        >
-          {isExporting ? `Экспортирую ${exportLabel}...` : `Скачать ${exportLabel}`}
-        </button>
       </section>
+
     </>
   );
-}
-
-function applyImageFitMode(
-  element: Extract<CanvasElement, { type: "image" }>,
-  mode: "cover" | "contain" | "original"
-) {
-  const sourceWidth = element.naturalWidth ?? element.width;
-  const sourceHeight = element.naturalHeight ?? element.height;
-  if (!sourceWidth || !sourceHeight) {
-    return element;
-  }
-
-  const sourceRatio = sourceWidth / sourceHeight;
-  const frameRatio = element.width / Math.max(1, element.height);
-  let width = element.width;
-  let height = element.height;
-
-  if (mode === "contain") {
-    if (sourceRatio > frameRatio) {
-      height = Math.max(24, Math.round(element.width / sourceRatio));
-    } else {
-      width = Math.max(24, Math.round(element.height * sourceRatio));
-    }
-  } else if (mode === "original") {
-    const capRatio = Math.min(1.2, 1280 / Math.max(sourceWidth, sourceHeight));
-    width = Math.max(24, Math.round(sourceWidth * capRatio));
-    height = Math.max(24, Math.round(sourceHeight * capRatio));
-  } else if (sourceRatio > frameRatio) {
-    width = Math.max(24, Math.round(element.height * sourceRatio));
-  } else {
-    height = Math.max(24, Math.round(element.width / sourceRatio));
-  }
-
-  return {
-    ...element,
-    width,
-    height
-  };
-}
-
-function getExportLabel(mode: ExportMode) {
-  if (mode === "png") {
-    return "PNG (архив)";
-  }
-  if (mode === "jpg") {
-    return "JPG (архив)";
-  }
-  if (mode === "pdf") {
-    return "PDF";
-  }
-  return "ZIP";
-}
-
-function getFitModeLabel(mode: "cover" | "contain" | "original") {
-  if (mode === "cover") {
-    return "Заполнить";
-  }
-
-  if (mode === "contain") {
-    return "Вписать";
-  }
-
-  return "Оригинал";
-}
-
-const EXPORT_PRESETS: Array<{
-  id: ExportPresetId;
-  label: string;
-  hint: string;
-  format: SlideFormat;
-}> = [
-  {
-    id: "instagram",
-    label: "Instagram",
-    hint: "Квадратный пост 1:1",
-    format: "1:1"
-  },
-  {
-    id: "instagram-stories",
-    label: "Stories",
-    hint: "Вертикальные сторис 9:16",
-    format: "9:16"
-  },
-  {
-    id: "tiktok",
-    label: "TikTok",
-    hint: "Вертикальный формат 9:16",
-    format: "9:16"
-  }
-];
-
-function getTemplatePreviewHeadline(template: { name: string; preview?: string }) {
-  const source = template.preview?.trim() || template.name;
-  return source.length > 32 ? `${source.slice(0, 32)}…` : source;
-}
-
-function getTemplatePreviewCaption(template: { description: string; preview?: string }) {
-  const source = template.preview?.trim() || template.description;
-  return source.length > 70 ? `${source.slice(0, 70)}…` : source;
-}
-
-function toggleFontStyleToken(value: string | undefined, token: "bold" | "italic") {
-  const current = new Set((value || "normal").split(" ").filter(Boolean));
-  if (current.has("normal")) {
-    current.delete("normal");
-  }
-
-  if (current.has(token)) {
-    current.delete(token);
-  } else {
-    current.add(token);
-  }
-
-  if (!current.size) {
-    return "normal";
-  }
-
-  return Array.from(current).join(" ");
-}
-
-function toggleTextDecorationToken(value: string | undefined, token: "underline" | "line-through") {
-  const current = new Set((value || "").split(" ").filter(Boolean));
-  if (current.has(token)) {
-    current.delete(token);
-  } else {
-    current.add(token);
-  }
-  return Array.from(current).join(" ");
 }
