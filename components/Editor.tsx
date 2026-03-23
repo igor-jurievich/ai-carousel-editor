@@ -63,18 +63,12 @@ const MOBILE_PREVIEW_MAX_WIDTH: Record<SlideFormat, number> = {
 };
 const MANAGED_TEXT_META_KEYS = new Set(["managed-title", "managed-body"]);
 const MANAGED_TITLE_META_KEY = "managed-title";
-const MANAGED_TITLE_ACCENT_META_KEY = "managed-title-accent";
-const MANAGED_TITLE_ACCENT_CHIP_META_KEY = "managed-title-accent-chip";
 
 type HistorySnapshot = {
   slides: Slide[];
   activeSlideId: string | null;
   slideFormat: SlideFormat;
 };
-
-function clampNumber(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(value, max));
-}
 
 export function Editor() {
   const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("light", "1:1"));
@@ -507,11 +501,6 @@ export function Editor() {
           slides.length,
           slideFormat
         );
-        const rebuiltTitleElement = rebuiltSlide.elements.find(
-          (element): element is TextElement =>
-            element.type === "text" && element.metaKey === MANAGED_TITLE_META_KEY
-        );
-
         const rebuiltWithPinnedPosition = rebuiltSlide.elements.map((element) => {
           if (
             element.type !== "text" ||
@@ -538,50 +527,8 @@ export function Editor() {
           };
         });
 
-        const rebuiltWithSyncedAccent =
-          next.type === "text" &&
-          next.metaKey === MANAGED_TITLE_META_KEY &&
-          rebuiltTitleElement
-            ? rebuiltWithPinnedPosition.map((element) => {
-                if (
-                  element.type === "text" &&
-                  element.metaKey === MANAGED_TITLE_ACCENT_META_KEY
-                ) {
-                  const widthScale =
-                    rebuiltTitleElement.width > 0 ? next.width / rebuiltTitleElement.width : 1;
-                  return {
-                    ...element,
-                    x: element.x + (next.x - rebuiltTitleElement.x),
-                    y: element.y + (next.y - rebuiltTitleElement.y),
-                    width: clampNumber(Math.round(element.width * widthScale), 24, next.width),
-                    fontSize: next.fontSize,
-                    fontFamily: next.fontFamily,
-                    fontStyle: next.fontStyle,
-                    lineHeight: next.lineHeight,
-                    letterSpacing: next.letterSpacing
-                  };
-                }
-
-                if (
-                  element.type === "shape" &&
-                  element.metaKey === MANAGED_TITLE_ACCENT_CHIP_META_KEY
-                ) {
-                  const widthScale =
-                    rebuiltTitleElement.width > 0 ? next.width / rebuiltTitleElement.width : 1;
-                  return {
-                    ...element,
-                    x: element.x + (next.x - rebuiltTitleElement.x),
-                    y: element.y + (next.y - rebuiltTitleElement.y),
-                    width: clampNumber(Math.round(element.width * widthScale), 30, next.width)
-                  };
-                }
-
-                return element;
-              })
-            : rebuiltWithPinnedPosition;
-
         if (next.metaKey) {
-          const replacement = rebuiltWithSyncedAccent.find(
+          const replacement = rebuiltWithPinnedPosition.find(
             (element) => element.type === next.type && element.metaKey === next.metaKey
           );
 
@@ -596,7 +543,7 @@ export function Editor() {
 
         return {
           ...rebuiltSlide,
-          elements: rebuiltWithSyncedAccent
+          elements: rebuiltWithPinnedPosition
         };
       }
 

@@ -140,7 +140,6 @@ const MANAGED_META_KEYS = new Set([
   "profile-subtitle",
   "footer-arrow",
   "managed-title",
-  "managed-title-accent",
   "managed-title-accent-chip",
   "managed-body",
   "image-placeholder",
@@ -215,6 +214,29 @@ function normalizeWordTokens(value: string) {
 }
 
 const GENERIC_ERROR_LEAD_RE = /^(одн[а-яё]*\s+)?(типичн[а-яё]*\s+)?(главн[а-яё]*\s+)?ошиб[а-яё]*/iu;
+const TITLE_DEDUPE_STOP_WORDS = new Set([
+  "как",
+  "что",
+  "это",
+  "или",
+  "для",
+  "про",
+  "под",
+  "без",
+  "при",
+  "где",
+  "когда",
+  "почему",
+  "вместо",
+  "после",
+  "до"
+]);
+const LEGACY_TITLE_TEMPLATE_RE =
+  /\b(в\s+теме|где\s+ломается\s+поток|что\s+это\s+стоит\s+в\s+теме|разбор\s+под\s+ваш\s+кейс)\b/iu;
+
+function shouldDedupeTitleToken(token: string) {
+  return token.length >= 4 && !TITLE_DEDUPE_STOP_WORDS.has(token);
+}
 
 function sanitizeBlueprintText(value: string, maxLength: number, dedupeGlobal = false) {
   const normalized = normalizeMultilineText(value).replace(/\s+([.,!?;:])/gu, "$1");
@@ -222,11 +244,11 @@ function sanitizeBlueprintText(value: string, maxLength: number, dedupeGlobal = 
     return "";
   }
 
+  const globalTokens = dedupeGlobal ? new Set<string>() : null;
   const lines = normalized.split("\n");
   const resultLines = lines.map((line) => {
     const words = line.split(" ").filter(Boolean);
     const compactWords: string[] = [];
-    const seen = new Set<string>();
     let previousToken = "";
 
     for (const word of words) {
@@ -234,22 +256,58 @@ function sanitizeBlueprintText(value: string, maxLength: number, dedupeGlobal = 
       if (token && token === previousToken) {
         continue;
       }
-      if (dedupeGlobal && token.length >= 5 && seen.has(token)) {
-        continue;
-      }
 
-      if (dedupeGlobal && token.length >= 5) {
-        seen.add(token);
+      if (globalTokens && token && shouldDedupeTitleToken(token) && globalTokens.has(token)) {
+        continue;
       }
 
       compactWords.push(word);
       previousToken = token || previousToken;
+      if (globalTokens && token && shouldDedupeTitleToken(token)) {
+        globalTokens.add(token);
+      }
     }
 
     return compactWords.join(" ").trim();
   });
 
-  return compactTextLength(resultLines.join("\n").trim(), maxLength);
+  const compacted = dedupeGlobal
+    ? collapseTitleRepetition(resultLines.join("\n").trim())
+    : resultLines.join("\n").trim();
+
+  return compactTextLength(compacted, maxLength);
+}
+
+function collapseTitleRepetition(value: string) {
+  if (!value) {
+    return "";
+  }
+
+  const words = value.split(/\s+/u).filter(Boolean);
+  if (words.length <= 2) {
+    return value;
+  }
+
+  const compactWords: string[] = [];
+  for (const word of words) {
+    const token = normalizeWordTokens(word)[0] ?? "";
+    const previous = compactWords[compactWords.length - 1] ?? "";
+    const previousToken = normalizeWordTokens(previous)[0] ?? "";
+    const prePrevious = compactWords[compactWords.length - 2] ?? "";
+    const prePreviousToken = normalizeWordTokens(prePrevious)[0] ?? "";
+
+    if (token && token === previousToken) {
+      continue;
+    }
+
+    if (token && shouldDedupeTitleToken(token) && token === prePreviousToken) {
+      continue;
+    }
+
+    compactWords.push(word);
+  }
+
+  return compactWords.join(" ");
 }
 
 function compactTextLength(text: string, maxChars: number) {
@@ -316,6 +374,11 @@ function estimateTextHeight(text: string, width: number, fontSize: number, lineH
   }
 
   return Math.ceil(visualLines * fontSize * lineHeight + fontSize * 0.3);
+}
+
+function estimateVisualLineCount(text: string, width: number, fontSize: number, lineHeight: number) {
+  const measured = estimateTextHeight(text, width, fontSize, lineHeight) - fontSize * 0.3;
+  return Math.max(1, Math.round(measured / Math.max(1, fontSize * lineHeight)));
 }
 
 function fitTextToBounds(
@@ -503,8 +566,16 @@ function resolveTitleAccent(title: string) {
     return null;
   }
 
+  const start = typeof firstToken.index === "number" ? firstToken.index : normalized.indexOf(best);
+  if (start !== 0) {
+    return null;
+  }
+  const end = start + best.length;
+
   return {
-    text: best
+    text: best,
+    start,
+    end
   };
 }
 
@@ -516,6 +587,21 @@ function buildTitleAccentElements(params: {
   const { titleElement, palette } = params;
 
   if (palette.accentMode === "none") {
+    return [];
+  }
+
+  // Long/truncated headings are already visually dense; accent overlays there tend to look noisy.
+  if (titleElement.wasAutoTruncated || normalizeMultilineText(titleElement.text).length > 86) {
+    return [];
+  }
+  const lineHeight = titleElement.lineHeight ?? 1.05;
+  const visualLines = estimateVisualLineCount(
+    titleElement.text,
+    titleElement.width,
+    titleElement.fontSize,
+    lineHeight
+  );
+  if (visualLines > 2) {
     return [];
   }
 
@@ -532,30 +618,28 @@ function buildTitleAccentElements(params: {
   if (accent.text.includes(" ") || accent.text.includes("\n")) {
     return [];
   }
-  const textX = titleElement.x;
-  const textY = titleElement.y;
+  const accentX = titleElement.x;
+  const accentY = titleElement.y;
   const accentWidth = Math.ceil(
     accent.text.split("").reduce((sum, char) => sum + estimateCharWidth(char, titleElement.fontSize), 0)
   );
-  const paddedAccentWidth = clampValue(
-    accentWidth + Math.round(titleElement.fontSize * 0.7),
-    34,
-    titleElement.width
-  );
-  const textWidth = Math.ceil(
-    clampValue(paddedAccentWidth, accentWidth, titleElement.width)
-  );
-  const textHeight = Math.ceil(titleElement.fontSize * (titleElement.lineHeight ?? 1.05));
+  const textWidth = Math.ceil(clampValue(accentWidth + 4, 16, titleElement.width));
+  const textHeight = Math.ceil(titleElement.fontSize * lineHeight);
+  const accentCoverage = textWidth / Math.max(1, titleElement.width);
+  if (accentCoverage > 0.45 && visualLines > 1) {
+    return [];
+  }
 
   if (palette.accentMode === "chip") {
     const chipPadX = Math.max(8, Math.round(titleElement.fontSize * 0.14));
     const chipPadY = Math.max(5, Math.round(titleElement.fontSize * 0.08));
+    const chipWidth = clampValue(accentWidth + chipPadX * 2, 34, titleElement.width);
     return [
       createShapeElement({
         metaKey: "managed-title-accent-chip",
-        x: textX - chipPadX,
-        y: textY - chipPadY,
-        width: Math.min(titleElement.width, textWidth + chipPadX * 2),
+        x: accentX - chipPadX,
+        y: accentY - chipPadY,
+        width: chipWidth,
         height: textHeight + chipPadY * 2,
         fill: palette.accent,
         opacity: 0.94,
@@ -564,18 +648,56 @@ function buildTitleAccentElements(params: {
     ];
   }
 
+  // For text accent mode we use an underline shape instead of a second text layer.
+  // This preserves the accent effect and avoids duplicated/shifted glyph rendering.
+  if (palette.accentMode === "text") {
+    const lineThickness = Math.max(7, Math.round(titleElement.fontSize * 0.28));
+    const lineY = accentY + Math.max(4, Math.round(textHeight * 0.72));
+    return [
+      createShapeElement({
+        metaKey: "managed-title-accent-chip",
+        x: accentX - 2,
+        y: lineY,
+        width: Math.min(titleElement.width, textWidth + 6),
+        height: lineThickness,
+        fill: palette.accent,
+        opacity: 0.92,
+        cornerRadius: Math.max(2, Math.round(lineThickness * 0.35))
+      })
+    ];
+  }
+
   return [
     createShapeElement({
       metaKey: "managed-title-accent-chip",
-      x: textX - 2,
-      y: textY + Math.max(4, Math.round(textHeight * 0.6)),
-      width: Math.min(titleElement.width, textWidth + 4),
-      height: Math.max(8, Math.round(titleElement.fontSize * 0.3)),
+      x: accentX - 2,
+      y: accentY + Math.max(4, Math.round(textHeight * 0.7)),
+      width: Math.min(titleElement.width, textWidth + 6),
+      height: Math.max(7, Math.round(titleElement.fontSize * 0.28)),
       fill: palette.accent,
       opacity: 0.9,
       cornerRadius: Math.max(2, Math.round(titleElement.fontSize * 0.08))
     })
   ];
+}
+
+function composeTitleAndAccentElements(params: {
+  titleElement: TextElement;
+  palette: SlidePalette;
+  template: CarouselTemplate;
+}) {
+  const { titleElement, palette, template } = params;
+  const accents = buildTitleAccentElements({ titleElement, palette, template });
+
+  if (!accents.length) {
+    return [titleElement];
+  }
+
+  if (palette.accentMode === "chip") {
+    return [...accents, titleElement];
+  }
+
+  return [...accents, titleElement];
 }
 
 export function createTextElement(
@@ -683,9 +805,13 @@ function resolveOutlineRole(
 
 function readTitle(role: CarouselSlideRole, outline: OutlineLike) {
   if (typeof outline.title === "string" && outline.title.trim()) {
-    const cleaned = sanitizeBlueprintText(outline.title, role === "hook" ? 84 : 96, true);
-    if (role === "hook" && GENERIC_ERROR_LEAD_RE.test(cleaned)) {
-      return "Разбор по теме без воды";
+    const cleaned = sanitizeBlueprintText(outline.title, titleMaxLengthByRole(role), true);
+    if (cleaned && GENERIC_ERROR_LEAD_RE.test(cleaned) && role !== "mistake") {
+      return fallbackTitleByRole(role);
+    }
+
+    if (cleaned && LEGACY_TITLE_TEMPLATE_RE.test(cleaned)) {
+      return fallbackTitleByRole(role);
     }
 
     if (cleaned) {
@@ -693,16 +819,60 @@ function readTitle(role: CarouselSlideRole, outline: OutlineLike) {
     }
   }
 
+  return fallbackTitleByRole(role);
+}
+
+function titleMaxLengthByRole(role: CarouselSlideRole) {
+  if (role === "hook") {
+    return 78;
+  }
+
+  if (role === "mistake" || role === "shift") {
+    return 86;
+  }
+
+  if (role === "cta") {
+    return 82;
+  }
+
+  return 80;
+}
+
+function fallbackTitleByRole(role: CarouselSlideRole) {
+  if (role === "hook") {
+    return "Точка роста, которую часто упускают";
+  }
+
+  if (role === "problem") {
+    return "Где теряется внимание";
+  }
+
+  if (role === "amplify") {
+    return "Почему это бьет по результату";
+  }
+
+  if (role === "mistake") {
+    return "Ключевой миф, который мешает";
+  }
+
   if (role === "consequence") {
-    return "Что произойдёт дальше";
+    return "Что изменится, если оставить как есть";
+  }
+
+  if (role === "shift") {
+    return "Как сменить фокус";
   }
 
   if (role === "solution") {
-    return "Что делать вместо этого";
+    return "Что делать по шагам";
   }
 
   if (role === "example") {
-    return "Пример формулировки";
+    return "Как переформулировать мысль";
+  }
+
+  if (role === "cta") {
+    return "Хотите адаптацию под свою тему?";
   }
 
   return "Новый слайд";
@@ -712,7 +882,7 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
   if (role === "hook") {
     const subtitle = typeof outline.subtitle === "string" ? outline.subtitle.trim() : "";
     return sanitizeBlueprintText(
-      subtitle || "Серия покажет, как получать больше заявок без лишнего бюджета.",
+      subtitle || "Коротко разложим тему на практичные шаги без воды.",
       250
     );
   }
@@ -734,10 +904,10 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
     }
 
     if (role === "consequence") {
-      return "→ Клиент торгуется по цене\n→ Ценность услуги падает\n→ Сделка уходит конкуренту";
+      return "→ Падает доверие к вашей экспертизе\n→ Контент сложнее дочитывают до конца\n→ Результат нестабилен даже при регулярных публикациях";
     }
 
-      return "→ Короткий тезис с конкретной выгодой\n→ Один факт вместо абстракции\n→ Ясный следующий шаг";
+    return "→ Одна мысль на один слайд\n→ Конкретный пример вместо абстракции\n→ Ясное действие после чтения";
   }
 
   if (role === "example") {
@@ -747,12 +917,15 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
       return sanitizeBlueprintText(`До: ${before || "—"}\nПосле: ${after || "—"}`, 240);
     }
 
-    return "До: «Мы лучшие на рынке»\nПосле: «За 30 дней закрыли 12 сделок выше рынка»";
+    return "До: «Мы делаем качественно»\nПосле: «За 3 шага получили понятный и предсказуемый результат»";
   }
 
   if (role === "cta") {
     const subtitle = typeof outline.subtitle === "string" ? outline.subtitle.trim() : "";
-    return sanitizeBlueprintText(subtitle || "Напишите «ШАБЛОНЫ» и заберите готовую структуру.", 240);
+    return sanitizeBlueprintText(
+      subtitle || "Напишите «РАЗБОР» и получите структуру, адаптированную под вашу задачу.",
+      240
+    );
   }
 
   if (typeof outline.text === "string" && outline.text.trim()) {
@@ -995,7 +1168,7 @@ function buildMainContent(
       lineHeight: 1.03
     });
 
-    return [...buildTitleAccentElements({ titleElement: title, palette, template }), title];
+    return composeTitleAndAccentElements({ titleElement: title, palette, template });
   }
 
   if (blueprint.slideType === "image_text") {
@@ -1055,8 +1228,7 @@ function buildMainContent(
     });
 
     elements.push(
-      ...buildTitleAccentElements({ titleElement: title, palette, template }),
-      title,
+      ...composeTitleAndAccentElements({ titleElement: title, palette, template }),
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
@@ -1090,8 +1262,7 @@ function buildMainContent(
     });
 
     return [
-      ...buildTitleAccentElements({ titleElement: title, palette, template }),
-      title,
+      ...composeTitleAndAccentElements({ titleElement: title, palette, template }),
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
@@ -1122,8 +1293,7 @@ function buildMainContent(
   });
 
   return [
-    ...buildTitleAccentElements({ titleElement: title, palette, template }),
-    title,
+    ...composeTitleAndAccentElements({ titleElement: title, palette, template }),
     createFittedTextElement({
       role: "body",
       metaKey: "managed-body",
@@ -1280,19 +1450,19 @@ function resolveFallbackOutline(role: CarouselSlideRole): CarouselOutlineSlide {
   if (role === "hook") {
     return {
       type: "hook",
-      title: "Один точный сдвиг повышает конверсию",
-      subtitle: "Показываю, как перестать сливать бюджет на холодные заявки"
+      title: "Точка роста, которую чаще всего пропускают",
+      subtitle: "Коротко покажу, как собрать сильную карусель без воды"
     };
   }
 
   if (role === "problem") {
     return {
       type: "problem",
-      title: "Почему заявки не доходят до сделки",
+      title: "Где теряется внимание",
       bullets: [
-        "Подача звучит как у всех",
-        "Клиент не видит измеримую выгоду",
-        "Цена обсуждается раньше результата"
+        "Главная мысль тонет в общих словах",
+        "Человек не понимает, что забрать себе",
+        "Слайды читают, но не двигаются дальше"
       ]
     };
   }
@@ -1300,36 +1470,36 @@ function resolveFallbackOutline(role: CarouselSlideRole): CarouselOutlineSlide {
   if (role === "amplify") {
     return {
       type: "amplify",
-      title: "Во что это превращается",
-      bullets: ["Уходят горячие лиды", "Маркетинг дорожает", "Время команды сгорает"]
+      title: "Почему это усиливается",
+      bullets: ["Отклик падает на первых экранах", "Публикации не удерживают внимание", "Растет усталость от контента"]
     };
   }
 
   if (role === "mistake") {
     return {
       type: "mistake",
-      title: "Главный разрыв: вы продаёте процесс, а не итог для клиента"
+      title: "Ключевой миф: больше текста не равно больше пользы"
     };
   }
 
   if (role === "consequence") {
     return {
       type: "consequence",
-      bullets: ["Торг начинается сразу", "Экспертность падает", "Сделки срываются"]
+      bullets: ["Снижается доверие к подаче", "Люди не доходят до CTA", "Контент работает нестабильно"]
     };
   }
 
   if (role === "shift") {
     return {
       type: "shift",
-      title: "Сдвиг мышления: сначала ценность, потом цена"
+      title: "Сдвиг: сначала ясная ценность, потом детали"
     };
   }
 
   if (role === "solution") {
     return {
       type: "solution",
-      bullets: ["Фраза с конкретной выгодой", "2-3 факта вместо общих слов", "Ясный CTA"]
+      bullets: ["Одна мысль на один слайд", "Факты и примеры вместо общих обещаний", "Четкий следующий шаг в конце"]
     };
   }
 
@@ -1337,14 +1507,14 @@ function resolveFallbackOutline(role: CarouselSlideRole): CarouselOutlineSlide {
     return {
       type: "example",
       before: "До: «Мы работаем качественно»",
-      after: "После: «За месяц закрыли 12 сделок по цене выше рынка»"
+      after: "После: «За 14 дней получили стабильный отклик и входящие вопросы»"
     };
   }
 
   return {
     type: "cta",
-    title: "Нужна такая же структура под ваш кейс?",
-    subtitle: "Напишите «ШАБЛОНЫ» и получите готовый каркас карусели"
+    title: "Хотите такую же структуру под свою тему?",
+    subtitle: "Напишите «РАЗБОР» и получите каркас, адаптированный под вашу задачу"
   };
 }
 
@@ -1360,7 +1530,7 @@ export function createSlidesFromOutline(
   return flow.map((role, index) => {
     const fromInput = outline[index];
     const fallback = resolveFallbackOutline(role);
-    const item = fromInput ? { ...fallback, ...fromInput } : fallback;
+    const item = fromInput ? { ...fallback, ...fromInput, type: role } : fallback;
     return createSlideFromOutline(item, index, templateId, format, flow.length);
   });
 }
