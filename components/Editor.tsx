@@ -90,6 +90,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const [topic, setTopic] = useState("");
   const [slidesCount, setSlidesCount] = useState(DEFAULT_SLIDES_COUNT);
   const [projectId, setProjectId] = useState<string | null>(initialProjectId);
+  const [promptVariant, setPromptVariant] = useState<"A" | "B">("B");
   const [niche, setNiche] = useState("");
   const [audience, setAudience] = useState("");
   const [tone, setTone] = useState("balanced");
@@ -384,6 +385,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setProjectId(existing.id ?? initialProjectId);
     setSlides(existing.slides?.length ? cloneSlides(existing.slides) : createStarterSlides("light", "1:1"));
     setTopic(existing.topic ?? "");
+    setPromptVariant(existing.promptVariant === "A" ? "A" : "B");
     setSlidesCount(clampSlidesCount(existing.slides?.length ?? DEFAULT_SLIDES_COUNT));
     setNiche(existing.niche ?? "");
     setAudience(existing.audience ?? "");
@@ -420,6 +422,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         slides: cloneSlides(slides),
         format: slideFormat,
         theme: activeTemplateId,
+        promptVariant,
         niche: niche.trim() || undefined,
         audience: audience.trim() || undefined,
         tone,
@@ -453,6 +456,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     slides,
     slideFormat,
     activeTemplateId,
+    promptVariant,
     niche,
     audience,
     tone,
@@ -749,7 +753,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         payload: {
           source: "editor",
           format: slideFormat,
-          slidesCount: requestedSlidesCount
+          slidesCount: requestedSlidesCount,
+          promptVariant
         }
       });
       const controller = new AbortController();
@@ -768,7 +773,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           tone,
           goal,
           format: slideFormat,
-          theme: activeTemplateId
+          theme: activeTemplateId,
+          promptVariant
         }),
         signal: controller.signal
       }).finally(() => {
@@ -777,11 +783,17 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
       let data: {
         slides?: CarouselOutlineSlide[];
+        project?: {
+          promptVariant?: "A" | "B";
+        };
         error?: string;
       };
       try {
         data = (await response.json()) as {
           slides?: CarouselOutlineSlide[];
+          project?: {
+            promptVariant?: "A" | "B";
+          };
           error?: string;
         };
       } catch {
@@ -808,12 +820,14 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       setSelectedElementId(null);
       setEditingTextElementId(null);
       setCaptionResult(null);
+      setPromptVariant(data.project?.promptVariant === "A" ? "A" : "B");
       trackEvent({
         name: "generate_succeeded",
         payload: {
           source: "editor",
           format: slideFormat,
-          slidesCount: nextSlides.length
+          slidesCount: nextSlides.length,
+          promptVariant: data.project?.promptVariant ?? "B"
         }
       });
       setStatus(`Создано ${nextSlides.length} слайдов в формате ${slideFormat}.`);
@@ -1287,13 +1301,13 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
     const normalizedTopic = topic.trim();
     if (!normalizedTopic || normalizedTopic.length < MIN_TOPIC_CHARS) {
-      setStatus("Введите тему карусели перед генерацией подписи.");
+      setStatus("Подпись недоступна: сначала задайте тему карусели.");
       return;
     }
 
     const outline = buildOutlineFromSlides(slides);
     if (!outline.length) {
-      setStatus("Не удалось собрать содержание слайдов для подписи.");
+      setStatus("Подпись недоступна: сначала сгенерируйте карусель.");
       return;
     }
 
@@ -1346,7 +1360,19 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return;
     }
 
-    const text = `${captionResult.text}\n\n${captionResult.cta}\n\n${captionResult.hashtags.join(" ")}`.trim();
+    const ctaLines = [
+      captionResult.cta,
+      captionResult.ctaSoft && captionResult.ctaSoft !== captionResult.cta
+        ? `Soft CTA: ${captionResult.ctaSoft}`
+        : "",
+      captionResult.ctaAggressive && captionResult.ctaAggressive !== captionResult.cta
+        ? `Aggressive CTA: ${captionResult.ctaAggressive}`
+        : ""
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const text = `${captionResult.text}\n\n${ctaLines}\n\n${captionResult.hashtags.join(" ")}`.trim();
 
     try {
       await navigator.clipboard.writeText(text);
@@ -1596,6 +1622,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     pushHistorySnapshot(true);
     setSlides(starterSlides);
     setTopic("");
+    setPromptVariant("B");
     setSlidesCount(DEFAULT_SLIDES_COUNT);
     setNiche("");
     setAudience("");

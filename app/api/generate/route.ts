@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { clampSlidesCount } from "@/lib/slides";
-import { generateCarouselFromTopic } from "@/lib/openai";
+import { generateCarouselFromTopic, type PromptVariant } from "@/lib/openai";
 import type {
   CarouselOutlineSlide,
   CarouselTemplateId,
@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     goal?: unknown;
     format?: unknown;
     theme?: unknown;
+    promptVariant?: unknown;
   };
 
   try {
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
       goal?: unknown;
       format?: unknown;
       theme?: unknown;
+      promptVariant?: unknown;
     };
   } catch {
     return NextResponse.json(
@@ -81,6 +83,7 @@ export async function POST(request: Request) {
   const goal = typeof body.goal === "string" ? body.goal.trim().slice(0, 40) : "";
   const format = resolveFormat(body.format);
   const theme = resolveTheme(body.theme);
+  const promptVariant = resolvePromptVariant(body.promptVariant);
 
   if (!topic) {
     return NextResponse.json({ error: "Введите тему карусели." }, { status: 400 });
@@ -88,7 +91,7 @@ export async function POST(request: Request) {
 
   if (topic.length < MIN_TOPIC_CHARS) {
     return NextResponse.json(
-      { error: `Тема слишком короткая. Минимум ${MIN_TOPIC_CHARS} символа.` },
+      { error: "Тема слишком короткая — добавьте 2–3 слова." },
       { status: 400 }
     );
   }
@@ -107,7 +110,8 @@ export async function POST(request: Request) {
         niche,
         audience,
         tone,
-        goal
+        goal,
+        promptVariant
       }),
       timeoutMs
     );
@@ -131,6 +135,7 @@ export async function POST(request: Request) {
         topic,
         format,
         theme,
+        promptVariant: generationResult.promptVariant,
         language: "ru",
         version: 1
       }
@@ -146,7 +151,7 @@ export async function POST(request: Request) {
     console.error("Generate API failed:", error);
 
     return NextResponse.json(
-      { error: "Не удалось сгенерировать карусель. Попробуйте снова." },
+      { error: "Не удалось сгенерировать. Попробуйте переформулировать тему или выберите другой тон." },
       { status: 500 }
     );
   }
@@ -310,6 +315,14 @@ function resolveFormat(value: unknown): SlideFormat {
 
 function resolveTheme(value: unknown): CarouselTemplateId {
   return value === "light" || value === "dark" || value === "color" ? value : "light";
+}
+
+function resolvePromptVariant(value: unknown): PromptVariant {
+  if (value === "A" || value === "B") {
+    return value;
+  }
+
+  return Math.random() < 0.5 ? "A" : "B";
 }
 
 function projectTitleFromTopic(topic: string) {

@@ -527,9 +527,17 @@ export function MobileTools({
                 {captionResult ? (
                   <textarea
                     className="textarea"
-                    value={[captionResult.text, "", captionResult.cta, "", captionResult.hashtags.join(" ")].join(
-                      "\n"
-                    )}
+                    value={[
+                      captionResult.text,
+                      "",
+                      `CTA: ${captionResult.cta}`,
+                      captionResult.ctaSoft ? `Soft CTA: ${captionResult.ctaSoft}` : "",
+                      captionResult.ctaAggressive ? `Aggressive CTA: ${captionResult.ctaAggressive}` : "",
+                      "",
+                      captionResult.hashtags.join(" ")
+                    ]
+                      .filter(Boolean)
+                      .join("\n")}
                     rows={6}
                     readOnly
                   />

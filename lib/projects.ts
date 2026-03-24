@@ -117,4 +117,3 @@ export function deleteLocalProject(projectId: string) {
   const next = current.filter((project) => project.id !== projectId);
   writeAllProjects(next);
 }
-

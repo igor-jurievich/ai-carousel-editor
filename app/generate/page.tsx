@@ -15,6 +15,7 @@ type GenerateResponse = {
     topic?: string;
     format?: SlideFormat;
     theme?: CarouselTemplateId;
+    promptVariant?: "A" | "B";
     language?: "ru";
     version?: number;
   };
@@ -117,7 +118,8 @@ export default function GeneratePage() {
           source: "generate_page",
           format: data.project?.format ?? format,
           slidesCount: data.slides.length,
-          theme: data.project?.theme ?? theme
+          theme: data.project?.theme ?? theme,
+          promptVariant: data.project?.promptVariant ?? "B"
         }
       });
     } catch (generationError) {
@@ -162,6 +164,7 @@ export default function GeneratePage() {
       slides,
       format: resolvedFormat,
       theme: resolvedTheme,
+      promptVariant: generatedProjectMeta?.promptVariant ?? "B",
       niche: niche.trim() || undefined,
       audience: audience.trim() || undefined,
       tone,

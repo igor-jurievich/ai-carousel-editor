@@ -171,6 +171,7 @@ export type CarouselProject = {
   topic: string;
   format?: SlideFormat;
   theme?: CarouselTemplateId;
+  promptVariant?: "A" | "B";
   niche?: string;
   audience?: string;
   tone?: string;
@@ -186,6 +187,8 @@ export type CarouselProject = {
 export type CarouselPostCaption = {
   text: string;
   cta: string;
+  ctaSoft?: string;
+  ctaAggressive?: string;
   hashtags: string[];
 };
 

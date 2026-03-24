@@ -320,6 +320,18 @@ export function SettingsPanel({
               CTA
               <textarea className="field" readOnly value={captionResult.cta} rows={2} />
             </label>
+            {captionResult.ctaSoft ? (
+              <label className="field-label">
+                CTA Soft
+                <textarea className="field" readOnly value={captionResult.ctaSoft} rows={2} />
+              </label>
+            ) : null}
+            {captionResult.ctaAggressive ? (
+              <label className="field-label">
+                CTA Aggressive
+                <textarea className="field" readOnly value={captionResult.ctaAggressive} rows={2} />
+              </label>
+            ) : null}
             <label className="field-label">
               Хэштеги
               <textarea className="field" readOnly value={captionResult.hashtags.join(" ")} rows={2} />

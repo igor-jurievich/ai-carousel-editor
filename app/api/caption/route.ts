@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   const goal = typeof body.goal === "string" ? body.goal.trim().slice(0, 40) : "";
 
   if (!topic) {
-    return NextResponse.json({ error: "Введите тему перед генерацией подписи." }, { status: 400 });
+    return NextResponse.json({ error: "Подпись недоступна: сначала задайте тему карусели." }, { status: 400 });
   }
 
   if (topic.length < MIN_TOPIC_CHARS || topic.length > MAX_TOPIC_CHARS) {
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
   const slides = normalizeOutlineSlides(body.slides);
   if (!slides.length) {
     return NextResponse.json(
-      { error: "Не найдено содержание карусели для генерации подписи." },
+      { error: "Подпись недоступна: сначала сгенерируйте карусель." },
       { status: 400 }
     );
   }
