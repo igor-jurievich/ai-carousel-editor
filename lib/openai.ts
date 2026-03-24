@@ -75,6 +75,11 @@ const DEFAULT_MODEL_CANDIDATES = [
   "gpt-4o-mini"
 ] as const;
 
+const HOOK_SUBTITLE_INPUT_MAX = 154;
+const HOOK_SUBTITLE_OUTPUT_MAX = 148;
+const CTA_SUBTITLE_INPUT_MAX = 172;
+const CTA_SUBTITLE_OUTPUT_MAX = 164;
+
 const BANNED_TEMPLATE_PATTERNS: RegExp[] = [
   /(?:^|[^\p{L}])в\s+современном\s+мире(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])важно\s+понимать(?=$|[^\p{L}])/iu,
@@ -104,7 +109,9 @@ const WEAK_ROLE_TITLE_PATTERNS: RegExp[] = [
   /^как\s+переформулировать\s+мысль\??$/iu,
   /^всё\s+держится\s+на\s+отдельных\s+звеньях\??$/iu,
   /^разные\s+цели\s+—?\s*слепые\s+зоны\??$/iu,
-  /^что\s+теряет\s+бизнес\s+из[-\s]за\s+разногласий\??$/iu
+  /^что\s+теряет\s+бизнес\s+из[-\s]за\s+разногласий\??$/iu,
+  /^[\p{L}-]+(?:у|ю)\s+[\p{L}-]{4,}ть\s*:/iu,
+  /^[\p{L}-]+\s+[\p{L}-]{4,}ть:\s+как\b/iu
 ];
 
 function resolveModelCandidates() {
@@ -151,7 +158,7 @@ export async function generateCarouselFromTopic(
         try {
           const response = await openai.responses.create({
             model,
-            temperature: 0.9,
+            temperature: 0.82,
             max_output_tokens: 2600,
             input: [
               {
@@ -173,6 +180,7 @@ export async function generateCarouselFromTopic(
                       "Avoid generic opener like «Одна ошибка…» unless the topic explicitly asks for mistakes.",
                       "Hook title must be topic-specific and must not start with «ошибка», «одна ошибка», «главная ошибка».",
                       "Never use «ошибка» / «главная ошибка» / «одна ошибка» as the default first frame.",
+                      "Avoid awkward title constructions like «эксперту повысить: ...» or «психологу объяснять: ...».",
                       "Avoid boilerplate phrases like «в теме ...», «где ломается поток», «что это стоит в теме».",
                       "Do not force the words «кейс», «разбор», «поток», «лиды» unless the topic needs them.",
                       "Avoid repeated words, broken compounds and malformed line fragments.",
@@ -605,6 +613,7 @@ function buildUserPrompt(
     "Bullets must be concise but meaningful: 3-4 bullets when natural, each ~9-18 words with concrete detail instead of generic slogans.",
     "For problem/amplify/consequence/solution include at least one concrete symptom, cost, or action in bullets.",
     "Keep wording topic-specific. Avoid universal sales jargon if topic is not sales-related.",
+    "Do not use broken hook syntax like «эксперту повысить: ...» or «психологу объяснять: ...».",
     ...buildDomainPromptAddendum(topicDomain),
     "Avoid stale templates like «в теме ...», «одна ошибка ...», «где ломается поток ...».",
     "Avoid generic headings like «Что делать по шагам», «Что это значит для вас», «Что изменится, если оставить как есть».",
@@ -745,13 +754,17 @@ function enforceTopicAndHookIntegrity(
     if (role === "hook") {
       const safeSubtitle =
         "subtitle" in current && typeof current.subtitle === "string" && current.subtitle.trim()
-          ? sanitizeCopyText(normalizeText(current.subtitle, 138), 132)
+          ? sanitizeCopyText(
+              normalizeText(current.subtitle, HOOK_SUBTITLE_INPUT_MAX),
+              HOOK_SUBTITLE_OUTPUT_MAX
+            )
           : "";
       const hookCopy = [normalizedTitle, safeSubtitle].filter(Boolean).join(" ");
       const hookTopicMismatch = !isCopyTopicAligned(hookCopy, topic);
       const hookAnchorMismatch = !hasPrimaryTopicAnchor(hookCopy, topic);
+      const hookLooksAwkward = hasAwkwardHookTitle(normalizedTitle);
 
-      if (!normalizedTitle || hasGenericMistakeLead || hookTopicMismatch || hookAnchorMismatch) {
+      if (!normalizedTitle || hasGenericMistakeLead || hookTopicMismatch || hookAnchorMismatch || hookLooksAwkward) {
         return {
           ...current,
           title: buildHookFallbackTitle(topic),
@@ -812,7 +825,9 @@ function repairTopicCoverage(
 
   if (hook && !hasHookTopic && hook.type === "hook") {
     const safeSubtitle =
-      typeof hook.subtitle === "string" ? sanitizeCopyText(normalizeText(hook.subtitle, 138), 132) : "";
+      typeof hook.subtitle === "string"
+        ? sanitizeCopyText(normalizeText(hook.subtitle, HOOK_SUBTITLE_INPUT_MAX), HOOK_SUBTITLE_OUTPUT_MAX)
+        : "";
     hook.title = buildHookFallbackTitle(topic);
     hook.subtitle = safeSubtitle || buildHookFallbackSubtitle(topic);
   }
@@ -863,13 +878,17 @@ function applyFinalCopyPolish(
   const ctaIndex = expectedFlow.findIndex((role) => role === "cta");
 
   if (hookIndex >= 0) {
-    const hook = nextSlides[hookIndex];
+      const hook = nextSlides[hookIndex];
     if (hook?.type === "hook") {
       const normalizedTitle = sanitizeTitleValue(hook.title, 84);
-      const normalizedSubtitle = sanitizeCopyText(normalizeText(hook.subtitle, 138), 132);
+      const normalizedSubtitle = sanitizeCopyText(
+        normalizeText(hook.subtitle, HOOK_SUBTITLE_INPUT_MAX),
+        HOOK_SUBTITLE_OUTPUT_MAX
+      );
       const combinedHook = `${normalizedTitle} ${normalizedSubtitle}`.trim();
       const shouldRepairHook =
         !normalizedTitle ||
+        hasAwkwardHookTitle(normalizedTitle) ||
         startsWithGenericMistakeLead(normalizedTitle) ||
         hasLegacyTemplatePhrase(combinedHook) ||
         BANNED_TEMPLATE_PATTERNS.some((pattern) => pattern.test(combinedHook)) ||
@@ -917,7 +936,10 @@ function applyFinalCopyPolish(
     if (cta?.type === "cta") {
       const ctaVariants = buildCtaVariants(options?.goal, topic);
       const normalizedTitle = sanitizeTitleValue(cta.title, 84);
-      const normalizedSubtitle = sanitizeCopyText(normalizeText(cta.subtitle, 138), 132);
+      const normalizedSubtitle = sanitizeCopyText(
+        normalizeText(cta.subtitle, CTA_SUBTITLE_INPUT_MAX),
+        CTA_SUBTITLE_OUTPUT_MAX
+      );
       const hasAction = hasActionVerb(normalizedSubtitle);
       const weakTitle =
         !normalizedTitle ||
@@ -952,9 +974,13 @@ function enforceSlideQuality(
     if (role === "hook") {
       const hook = current as Extract<CarouselOutlineSlide, { type: "hook" }>;
       const title = sanitizeTitleValue(hook.title, 84);
-      const subtitle = sanitizeCopyText(normalizeText(hook.subtitle, 138), 132);
+      const subtitle = sanitizeCopyText(
+        normalizeText(hook.subtitle, HOOK_SUBTITLE_INPUT_MAX),
+        HOOK_SUBTITLE_OUTPUT_MAX
+      );
       const weakTitle =
         !title ||
+        hasAwkwardHookTitle(title) ||
         startsWithGenericMistakeLead(title) ||
         hasLegacyTemplatePhrase(title) ||
         isWeakRoleTitle(title);
@@ -1069,7 +1095,10 @@ function enforceSlideQuality(
     const cta = current as Extract<CarouselOutlineSlide, { type: "cta" }>;
     const ctaVariants = buildCtaVariants(options?.goal, topic);
     const title = sanitizeTitleValue(cta.title, 84);
-    const subtitle = sanitizeCopyText(normalizeText(cta.subtitle, 138), 132);
+    const subtitle = sanitizeCopyText(
+      normalizeText(cta.subtitle, CTA_SUBTITLE_INPUT_MAX),
+      CTA_SUBTITLE_OUTPUT_MAX
+    );
     const hasAction = hasActionVerb(subtitle);
     return {
       type: "cta",
@@ -1312,7 +1341,11 @@ function scoreHookCandidate(title: string, subtitle: string) {
   if (/\b\d{1,2}\b/.test(combined) || /\b(чек-лист|шаг|минут)\b/iu.test(combined)) {
     score += 1;
   }
-  if (startsWithGenericMistakeLead(normalizedTitle) || hasLegacyTemplatePhrase(combined)) {
+  if (
+    startsWithGenericMistakeLead(normalizedTitle) ||
+    hasLegacyTemplatePhrase(combined) ||
+    hasAwkwardHookTitle(normalizedTitle)
+  ) {
     score -= 3;
   }
   if (BANNED_TEMPLATE_PATTERNS.some((pattern) => pattern.test(combined))) {
@@ -1482,7 +1515,8 @@ function normalizeSlideByType(
       type: "hook",
       title: normalizedTitle || buildHookFallbackTitle(topic),
       subtitle:
-        sanitizeCopyText(normalizeText(safe.subtitle, 138), 132) || buildHookFallbackSubtitle(topic)
+        sanitizeCopyText(normalizeText(safe.subtitle, HOOK_SUBTITLE_INPUT_MAX), HOOK_SUBTITLE_OUTPUT_MAX) ||
+        buildHookFallbackSubtitle(topic)
     };
   }
 
@@ -1551,10 +1585,10 @@ function normalizeSlideByType(
       type: "example",
       before:
         sanitizeCopyText(normalizeText(safe.before, 128), 122) ||
-        `До: «${topicFocus} важен, мы делаем это качественно»`,
+        `До: «${topicFocus} объясняли общо, и человек терял нить»`,
       after:
         sanitizeCopyText(normalizeText(safe.after, 128), 122) ||
-        `После: «Внедрили 3 шага и получили заметный рост отклика по ${topicFocus}»`
+        `После: «Добавили конкретные шаги, и отклик по ${topicFocus} стал стабильнее»`
     };
   }
 
@@ -1564,7 +1598,7 @@ function normalizeSlideByType(
     type: "cta",
     title: ctaTitle || trimToWordBoundary("Хотите адаптацию под свою тему?", 84),
     subtitle:
-      sanitizeCopyText(normalizeText(safe.subtitle, 138), 132) ||
+      sanitizeCopyText(normalizeText(safe.subtitle, CTA_SUBTITLE_INPUT_MAX), CTA_SUBTITLE_OUTPUT_MAX) ||
       goalAwareCta
   };
 }
@@ -2292,6 +2326,23 @@ function startsWithGenericMistakeLead(value: string) {
   }
 
   return /^(одн[а-яё]*\s+)?(типичн[а-яё]*\s+)?(главн[а-яё]*\s+)?ошиб[а-яё]*/iu.test(normalizedLead);
+}
+
+function hasAwkwardHookTitle(value: string) {
+  const normalized = value
+    .replace(/\s+/gu, " ")
+    .replace(/[«»“”„]/gu, "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    /^[\p{L}-]+(?:у|ю)\s+[\p{L}-]{4,}ть\s*:/iu.test(normalized) ||
+    /^[\p{L}-]+\s+[\p{L}-]{4,}ть:\s+как\b/iu.test(normalized)
+  );
 }
 
 function hasLegacyTemplatePhrase(value: string) {

@@ -4115,3 +4115,51 @@ button:disabled {
     text-overflow: ellipsis;
   }
 }
+
+/* Mobile final lock: prevent field overlap and keep all bottom tabs reachable */
+@media (max-width: 768px) {
+  .generate-advanced-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+    gap: 10px !important;
+  }
+
+  .generate-advanced-field,
+  .generate-advanced .field,
+  .generate-advanced .select,
+  .generate-advanced .textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .mobile-bottom-toolbar-v2 {
+    display: flex !important;
+    justify-content: flex-start !important;
+    align-items: stretch;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .mobile-bottom-toolbar-v2::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-bottom-tool {
+    flex: 0 0 auto !important;
+    min-width: 62px;
+    max-width: 74px;
+    scroll-snap-align: start;
+  }
+
+  .mobile-bottom-tool small {
+    font-size: 11px;
+    line-height: 1.15;
+  }
+}
