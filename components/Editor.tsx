@@ -130,6 +130,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const backgroundImageInputRef = useRef<HTMLInputElement | null>(null);
   const generateRequestRef = useRef(0);
+  const generateAbortRef = useRef<AbortController | null>(null);
   const lastHistoryAtRef = useRef(0);
   const skipAutosaveRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
@@ -511,6 +512,13 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   }, [isProjectHydrated, projectId, slideFormat]);
 
   useEffect(() => {
+    return () => {
+      generateAbortRef.current?.abort();
+      generateAbortRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isSlideExportModalOpen) {
       return;
     }
@@ -773,6 +781,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     const requestedSlidesCount = clampSlidesCount(slidesCount);
     const source = options?.source ?? "editor";
     const openPostTool = Boolean(options?.openPostTool);
+    let controller: AbortController | null = null;
 
     try {
       setIsGenerating(true);
@@ -789,8 +798,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           openPostTool
         }
       });
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 70000);
+      const activeController = new AbortController();
+      controller = activeController;
+      generateAbortRef.current = activeController;
+      const timeoutId = window.setTimeout(() => activeController.abort(), 70000);
 
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -808,7 +819,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           theme: activeTemplateId,
           promptVariant
         }),
-        signal: controller.signal
+        signal: activeController.signal
       }).finally(() => {
         window.clearTimeout(timeoutId);
       });
@@ -889,6 +900,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     } finally {
       if (requestId === generateRequestRef.current) {
         setIsGenerating(false);
+      }
+      if (controller && generateAbortRef.current === controller) {
+        generateAbortRef.current = null;
       }
     }
   };
@@ -2233,7 +2247,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onClick={() => setMobileToolTab("post")}
               disabled={generationLocked}
             >
-              Пост
+              Пост / подпись
             </button>
             <button
               type="button"
@@ -2241,7 +2255,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onClick={() => setMobileToolTab("text")}
               disabled={generationLocked}
             >
-              Текст
+              Текст слайда
             </button>
             <button
               type="button"

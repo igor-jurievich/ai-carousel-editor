@@ -7,6 +7,16 @@ import type {
 } from "@/types/editor";
 
 export type PromptVariant = "A" | "B";
+type TopicDomain =
+  | "sales"
+  | "education"
+  | "psychology"
+  | "health"
+  | "fitness"
+  | "beauty"
+  | "finance"
+  | "creator"
+  | "general";
 
 type GenerationOptions = {
   niche?: string;
@@ -72,7 +82,8 @@ const BANNED_TEMPLATE_PATTERNS: RegExp[] = [
   /(?:^|[^\p{L}])где\s+ломается\s+поток(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])по\s+теме(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])в\s+теме(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])разбор\s+под\s+ваш\s+кейс(?=$|[^\p{L}])/iu
+  /(?:^|[^\p{L}])разбор\s+под\s+ваш\s+кейс(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])быстрый\s+рычаг(?=$|[^\p{L}])/iu
 ];
 
 const WEAK_SHIFT_PATTERNS: RegExp[] = [
@@ -423,12 +434,132 @@ function resolvePromptVariant(value?: PromptVariant | string) {
   return value === "A" ? "A" : "B";
 }
 
+function resolveTopicDomain(topic: string, options?: GenerationOptions): TopicDomain {
+  const source = normalizeText(
+    [topic, options?.niche ?? "", options?.audience ?? ""].filter(Boolean).join(" "),
+    420
+  ).toLowerCase();
+
+  if (
+    /\b(финанс|инвест|бюджет|деньг|доход|портфел|кредит|налог|капитал|риск)\w*\b/iu.test(source)
+  ) {
+    return "finance";
+  }
+
+  if (
+    /\b(врач|медицин|диагноз|пациент|клиник|здоров|лечение|терапи|симптом)\w*\b/iu.test(source)
+  ) {
+    return "health";
+  }
+
+  if (
+    /\b(психолог|тревог|выгоран|терапевт|эмоци|самооцен|отношен|стресс)\w*\b/iu.test(source)
+  ) {
+    return "psychology";
+  }
+
+  if (/\b(фитнес|тренер|трениров|зал|спорт|форма|похуд|нагрузк)\w*\b/iu.test(source)) {
+    return "fitness";
+  }
+
+  if (
+    /\b(бьюти|салон|мастер|космет|ресниц|маник|ногт|бров|стилист)\w*\b/iu.test(source)
+  ) {
+    return "beauty";
+  }
+
+  if (
+    /\b(репетитор|обучен|ученик|урок|школ|курс|преподав|студент|образован)\w*\b/iu.test(source)
+  ) {
+    return "education";
+  }
+
+  if (
+    /\b(личн[а-яё]*\s+бренд|эксперт|блог|контент|instagram|telegram|соцсет|автор)\b/iu.test(source)
+  ) {
+    return "creator";
+  }
+
+  if (
+    /\b(продаж|заявк|лид|воронк|конверс|маркетолог|риелтор|агентств|клиент|сделк|реклам)\w*\b/iu.test(
+      source
+    )
+  ) {
+    return "sales";
+  }
+
+  return "general";
+}
+
+function buildDomainPromptAddendum(domain: TopicDomain) {
+  if (domain === "education") {
+    return [
+      "Domain: education. Speak through progress, practice, motivation, lesson rhythm and homework.",
+      "Avoid hard-sales vocabulary unless user explicitly asks for selling mechanics."
+    ];
+  }
+
+  if (domain === "psychology") {
+    return [
+      "Domain: psychology. Keep language careful, humane, and practical for client communication.",
+      "No manipulative pressure, no aggressive selling language."
+    ];
+  }
+
+  if (domain === "health") {
+    return [
+      "Domain: health. Prioritize clarity, trust, and understandable explanations over hype.",
+      "Avoid miracle claims and loud marketing clichés."
+    ];
+  }
+
+  if (domain === "fitness") {
+    return [
+      "Domain: fitness. Use concrete routine, consistency, load, recovery and return-to-training angles.",
+      "Avoid generic motivational slogans without actionable steps."
+    ];
+  }
+
+  if (domain === "beauty") {
+    return [
+      "Domain: beauty. Use client journey: first visit, repeat booking, trust, service value.",
+      "Avoid abstract business jargon."
+    ];
+  }
+
+  if (domain === "finance") {
+    return [
+      "Domain: finance. Explain through risk, decisions, scenario outcomes and client confidence.",
+      "No clickbait promises or unrealistic certainty."
+    ];
+  }
+
+  if (domain === "creator") {
+    return [
+      "Domain: creator/personal brand. Keep voice native for social media and practical content creation.",
+      "Avoid sterile corporate wording."
+    ];
+  }
+
+  if (domain === "sales") {
+    return [
+      "Domain: commercial growth. Keep copy persuasive but specific and human, not pushy.",
+      "Use sales language only where it is contextually relevant."
+    ];
+  }
+
+  return [
+    "Domain: mixed/general. Stay close to the topic semantics and avoid importing sales jargon by default."
+  ];
+}
+
 function buildUserPrompt(
   topic: string,
   flow: CarouselSlideRole[],
   options?: GenerationOptions,
   promptVariant: PromptVariant = "B"
 ) {
+  const topicDomain = resolveTopicDomain(topic, options);
   const niche = normalizeText(options?.niche ?? "", 120);
   const audience = normalizeText(options?.audience ?? "", 160);
   const tone = normalizeText(options?.tone ?? "", 40);
@@ -454,6 +585,7 @@ function buildUserPrompt(
     audience ? `Audience: ${audience}` : "",
     tone ? `Tone preference: ${tone}` : "",
     goal ? `Goal: ${goal}` : "",
+    `Detected domain: ${topicDomain}`,
     `Slides count: ${flow.length}`,
     `Required flow (strict order): ${flow.join(" -> ")}`,
     "Field rules by type:",
@@ -473,6 +605,7 @@ function buildUserPrompt(
     "Bullets must be concise but meaningful: 2-4 bullets, each ~8-16 words with concrete detail instead of generic slogans.",
     "For problem/amplify/consequence/solution include at least one concrete symptom, cost, or action in bullets.",
     "Keep wording topic-specific. Avoid universal sales jargon if topic is not sales-related.",
+    ...buildDomainPromptAddendum(topicDomain),
     "Avoid stale templates like «в теме ...», «одна ошибка ...», «где ломается поток ...».",
     "Avoid generic headings like «Что делать по шагам», «Что это значит для вас», «Что изменится, если оставить как есть».",
     "Ban phrases: «в современном мире», «важно понимать», «ключ к успеху».",
@@ -616,8 +749,9 @@ function enforceTopicAndHookIntegrity(
           : "";
       const hookCopy = [normalizedTitle, safeSubtitle].filter(Boolean).join(" ");
       const hookTopicMismatch = !isCopyTopicAligned(hookCopy, topic);
+      const hookAnchorMismatch = !hasPrimaryTopicAnchor(hookCopy, topic);
 
-      if (!normalizedTitle || hasGenericMistakeLead || hookTopicMismatch) {
+      if (!normalizedTitle || hasGenericMistakeLead || hookTopicMismatch || hookAnchorMismatch) {
         return {
           ...current,
           title: buildHookFallbackTitle(topic),
@@ -738,11 +872,15 @@ function applyFinalCopyPolish(
         !normalizedTitle ||
         startsWithGenericMistakeLead(normalizedTitle) ||
         hasLegacyTemplatePhrase(combinedHook) ||
-        BANNED_TEMPLATE_PATTERNS.some((pattern) => pattern.test(combinedHook));
+        BANNED_TEMPLATE_PATTERNS.some((pattern) => pattern.test(combinedHook)) ||
+        !hasPrimaryTopicAnchor(combinedHook, topic);
+      const generatedScore = scoreHookCandidate(normalizedTitle, normalizedSubtitle);
+      const candidates = buildHookCandidates(topic, options);
+      const best = pickBestHookCandidate(candidates);
+      const bestScore = best ? scoreHookCandidate(best.title, best.subtitle) : Number.NEGATIVE_INFINITY;
+      const shouldUpgradeHook = Boolean(best && bestScore >= generatedScore + 2);
 
-      if (shouldRepairHook) {
-        const candidates = buildHookCandidates(topic, options);
-        const best = pickBestHookCandidate(candidates);
+      if (shouldRepairHook || shouldUpgradeHook) {
         if (!best) {
           hook.title = buildHookFallbackTitle(topic);
           hook.subtitle = normalizedSubtitle || buildHookFallbackSubtitle(topic);
@@ -767,7 +905,7 @@ function applyFinalCopyPolish(
         cleanShift.length < 16;
 
       if (weakShift) {
-        shift.title = buildRoleTitleFallback("shift", topic);
+        shift.title = buildRoleTitleFallback("shift", topic, options);
       } else {
         shift.title = cleanShift;
       }
@@ -838,7 +976,7 @@ function enforceSlideQuality(
         type: "problem",
         title:
           !title || startsWithGenericMistakeLead(title) || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
-            ? buildRoleTitleFallback("problem", topic)
+            ? buildRoleTitleFallback("problem", topic, options)
             : title,
         bullets: (denseBullets.length >= 2 ? denseBullets : problemFallback.bullets).slice(0, 4)
       };
@@ -854,7 +992,7 @@ function enforceSlideQuality(
         type: "amplify",
         title:
           !title || startsWithGenericMistakeLead(title) || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
-            ? buildRoleTitleFallback("amplify", topic)
+            ? buildRoleTitleFallback("amplify", topic, options)
             : title,
         bullets: (denseBullets.length >= 2 ? denseBullets : amplifyFallback.bullets).slice(0, 4)
       };
@@ -872,7 +1010,7 @@ function enforceSlideQuality(
 
       return {
         type: "mistake",
-        title: weakTitle ? buildRoleTitleFallback("mistake", topic) : title
+        title: weakTitle ? buildRoleTitleFallback("mistake", topic, options) : title
       };
     }
 
@@ -899,7 +1037,7 @@ function enforceSlideQuality(
 
       return {
         type: "shift",
-        title: weakTitle ? buildRoleTitleFallback("shift", topic) : title
+        title: weakTitle ? buildRoleTitleFallback("shift", topic, options) : title
       };
     }
 
@@ -1097,10 +1235,27 @@ function isWeakRoleTitle(value: string) {
 function buildHookCandidates(topic: string, options?: GenerationOptions) {
   const normalizedTopic = normalizeText(topic, 220).toLowerCase();
   const topicAnchor = extractHookAnchor(topic);
+  const topicDomain = resolveTopicDomain(topic, options);
   const isAdContext = /\b(реклам|клик|лендинг|заяв|лид|воронк)\b/iu.test(normalizedTopic);
   const isCallContext = /\b(звон|созвон|переговор|клиент\s+пропал)\b/iu.test(normalizedTopic);
   const goalCue = normalizeText(options?.goal ?? "", 30).toLowerCase();
   const isQuestionAnchor = /^(как|почему|зачем|что|когда|где)\b/iu.test(topicAnchor);
+  const tensionTitle =
+    topicDomain === "education"
+      ? "Уроки идут, а прогресса не видно: где узкое место?"
+      : topicDomain === "psychology"
+        ? "Слова поддержки есть, а облегчения нет: где разрыв?"
+        : topicDomain === "health"
+          ? "Объяснение было, а ясности у пациента нет: почему?"
+          : topicDomain === "fitness"
+            ? "План есть, а дисциплина срывается: где стоп-фактор?"
+            : topicDomain === "beauty"
+              ? "Первый визит прошел, а повтора нет: где теряется ценность?"
+              : topicDomain === "finance"
+                ? "Цифры есть, а решение не принимается: что мешает?"
+                : topicDomain === "creator"
+                  ? "Контент есть, а реакции мало: где ломается интерес?"
+                  : "Шаги есть, а результат буксует: где узкое место?";
 
   const firstTitle = isCallContext
     ? "Созвон прошёл. Почему дальше тишина?"
@@ -1122,9 +1277,9 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
       subtitle: trimToWordBoundary(firstSubtitle, 132)
     },
     {
-      title: "Есть контент. Нет реакции. Где провал?",
+      title: trimToWordBoundary(tensionTitle, 72),
       subtitle: trimToWordBoundary(
-        "Короткий разбор: крючок, перелом мысли и следующий шаг без давления.",
+        "Разберём, где именно теряется путь читателя от интереса к действию.",
         132
       )
     },
@@ -1338,12 +1493,8 @@ function normalizeSlideByType(
       title:
         (rawTitle && !startsWithGenericMistakeLead(rawTitle) && !hasLegacyTemplatePhrase(rawTitle)
           ? rawTitle
-          : "") || buildRoleTitleFallback("problem", topic),
-      bullets: normalizeBullets(safe.bullets, [
-        "Читатель видит общие фразы и не понимает, что делать именно ему.",
-        "Польза заявлена, но нет конкретного результата или понятного критерия успеха.",
-        "Первые экраны перегружены, поэтому важная мысль теряется еще до сути."
-      ])
+          : "") || buildRoleTitleFallback("problem", topic, options),
+      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("problem", topic, options))
     };
   }
 
@@ -1354,12 +1505,8 @@ function normalizeSlideByType(
       title:
         (rawTitle && !startsWithGenericMistakeLead(rawTitle) && !hasLegacyTemplatePhrase(rawTitle)
           ? rawTitle
-          : "") || buildRoleTitleFallback("amplify", topic),
-      bullets: normalizeBullets(safe.bullets, [
-        "Когда смысл неясен на старте, до финальных слайдов доходит только часть аудитории.",
-        "Алгоритм видит слабые досмотры, и следующие публикации получают меньше охвата.",
-        "Вы тратите время на контент, который не превращается в диалоги и входящие."
-      ])
+          : "") || buildRoleTitleFallback("amplify", topic, options),
+      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("amplify", topic, options))
     };
   }
 
@@ -1369,18 +1516,14 @@ function normalizeSlideByType(
       type: "mistake",
       title:
         (rawTitle && !hasLegacyTemplatePhrase(rawTitle) ? rawTitle : "") ||
-        buildRoleTitleFallback("mistake", topic)
+        buildRoleTitleFallback("mistake", topic, options)
     };
   }
 
   if (expectedType === "consequence") {
     return {
       type: "consequence",
-      bullets: normalizeBullets(safe.bullets, [
-        "Даже сильная экспертиза выглядит как у всех, потому что не считывается отличимый фокус.",
-        "Подписчик уходит без действия: не сохраняет, не пишет и не возвращается к публикации.",
-        "Команда выгорает: усилий много, а предсказуемого результата по отклику мало."
-      ])
+      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("consequence", topic, options))
     };
   }
 
@@ -1392,18 +1535,14 @@ function normalizeSlideByType(
         (rawTitle && !startsWithGenericMistakeLead(rawTitle) && !hasLegacyTemplatePhrase(rawTitle)
           ? rawTitle
           : "") ||
-        buildRoleTitleFallback("shift", topic)
+        buildRoleTitleFallback("shift", topic, options)
     };
   }
 
   if (expectedType === "solution") {
     return {
       type: "solution",
-      bullets: normalizeBullets(safe.bullets, [
-        "Начинайте с боли в одном предложении и сразу показывайте понятный выигрыш для читателя.",
-        "На каждом слайде добавляйте факт: цифру, ситуацию из практики или мини-кейс.",
-        "Закрывайте блок действием: вопрос, чек-поинт или шаг, который легко сделать сразу."
-      ])
+      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("solution", topic, options))
     };
   }
 
@@ -1483,26 +1622,493 @@ function buildCtaTitleFallback(goal: string | undefined, topic: string) {
   return trimToWordBoundary(`Хотите усилить ${focus} без шаблонных фраз?`, 84);
 }
 
-function buildRoleTitleFallback(role: CarouselSlideRole, topic: string) {
-  const focus = buildTopicFocus(topic);
+function buildRoleTitleFallback(
+  role: CarouselSlideRole,
+  topic: string,
+  options?: GenerationOptions
+) {
+  const domain = resolveTopicDomain(topic, options);
+  const focus = upperFirst(buildCompactTopicFocus(topic, 44));
+
+  const commonByRole: Record<"problem" | "amplify" | "mistake" | "shift", string[]> = {
+    problem: [
+      `${focus}: где начинается просадка`,
+      `${focus}: что срывает результат в начале`,
+      `${focus}: почему внимание теряется слишком рано`
+    ],
+    amplify: [
+      `${focus}: почему это быстро накапливается`,
+      `${focus}: чем затяжная проблема бьет дальше`,
+      `${focus}: как незаметная мелочь превращается в системный провал`
+    ],
+    mistake: [
+      `${focus}: привычный ход, который режет результат`,
+      `${focus}: где шаблон подменяет смысл`,
+      `${focus}: тонкая ошибка, из-за которой всё буксует`
+    ],
+    shift: [
+      `${focus}: разворот, после которого появляется отклик`,
+      `${focus}: точка, где меняется сценарий`,
+      `${focus}: как перейти от хаоса к понятному шагу`
+    ]
+  };
+
+  const domainByRole: Partial<Record<"problem" | "amplify" | "mistake" | "shift", string[]>> =
+    buildDomainRoleTitleVariants(domain, focus);
+
+  if (
+    role === "problem" ||
+    role === "amplify" ||
+    role === "mistake" ||
+    role === "shift"
+  ) {
+    const variants = domainByRole[role]?.length
+      ? [...(domainByRole[role] as string[]), ...commonByRole[role]]
+      : commonByRole[role];
+    const maxLength = role === "mistake" || role === "shift" ? 92 : 80;
+    return trimToWordBoundary(pickVariantByTopic(`${focus}-${role}-${domain}`, variants), maxLength);
+  }
+
+  return trimToWordBoundary(`${focus}: как усилить подачу на практике`, 84);
+}
+
+function buildDomainRoleTitleVariants(domain: TopicDomain, focus: string) {
+  if (domain === "education") {
+    return {
+      problem: [
+        `${focus}: почему ученики теряют ритм`,
+        `${focus}: где пропадает мотивация между занятиями`
+      ],
+      amplify: [
+        `${focus}: как паузы в практике ускоряют откат`,
+        `${focus}: почему «потом доделаю» ломает прогресс`
+      ],
+      mistake: [
+        `${focus}: шаг, который убивает вовлеченность`,
+        `${focus}: где объяснение становится слишком абстрактным`
+      ],
+      shift: [
+        `${focus}: как вернуть ощущение прогресса`,
+        `${focus}: разворот в пользу регулярной практики`
+      ]
+    };
+  }
+
+  if (domain === "psychology") {
+    return {
+      problem: [
+        `${focus}: где клиент теряет ясность`,
+        `${focus}: почему важные различия звучат «всё одинаково»`
+      ],
+      amplify: [
+        `${focus}: как путаница усиливает тревогу`,
+        `${focus}: почему без рамки запрос застревает`
+      ],
+      mistake: [
+        `${focus}: формулировка, которая повышает сопротивление`,
+        `${focus}: где профессиональный язык мешает контакту`
+      ],
+      shift: [
+        `${focus}: как говорить точно и бережно`,
+        `${focus}: разворот к понятному действию`
+      ]
+    };
+  }
+
+  if (domain === "health") {
+    return {
+      problem: [
+        `${focus}: где пациент теряет понимание`,
+        `${focus}: почему рекомендации не доходят до действия`
+      ],
+      amplify: [
+        `${focus}: как неясность влияет на приверженность`,
+        `${focus}: почему общие формулировки повышают тревогу`
+      ],
+      mistake: [
+        `${focus}: что ломает доверие в объяснении`,
+        `${focus}: где термин важнее смысла для пациента`
+      ],
+      shift: [
+        `${focus}: как объяснять по-человечески и по делу`,
+        `${focus}: точка перехода к понятным шагам`
+      ]
+    };
+  }
+
+  if (domain === "fitness") {
+    return {
+      problem: [
+        `${focus}: где срывается возвращение в режим`,
+        `${focus}: почему мотивация тухнет после паузы`
+      ],
+      amplify: [
+        `${focus}: как пропуски быстро откатывают результат`,
+        `${focus}: почему без системы человек снова выпадает`
+      ],
+      mistake: [
+        `${focus}: фраза, после которой клиент исчезает`,
+        `${focus}: где обещание сильнее плана`
+      ],
+      shift: [
+        `${focus}: как вернуть ритм без перегруза`,
+        `${focus}: разворот к устойчивой дисциплине`
+      ]
+    };
+  }
+
+  if (domain === "beauty") {
+    return {
+      problem: [
+        `${focus}: где теряются повторные записи`,
+        `${focus}: почему клиент не возвращается после первого визита`
+      ],
+      amplify: [
+        `${focus}: как тишина после визита бьет по загрузке`,
+        `${focus}: почему ценность услуги не считывается`
+      ],
+      mistake: [
+        `${focus}: шаг, который обнуляет доверие`,
+        `${focus}: где сервис выглядит как «просто процедура»`
+      ],
+      shift: [
+        `${focus}: как переводить визит в долгий цикл`,
+        `${focus}: разворот к повторным визитам без скидок`
+      ]
+    };
+  }
+
+  if (domain === "finance") {
+    return {
+      problem: [
+        `${focus}: где клиент перестает понимать риски`,
+        `${focus}: почему решения откладываются до бесконечности`
+      ],
+      amplify: [
+        `${focus}: как неопределенность съедает доверие`,
+        `${focus}: почему «проценты» без сценариев не работают`
+      ],
+      mistake: [
+        `${focus}: где цифры есть, а ясности нет`,
+        `${focus}: ошибка в подаче, не в аналитике`
+      ],
+      shift: [
+        `${focus}: как объяснять риск через сценарии`,
+        `${focus}: разворот к уверенным решениям`
+      ]
+    };
+  }
+
+  if (domain === "creator") {
+    return {
+      problem: [
+        `${focus}: где контент становится «как у всех»`,
+        `${focus}: почему подписчик уходит на втором слайде`
+      ],
+      amplify: [
+        `${focus}: как слабый ритм режет досмотры`,
+        `${focus}: почему полезность не превращается в диалоги`
+      ],
+      mistake: [
+        `${focus}: где экспертность звучит сухо`,
+        `${focus}: ошибка подачи, которая убивает интерес`
+      ],
+      shift: [
+        `${focus}: как вернуть живой темп карусели`,
+        `${focus}: разворот к тексту, который сохраняют`
+      ]
+    };
+  }
+
+  if (domain === "sales") {
+    return {
+      problem: [
+        `${focus}: где лиды застревают после первого контакта`,
+        `${focus}: почему заявки не доходят до сделки`
+      ],
+      amplify: [
+        `${focus}: как паузы в коммуникации сжигают спрос`,
+        `${focus}: почему команда спорит вместо роста конверсии`
+      ],
+      mistake: [
+        `${focus}: шаг, который охлаждает горячий спрос`,
+        `${focus}: где скрипт звучит как шаблон`
+      ],
+      shift: [
+        `${focus}: как перевести диалог в следующий шаг`,
+        `${focus}: разворот к прогнозируемой конверсии`
+      ]
+    };
+  }
+
+  return {};
+}
+
+function buildRoleBulletsFallback(
+  role: "problem" | "amplify" | "consequence" | "solution",
+  topic: string,
+  options?: GenerationOptions
+) {
+  const domain = resolveTopicDomain(topic, options);
+
+  if (domain === "education") {
+    if (role === "problem") {
+      return [
+        "Ученик понимает тему на уроке, но между занятиями быстро теряет ритм.",
+        "Домашка кажется формальностью, поэтому прогресс не ощущается.",
+        "Цель звучит абстрактно, и мотивация падает уже на второй неделе."
+      ];
+    }
+    if (role === "amplify") {
+      return [
+        "Паузы в практике дают откат, и каждый новый урок стартует «с нуля».",
+        "Без коротких побед вовлеченность тает от недели к неделе.",
+        "Время уходит на возврат дисциплины вместо движения вперед."
+      ];
+    }
+    if (role === "consequence") {
+      return [
+        "Часть учеников уходит, даже если программа сильная по сути.",
+        "Темп группы проседает: приходится постоянно догонять базу.",
+        "Преподаватель выгорает из-за постоянного «подтягивания» мотивации."
+      ];
+    }
+    return [
+      "Ставьте микро-цель на 7 дней с понятным критерием «сделано».",
+      "Добавляйте короткую практику 10–15 минут между занятиями.",
+      "Показывайте прогресс формулой «было -> стало» на реальных примерах."
+    ];
+  }
+
+  if (domain === "psychology") {
+    if (role === "problem") {
+      return [
+        "Клиент смешивает тревогу, выгорание и усталость в одно состояние.",
+        "Профессиональные термины звучат сложно и не превращаются в действие.",
+        "После сессии остаются эмоции, но не остается опоры для шага."
+      ];
+    }
+    if (role === "amplify") {
+      return [
+        "Без ясной рамки человек снова возвращается в тот же цикл.",
+        "Непонятные объяснения повышают сопротивление и тревожность.",
+        "Каждый пропущенный шаг усиливает чувство беспомощности."
+      ];
+    }
+    if (role === "consequence") {
+      return [
+        "Прогресс идет медленнее, чем мог бы при точной формулировке.",
+        "Доверие к процессу падает из-за ощущения «я снова не понял».",
+        "Запрос затягивается, а ресурс человека продолжает снижаться."
+      ];
+    }
+    return [
+      "Объясняйте через маркеры: признаки, триггеры и первый безопасный шаг.",
+      "Давайте формулировку, которую клиент может повторить сам себе.",
+      "Фиксируйте одно действие на ближайшие 24 часа."
+    ];
+  }
+
+  if (domain === "health") {
+    if (role === "problem") {
+      return [
+        "Пациент слышит диагноз, но не понимает последовательность действий.",
+        "На приеме много информации сразу, ключевые шаги теряются.",
+        "Риски и польза объясняются общо, поэтому растет тревога."
+      ];
+    }
+    if (role === "amplify") {
+      return [
+        "Непонимание схемы лечения снижает приверженность назначениям.",
+        "Часть шагов откладывается, потому что нет ясного приоритета.",
+        "Повторные вопросы перегружают коммуникацию клиники."
+      ];
+    }
+    if (role === "consequence") {
+      return [
+        "Растет число пропусков контроля и срывов рекомендаций.",
+        "Пациент чувствует неопределенность вместо спокойной опоры.",
+        "Команда тратит больше времени на повтор базовых объяснений."
+      ];
+    }
+    return [
+      "Объясняйте диагноз в 3 пунктах: что это, почему важно, что делать дальше.",
+      "Давайте памятку «сегодня / на неделе / когда срочно обратиться».",
+      "Проверяйте понимание одним финальным вопросом в конце приема."
+    ];
+  }
+
+  if (domain === "fitness") {
+    if (role === "problem") {
+      return [
+        "После паузы клиент боится вернуться и снова сорваться через неделю.",
+        "План кажется слишком большим, поэтому старт постоянно откладывается.",
+        "Результат не фиксируется, и мотивация быстро гаснет."
+      ];
+    }
+    if (role === "amplify") {
+      return [
+        "Каждый пропуск усиливает ощущение «я опять не справился».",
+        "Нерегулярность ломает технику и повышает риск перегруза.",
+        "Восстановление занимает больше времени, чем могло бы."
+      ];
+    }
+    if (role === "consequence") {
+      return [
+        "Клиент уходит из процесса, даже имея запрос и ресурс.",
+        "Тренер теряет долгую работу и повторные циклы сопровождения.",
+        "Прогресс рваный: усилий много, устойчивого результата нет."
+      ];
+    }
+    return [
+      "Стартуйте с мягкого протокола на 2 недели без гонки за рекордами.",
+      "Фиксируйте микро-результаты: сон, энергия, самочувствие, регулярность.",
+      "Добавьте короткий ритуал обратной связи после каждой тренировки."
+    ];
+  }
+
+  if (domain === "beauty") {
+    if (role === "problem") {
+      return [
+        "После первого визита клиент доволен, но не бронирует следующий.",
+        "Ценность услуги не проговорена в языке результата для клиента.",
+        "Коммуникация после процедуры слишком формальная и редкая."
+      ];
+    }
+    if (role === "amplify") {
+      return [
+        "Пауза после визита быстро охлаждает интерес к повторной записи.",
+        "Человек забывает, зачем возвращаться именно к вам, а не «куда ближе».",
+        "Появляется ценовая чувствительность даже при хорошем сервисе."
+      ];
+    }
+    if (role === "consequence") {
+      return [
+        "График заполняется нестабильно, выручка «качает» от недели к неделе.",
+        "Приходится чаще добирать клиентов через скидки.",
+        "Лояльность не формируется, и база не растет системно."
+      ];
+    }
+    return [
+      "Закрывайте визит конкретным планом следующей процедуры и сроком.",
+      "Отправляйте персональный follow-up с напоминанием и микро-советом.",
+      "Показывайте результат в языке выгоды клиента, а не только процесса."
+    ];
+  }
+
+  if (domain === "finance") {
+    if (role === "problem") {
+      return [
+        "Клиент слышит цифры доходности, но не понимает рамку риска.",
+        "Сценарии «что будет если» не проговорены до принятия решения.",
+        "Финансовые термины создают дистанцию вместо ясности."
+      ];
+    }
+    if (role === "amplify") {
+      return [
+        "Неопределенность переводит решение в бесконечное «подумаю».",
+        "Каждое колебание рынка усиливает тревогу и недоверие.",
+        "Обсуждение упирается в спор о процентах без общей картины."
+      ];
+    }
+    if (role === "consequence") {
+      return [
+        "Решение откладывается, и окно возможностей закрывается.",
+        "Клиент теряет уверенность и возвращается к хаотичным действиям.",
+        "Консультант тратит время на повторное объяснение базовых вещей."
+      ];
+    }
+    return [
+      "Объясняйте через 2-3 сценария: базовый, стрессовый и целевой.",
+      "Фиксируйте допуск по риску до обсуждения доходности.",
+      "Завершайте встречу понятным планом действий на ближайший месяц."
+    ];
+  }
+
+  if (domain === "creator") {
+    if (role === "problem") {
+      return [
+        "Сильная экспертиза звучит ровно, но без крючка на первом экране.",
+        "Мысль растягивается, и читатель теряет нить уже на втором слайде.",
+        "Нет конкретного действия, ради которого человек дочитывает."
+      ];
+    }
+    if (role === "amplify") {
+      return [
+        "Низкий досмотр сигнализирует алгоритму, что контент «средний».",
+        "Полезность есть, но она не превращается в сохранения и диалоги.",
+        "Каждый следующий пост сложнее раскачать на старте."
+      ];
+    }
+    if (role === "consequence") {
+      return [
+        "Охваты нестабильны, даже при регулярной публикации.",
+        "Аудитория запоминает формат, но не запоминает вашу позицию.",
+        "Контент-план есть, а воронка доверия не собирается."
+      ];
+    }
+    return [
+      "Делайте один слайд = одна мысль с четким микровыводом.",
+      "Добавляйте контраст «до/после» или конкретный пример из практики.",
+      "Закрывайте блок действием: сохранить, ответить, написать код-слово."
+    ];
+  }
+
+  if (domain === "sales") {
+    if (role === "problem") {
+      return [
+        "Заявка приходит, но первый контакт затягивается и интерес остывает.",
+        "Клиент не понимает следующий шаг и откладывает решение «на потом».",
+        "В диалоге много общих слов, мало точной логики под запрос."
+      ];
+    }
+    if (role === "amplify") {
+      return [
+        "Паузы между касаниями увеличивают стоимость каждой сделки.",
+        "Реклама продолжает лить лиды, а команда спорит о причинах провала.",
+        "Чем дольше нет системы, тем ниже доходимость до оплаты."
+      ];
+    }
+    if (role === "consequence") {
+      return [
+        "Горячие заявки уходят к тем, кто отвечает быстрее и точнее.",
+        "Бюджет растет, а предсказуемого результата по сделкам нет.",
+        "Команда выгорает из-за хаоса и взаимных претензий."
+      ];
+    }
+    return [
+      "Соберите единый сценарий: первый ответ, квалификация, следующий шаг.",
+      "Поставьте SLA на ответ и follow-up касания в первые 24 часа.",
+      "Раз в неделю разбирайте потерянные диалоги и правьте формулировки."
+    ];
+  }
 
   if (role === "problem") {
-    return trimToWordBoundary(`Почему ${focus} не цепляет с первого экрана`, 80);
+    return [
+      "Человек видит общий посыл, но не понимает, что делать именно ему.",
+      "Польза заявлена, но нет конкретного признака результата.",
+      "Старт перегружен, поэтому ключевая мысль теряется до сути."
+    ];
   }
-
   if (role === "amplify") {
-    return trimToWordBoundary(`Что в ${focus} усиливает просадку`, 80);
+    return [
+      "Когда смысл неясен на старте, до финала доходит только часть аудитории.",
+      "Слабый ритм снижает досмотры и обесценивает даже сильную мысль.",
+      "Время и усилия уходят в контент, который не дает обратной связи."
+    ];
   }
-
-  if (role === "mistake") {
-    return trimToWordBoundary(`Незаметный просчет в ${focus}, который режет результат`, 92);
+  if (role === "consequence") {
+    return [
+      "Экспертиза выглядит «как у всех», потому что фокус не считывается.",
+      "Люди уходят без действия: не сохраняют и не возвращаются к материалу.",
+      "Команда выгорает: усилий много, а стабильного результата мало."
+    ];
   }
-
-  if (role === "shift") {
-    return trimToWordBoundary(`Как повернуть ${focus}, чтобы появился отклик`, 92);
-  }
-
-  return trimToWordBoundary(`Как усилить ${focus} на практике`, 84);
+  return [
+    "Начинайте с одной боли и сразу показывайте понятный выигрыш.",
+    "На каждом слайде добавляйте факт: ситуацию, цифру или мини-кейс.",
+    "Закрывайте блок действием, которое реально сделать сегодня."
+  ];
 }
 
 function normalizeText(value: unknown, maxLength: number) {
@@ -1522,6 +2128,7 @@ function buildHookFallbackTitle(topic: string) {
   const cleanTopic = normalizeText(topic, 96)
     .replace(/[.?!…]+$/u, "")
     .trim();
+  const domain = resolveTopicDomain(topic);
 
   if (!cleanTopic) {
     return "Идея, которая усиливает ваш контент";
@@ -1531,12 +2138,22 @@ function buildHookFallbackTitle(topic: string) {
     return trimToWordBoundary(cleanTopic, 72);
   }
 
-  const topicFocus = buildTopicFocus(cleanTopic);
+  const topicFocus = buildCompactTopicFocus(cleanTopic, 28);
+  const domainCue =
+    domain === "education"
+      ? "читают до конца"
+      : domain === "psychology" || domain === "health"
+        ? "лучше понимают с первого раза"
+        : domain === "finance"
+          ? "решения принимаются спокойнее"
+          : domain === "fitness" || domain === "beauty"
+            ? "возвращаются чаще"
+            : "появляется живой отклик";
   const variants = [
-    `Как усилить ${topicFocus} так, чтобы дочитывали до конца`,
-    `Что в ${topicFocus} реально цепляет с первого экрана`,
-    `Сильный вход в ${topicFocus}: фраза, которая удерживает внимание`,
-    `Быстрый рычаг в ${topicFocus}, который усиливает отклик`
+    `${upperFirst(topicFocus)}: как удержать внимание до финала`,
+    `${upperFirst(topicFocus)}: что включает интерес с первого экрана`,
+    `${upperFirst(topicFocus)}: один ход, после которого ${domainCue}`,
+    `${upperFirst(topicFocus)}: как подать мысль сильнее и конкретнее`
   ];
   return trimToWordBoundary(pickVariantByTopic(topicFocus, variants), 72);
 }
@@ -1578,6 +2195,18 @@ function buildTopicFocus(topic: string) {
   const sliced = cleaned.slice(0, 52).trimEnd();
   const lastSpace = sliced.lastIndexOf(" ");
   return (lastSpace > 26 ? sliced.slice(0, lastSpace) : sliced).trimEnd();
+}
+
+function buildCompactTopicFocus(topic: string, maxLength = 42) {
+  const focus = buildTopicFocus(topic)
+    .replace(/^по\s+теме\s+/iu, "")
+    .trim();
+
+  if (!focus) {
+    return "вашей теме";
+  }
+
+  return trimToWordBoundary(focus, maxLength);
 }
 
 function extractHookAnchor(topic: string) {
@@ -1684,10 +2313,17 @@ function sanitizeTitleValue(value: unknown, maxLength: number) {
   if (!rawTitle) {
     return "";
   }
+  const cleanTitle = rawTitle
+    .replace(/[,:;—–-]+\s*$/u, "")
+    .replace(/\b(и|а|но|или|что|чтобы|как|где|когда|по|в|на|для|с)\s*$/iu, "")
+    .trim();
+  if (!cleanTitle) {
+    return "";
+  }
 
-  const words = rawTitle.split(" ").filter(Boolean);
+  const words = cleanTitle.split(" ").filter(Boolean);
   if (words.length <= 2) {
-    return rawTitle;
+    return cleanTitle;
   }
 
   const seen = new Set<string>();
@@ -1795,6 +2431,34 @@ function hasTopicStemMatch(copy: string, topicStems: Set<string>) {
 
     return false;
   });
+}
+
+function buildPrimaryTopicAnchors(topic: string) {
+  return normalizeWordTokens(normalizeText(topic, 180))
+    .filter((token) => token.length >= 4 && !TOPIC_STOP_WORDS.has(token))
+    .slice(0, 4)
+    .map((token) => token.slice(0, 5));
+}
+
+function hasPrimaryTopicAnchor(copy: string, topic: string) {
+  const anchors = buildPrimaryTopicAnchors(topic);
+  if (!anchors.length) {
+    return true;
+  }
+
+  const copyTokens = normalizeWordTokens(copy).filter(
+    (token) => token.length >= 4 && !TOPIC_STOP_WORDS.has(token)
+  );
+  if (!copyTokens.length) {
+    return false;
+  }
+
+  return anchors.some((anchor) =>
+    copyTokens.some((token) => {
+      const tokenPrefix = token.slice(0, 5);
+      return tokenPrefix.startsWith(anchor) || anchor.startsWith(tokenPrefix);
+    })
+  );
 }
 
 function isCopyTopicAligned(copy: string, topic: string) {

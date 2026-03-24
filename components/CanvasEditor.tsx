@@ -335,7 +335,7 @@ export function CanvasEditor({
           </div>
 
           {previewMode ? null : (
-            <div className="mobile-slide-tools">
+            <div className="mobile-slide-tools" aria-label="Управление слайдами">
               <MobileIconButton
                 icon="plus"
                 title="Добавить слайд"
@@ -382,6 +382,11 @@ export function CanvasEditor({
                 destructive
               />
             </div>
+          )}
+          {previewMode ? null : (
+            <p className="mobile-slide-tools-hint">
+              Листайте свайпом или кнопками ←/→. Кнопка <strong>+</strong> добавляет новый слайд.
+            </p>
           )}
         </div>
       </section>
