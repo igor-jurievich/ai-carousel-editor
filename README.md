@@ -44,6 +44,9 @@ npm run start
 ```bash
 # API quality matrix (topics x formats x themes)
 npm run quality:generate
+
+# mobile UI smoke (Playwright)
+npm run smoke:mobile
 ```
 
 Параметры (опционально):
@@ -56,6 +59,12 @@ npm run quality:generate
 - `QUALITY_THEMES` — темы через запятую, например `light,dark`
 
 Отчёт сохраняется в `test-results/quality-gate-latest.json`.
+Mobile UI отчёт сохраняется в `test-results/mobile-ui-smoke-latest.json`.
+
+## CI gates
+
+- `.github/workflows/release-gate.yml` — typecheck/build + mobile smoke + API quality gate (если задан `OPENAI_API_KEY` secret).
+- `.github/workflows/nightly-quality.yml` — ночной прогон на production (`quality:generate` + `smoke:mobile`).
 
 ## Environment variables
 

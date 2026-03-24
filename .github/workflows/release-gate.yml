@@ -1,0 +1,67 @@
+name: Release Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Start app
+        run: |
+          npm run start -- --port 3000 > /tmp/next-start.log 2>&1 &
+          for i in {1..60}; do
+            if curl -sf http://127.0.0.1:3000/ >/dev/null; then
+              echo "App is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "App failed to start in time"
+          cat /tmp/next-start.log
+          exit 1
+
+      - name: Mobile UI smoke
+        run: SMOKE_BASE_URL=http://127.0.0.1:3000 npm run smoke:mobile
+
+      - name: API quality gate (requires OPENAI key)
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QUALITY_BASE_URL: http://127.0.0.1:3000
+          QUALITY_TOPICS_LIMIT: 2
+          QUALITY_RUNS: 1
+        run: npm run quality:generate
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-reports
+          path: test-results/*.json

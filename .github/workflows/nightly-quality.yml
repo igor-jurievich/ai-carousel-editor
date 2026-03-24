@@ -1,0 +1,45 @@
+name: Nightly Quality
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Production quality gate
+        env:
+          QUALITY_BASE_URL: https://ai-carousel-editor.vercel.app
+          QUALITY_TOPICS_LIMIT: 5
+          QUALITY_RUNS: 1
+        run: npm run quality:generate
+
+      - name: Production mobile smoke
+        env:
+          SMOKE_BASE_URL: https://ai-carousel-editor.vercel.app
+        run: npm run smoke:mobile
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-quality-reports
+          path: test-results/*.json
