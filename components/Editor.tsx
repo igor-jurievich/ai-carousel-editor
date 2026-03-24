@@ -70,6 +70,11 @@ type HistorySnapshot = {
   slideFormat: SlideFormat;
 };
 
+type ExportSnapshot = {
+  slides: Slide[];
+  slideFormat: SlideFormat;
+};
+
 export function Editor() {
   const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("light", "1:1"));
   const [topic, setTopic] = useState("");
@@ -87,6 +92,7 @@ export function Editor() {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isSlideExportModalOpen, setIsSlideExportModalOpen] = useState(false);
   const [selectedExportSlideIds, setSelectedExportSlideIds] = useState<string[]>([]);
+  const [exportSnapshot, setExportSnapshot] = useState<ExportSnapshot | null>(null);
   const [mobileToolTab, setMobileToolTab] = useState<MobileToolTab | null>(null);
   const [mobileBottomOffset, setMobileBottomOffset] = useState(120);
   const [pendingImageSlideId, setPendingImageSlideId] = useState<string | null>(null);
@@ -797,41 +803,56 @@ export function Editor() {
 
     try {
       const dataUrl = await fileToOptimizedDataUrl(file);
-      const imageMeta = await readImageMeta(dataUrl);
-      const maxWidth = Math.min(900, slideDimensions.width - 180);
-      const maxHeight = Math.max(180, Math.min(560, slideDimensions.height * 0.42));
-      const fitRatio = Math.min(
-        1,
-        maxWidth / Math.max(1, imageMeta.width),
-        maxHeight / Math.max(1, imageMeta.height)
-      );
-      const imageWidth = Math.round(Math.max(160, imageMeta.width * fitRatio));
-      const imageHeight = Math.round(Math.max(120, imageMeta.height * fitRatio));
-      const element = createImageElement(dataUrl, {
-        width: imageWidth,
-        height: imageHeight,
-        x: Math.round((slideDimensions.width - imageWidth) / 2),
-        y: Math.round(Math.max(72, (slideDimensions.height - imageHeight) * 0.26)),
-        fitMode: "contain",
-        zoom: 1,
-        offsetX: 0,
-        offsetY: 0,
-        naturalWidth: imageMeta.width,
-        naturalHeight: imageMeta.height
-      });
       const targetSlideId = pendingImageSlideId ?? activeSlideId;
 
       if (!targetSlideId) {
         throw new Error("Не найден слайд для добавления изображения.");
       }
 
-      updateSlide(targetSlideId, (slide) => ({
-        ...slide,
-        elements: [...slide.elements, element]
-      }));
+      const targetSlideIndex = slides.findIndex((slide) => slide.id === targetSlideId);
+      const targetSlide = targetSlideIndex >= 0 ? slides[targetSlideIndex] : null;
+
+      if (!targetSlide) {
+        throw new Error("Не найден слайд для добавления изображения.");
+      }
+
+      if (targetSlide.slideType === "image_text") {
+        updateSlide(targetSlideId, (slide) =>
+          setSlideBackgroundImage(slide, dataUrl, targetSlideIndex, slides.length, slideFormat)
+        );
+        setSelectedElementId(null);
+      } else {
+        const imageMeta = await readImageMeta(dataUrl);
+        const maxWidth = Math.min(900, slideDimensions.width - 180);
+        const maxHeight = Math.max(180, Math.min(560, slideDimensions.height * 0.42));
+        const fitRatio = Math.min(
+          1,
+          maxWidth / Math.max(1, imageMeta.width),
+          maxHeight / Math.max(1, imageMeta.height)
+        );
+        const imageWidth = Math.round(Math.max(160, imageMeta.width * fitRatio));
+        const imageHeight = Math.round(Math.max(120, imageMeta.height * fitRatio));
+        const element = createImageElement(dataUrl, {
+          width: imageWidth,
+          height: imageHeight,
+          x: Math.round((slideDimensions.width - imageWidth) / 2),
+          y: Math.round(Math.max(72, (slideDimensions.height - imageHeight) * 0.26)),
+          fitMode: "contain",
+          zoom: 1,
+          offsetX: 0,
+          offsetY: 0,
+          naturalWidth: imageMeta.width,
+          naturalHeight: imageMeta.height
+        });
+
+        updateSlide(targetSlideId, (slide) => ({
+          ...slide,
+          elements: [...slide.elements, element]
+        }));
+        setSelectedElementId(element.id);
+      }
 
       setActiveSlideId(targetSlideId);
-      setSelectedElementId(element.id);
       setStatus(`Изображение "${file.name}" добавлено в макет.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Не удалось добавить изображение.");
@@ -1318,22 +1339,37 @@ export function Editor() {
       return;
     }
 
-    setIsExportRendering(true);
     try {
       if (!slides.length) {
         return;
       }
+
+      const exportFormat = slideFormat;
+      const exportTemplateId = activeTemplateId;
+      const exportSlides = prepareSlidesForExport(slides, exportTemplateId, exportFormat);
+      const exportDimensions = SLIDE_FORMAT_DIMENSIONS[exportFormat];
+      const pdfOrientation = exportDimensions.height >= exportDimensions.width ? "portrait" : "landscape";
       const selectedIds = requestedSlideIds?.length
         ? new Set(requestedSlideIds)
-        : new Set(slides.map((slide) => slide.id));
-      const targetSlides = slides.filter((slide) => selectedIds.has(slide.id));
+        : new Set(exportSlides.map((slide) => slide.id));
+      const targetSlides = exportSlides.filter((slide) => selectedIds.has(slide.id));
       const targetSlideIds = targetSlides.map((slide) => slide.id);
 
       if (!targetSlideIds.length) {
         throw new Error("Выберите хотя бы один слайд для экспорта.");
       }
 
-      const firstExportSlideIndex = slides.findIndex((slide) => slide.id === targetSlideIds[0]);
+      const firstExportSlideIndex = exportSlides.findIndex((slide) => slide.id === targetSlideIds[0]);
+
+      setExportSnapshot({
+        slides: exportSlides,
+        slideFormat: exportFormat
+      });
+      setIsExportRendering(true);
+
+      await waitForNextFrame();
+      await waitForNextFrame();
+
       let lastAttemptError: unknown = null;
 
       for (let attempt = 1; attempt <= EXPORT_ATTEMPTS_MAX; attempt += 1) {
@@ -1375,19 +1411,19 @@ export function Editor() {
 
           if (exportMode === "pdf") {
             const pdf = new jsPDF({
-              orientation: "portrait",
+              orientation: pdfOrientation,
               unit: "px",
-              format: [slideDimensions.width, slideDimensions.height]
+              format: [exportDimensions.width, exportDimensions.height]
             });
 
             for (let index = 0; index < targetSlideIds.length; index += 1) {
               const dataUrl = await getSlideDataUrl(targetSlideIds[index]);
 
               if (index > 0) {
-                pdf.addPage([slideDimensions.width, slideDimensions.height], "portrait");
+                pdf.addPage([exportDimensions.width, exportDimensions.height], pdfOrientation);
               }
 
-              pdf.addImage(dataUrl, "PNG", 0, 0, slideDimensions.width, slideDimensions.height);
+              pdf.addImage(dataUrl, "PNG", 0, 0, exportDimensions.width, exportDimensions.height);
             }
 
             pdf.save(`${slugify(projectTitleFromTopic(topic))}.pdf`);
@@ -1414,6 +1450,7 @@ export function Editor() {
       setStatus(resolveUserFacingError(error, "Ошибка экспорта. Попробуйте снова."));
     } finally {
       setIsExportRendering(false);
+      setExportSnapshot(null);
       exportStageRefs.current = {};
     }
   };
@@ -1772,16 +1809,16 @@ export function Editor() {
         onChange={(event) => void handleBackgroundImageSelected(event.target.files?.[0] ?? null)}
       />
 
-      {isExportRendering ? (
+      {isExportRendering && exportSnapshot ? (
         <div className="hidden-export-stages" aria-hidden="true">
-          {slides.map((slide) => (
+          {exportSnapshot.slides.map((slide) => (
             <SlideStage
               key={`export-${slide.id}`}
               slide={slide}
-              width={slideDimensions.width}
-              height={slideDimensions.height}
-              canvasWidth={slideDimensions.width}
-              canvasHeight={slideDimensions.height}
+              width={SLIDE_FORMAT_DIMENSIONS[exportSnapshot.slideFormat].width}
+              height={SLIDE_FORMAT_DIMENSIONS[exportSnapshot.slideFormat].height}
+              canvasWidth={SLIDE_FORMAT_DIMENSIONS[exportSnapshot.slideFormat].width}
+              canvasHeight={SLIDE_FORMAT_DIMENSIONS[exportSnapshot.slideFormat].height}
               showSlideBadge={false}
               stageRef={(node) => {
                 exportStageRefs.current[slide.id] = node;
@@ -1838,6 +1875,42 @@ async function ensureFontsReadyForExport() {
       window.setTimeout(resolve, 1800);
     })
   ]);
+}
+
+function hasCustomSlidePhoto(slide: Slide) {
+  return slide.elements.some(
+    (element) => element.type === "image" && element.metaKey !== "image-top"
+  );
+}
+
+function prepareSlidesForExport(
+  sourceSlides: Slide[],
+  templateId: CarouselTemplateId,
+  slideFormat: SlideFormat
+) {
+  const themedSlides = applyTemplateToSlides(cloneSlides(sourceSlides), templateId, slideFormat);
+
+  return themedSlides.map((slide, index) => {
+    if (slide.slideType !== "image_text") {
+      return slide;
+    }
+
+    const hasPhoto = Boolean(slide.backgroundImage) || hasCustomSlidePhoto(slide);
+    if (hasPhoto) {
+      return slide;
+    }
+
+    return applyTemplateToSlide(
+      {
+        ...slide,
+        slideType: "text"
+      },
+      templateId,
+      index,
+      themedSlides.length,
+      slideFormat
+    );
+  });
 }
 
 function cloneSlides(slides: Slide[]) {

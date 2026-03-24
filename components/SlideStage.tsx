@@ -25,6 +25,7 @@ type SlideStageProps = {
   onUpdateElementPosition?: (elementId: string, x: number, y: number) => void;
   onTransformElement?: (elementId: string, updates: Record<string, number>) => void;
   onStartTextEditing?: (elementId: string) => void;
+  onRequestSlidePhotoUpload?: (slideId: string) => void;
   stageRef?: (node: Konva.Stage | null) => void;
   showSlideBadge?: boolean;
 };
@@ -517,6 +518,7 @@ export function SlideStage({
   onUpdateElementPosition,
   onTransformElement,
   onStartTextEditing,
+  onRequestSlidePhotoUpload,
   stageRef,
   showSlideBadge = true
 }: SlideStageProps) {
@@ -784,37 +786,61 @@ export function SlideStage({
               const isLockedTextLayer = Boolean(
                 element.metaKey && NON_INTERACTIVE_TEXT_META_KEYS.has(element.metaKey)
               );
+              const isImagePlaceholderText =
+                element.metaKey === "image-placeholder-text" &&
+                !slide.backgroundImage &&
+                Boolean(onRequestSlidePhotoUpload);
+              const interactiveText = interactive && !isLockedTextLayer && !isImagePlaceholderText;
+
               return (
                 <SlideTextNode
                   key={element.id}
                   element={element}
-                  selected={selected && !isLockedTextLayer}
-                  interactive={interactive && !isLockedTextLayer}
+                  selected={selected && !isLockedTextLayer && !isImagePlaceholderText}
+                  interactive={interactiveText}
                   nodeRef={nodeRef as (node: Konva.Text | null) => void}
                   dragBoundFunc={dragBoundFunc}
                   onSelect={
-                    isLockedTextLayer ? undefined : () => onSelectElement?.(element.id)
+                    isImagePlaceholderText
+                      ? () => onRequestSlidePhotoUpload?.(slide.id)
+                      : isLockedTextLayer
+                        ? undefined
+                        : () => onSelectElement?.(element.id)
                   }
                   onDoubleClick={
-                    isLockedTextLayer ? undefined : () => onStartTextEditing?.(element.id)
+                    isLockedTextLayer || isImagePlaceholderText
+                      ? undefined
+                      : () => onStartTextEditing?.(element.id)
                   }
-                  onDragEnd={isLockedTextLayer ? undefined : handleDragEnd}
+                  onDragEnd={isLockedTextLayer || isImagePlaceholderText ? undefined : handleDragEnd}
                   onTransformEnd={
-                    isLockedTextLayer ? undefined : (node) => handleTransformEnd(element, node)
+                    isLockedTextLayer || isImagePlaceholderText
+                      ? undefined
+                      : (node) => handleTransformEnd(element, node)
                   }
                 />
               );
             }
 
             if (element.type === "shape") {
+              const isImagePlaceholderShape =
+                element.metaKey === "image-placeholder" &&
+                !slide.backgroundImage &&
+                Boolean(onRequestSlidePhotoUpload);
+
               return (
                 <SlideShapeNode
                   key={element.id}
                   element={element}
                   selected={false}
-                  interactive={false}
+                  interactive={interactive && isImagePlaceholderShape}
                   nodeRef={nodeRef as (node: Konva.Rect | null) => void}
                   dragBoundFunc={dragBoundFunc}
+                  onSelect={
+                    isImagePlaceholderShape
+                      ? () => onRequestSlidePhotoUpload?.(slide.id)
+                      : undefined
+                  }
                 />
               );
             }

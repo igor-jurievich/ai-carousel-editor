@@ -195,6 +195,7 @@ export function CanvasEditor({
                       onTransformElement(activeSlide.id, elementId, updates)
                     }
                     onStartTextEditing={(elementId) => onStartTextEditing(activeSlide.id, elementId)}
+                    onRequestSlidePhotoUpload={() => onAddImageToSlide(activeSlide.id)}
                     showSlideBadge={showSlideBadge}
                   />
                 </div>
@@ -387,6 +388,7 @@ export function CanvasEditor({
                           onStartTextEditing={(elementId) =>
                             onStartTextEditing(slide.id, elementId)
                           }
+                          onRequestSlidePhotoUpload={() => onAddImageToSlide(slide.id)}
                           showSlideBadge={showSlideBadge}
                         />
                       </div>
