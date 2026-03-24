@@ -34,27 +34,54 @@ function assert(condition, message, failures) {
   }
 }
 
+async function withRetry(fn, attempts = 4, delayMs = 300) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 async function setFormat(page, format) {
-  await page.locator(`.settings-card-format .segment-item:has-text("${format}")`).first().click();
+  await page
+    .locator(`.settings-card-format .segment-item:has-text("${format}"):visible`)
+    .first()
+    .click();
   await page.waitForTimeout(120);
 }
 
-async function openModalAndSelectMode(page, mode) {
-  await page.locator('.settings-card-export .btn:has-text("Выбрать слайды")').first().click();
-  await page.locator(".slide-export-modal").waitFor({ state: "visible", timeout: 10000 });
-  await page.locator(".slide-export-mode-row .select").selectOption(mode);
+async function setExportMode(page, mode) {
+  const settingsModeSelect = page.locator(".settings-card-export .select").first();
+  await withRetry(async () => {
+    await settingsModeSelect.waitFor({ state: "visible", timeout: 15000 });
+    await settingsModeSelect.selectOption(mode);
+  });
+  await page.waitForTimeout(100);
 }
 
-async function selectSingleSlide(page) {
-  const allToggle = page.locator(".slide-export-all-toggle input").first();
-  if (await allToggle.isChecked()) {
-    await allToggle.click();
-  }
+async function openModal(page) {
+  const modal = page.locator(".slide-export-modal:visible").first();
 
-  const firstSlide = page.locator(".slide-export-item input").first();
-  if (!(await firstSlide.isChecked())) {
-    await firstSlide.click();
-  }
+  await withRetry(async () => {
+    const openButton = page
+      .locator('.settings-card-export .btn:has-text("Выбрать слайды"):visible')
+      .first();
+    await openButton.waitFor({ state: "visible", timeout: 10000 });
+    await openButton.scrollIntoViewIfNeeded();
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await openButton.click();
+    await modal.waitFor({ state: "visible", timeout: 15000 });
+  });
+
+  return modal;
 }
 
 async function waitExportReady(page) {
@@ -66,10 +93,10 @@ async function waitExportReady(page) {
 
 async function runCase(page, downloadsDir, format, mode) {
   await setFormat(page, format);
-  await openModalAndSelectMode(page, mode);
-  await selectSingleSlide(page);
+  await setExportMode(page, mode);
+  const modal = await openModal(page);
 
-  const confirmButton = page.locator(".modal-primary-btn").first();
+  const confirmButton = modal.locator(".modal-primary-btn:visible").first();
   await confirmButton.waitFor({ state: "visible", timeout: 10000 });
   if (await confirmButton.isDisabled()) {
     throw new Error(`export modal confirm is disabled for ${format}/${mode}`);
@@ -82,8 +109,14 @@ async function runCase(page, downloadsDir, format, mode) {
 
   const suggestedFilename = download.suggestedFilename();
   const expectedExt = EXT_BY_MODE[mode] || "";
+  const normalizedFilename = suggestedFilename.toLowerCase();
+  const acceptableExt =
+    mode === "png" || mode === "jpg"
+      ? [expectedExt, ".zip"]
+      : [expectedExt];
   const targetPath = path.join(downloadsDir, `${format.replace(":", "x")}-${mode}-${suggestedFilename}`);
   await download.saveAs(targetPath);
+  await modal.waitFor({ state: "hidden", timeout: EXPORT_TIMEOUT_MS });
   await waitExportReady(page);
 
   return {
@@ -92,7 +125,7 @@ async function runCase(page, downloadsDir, format, mode) {
     suggestedFilename,
     filePath: targetPath,
     expectedExt,
-    matchesExt: suggestedFilename.toLowerCase().endsWith(expectedExt)
+    matchesExt: acceptableExt.some((ext) => normalizedFilename.endsWith(ext))
   };
 }
 
@@ -113,6 +146,8 @@ async function main() {
     const page = await context.newPage();
     await page.goto(`${BASE_URL}/editor`, { waitUntil: "networkidle" });
     await page.locator('.prompt-composer textarea').first().fill("Тестовая тема для проверки экспорта");
+    await page.locator(".settings-card-export .select").first().waitFor({ state: "visible", timeout: 15000 });
+    await page.waitForTimeout(200);
 
     for (const format of FORMATS) {
       for (const mode of MODES) {

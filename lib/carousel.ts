@@ -916,14 +916,14 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
     const subtitle = typeof outline.subtitle === "string" ? outline.subtitle.trim() : "";
     return sanitizeBlueprintText(
       subtitle || "Коротко разложим тему на практичные шаги без воды.",
-      250
+      320
     );
   }
 
   if (role === "problem" || role === "amplify" || role === "consequence" || role === "solution") {
     const bullets = Array.isArray(outline.bullets)
       ? outline.bullets
-          .map((item) => sanitizeBlueprintText(String(item), 120))
+          .map((item) => sanitizeBlueprintText(String(item), 150))
           .filter(Boolean)
           .slice(0, 4)
       : [];
@@ -933,7 +933,7 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
     }
 
     if (typeof outline.text === "string" && outline.text.trim()) {
-      return sanitizeBlueprintText(outline.text, 340);
+      return sanitizeBlueprintText(outline.text, 430);
     }
 
     if (role === "consequence") {
@@ -947,7 +947,7 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
     const before = typeof outline.before === "string" ? outline.before.trim() : "";
     const after = typeof outline.after === "string" ? outline.after.trim() : "";
     if (before || after) {
-      return sanitizeBlueprintText(`До: ${before || "—"}\nПосле: ${after || "—"}`, 240);
+      return sanitizeBlueprintText(`До: ${before || "—"}\nПосле: ${after || "—"}`, 320);
     }
 
     return "До: «Мы делаем качественно»\nПосле: «За 3 шага получили понятный и предсказуемый результат»";
@@ -957,16 +957,16 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
     const subtitle = typeof outline.subtitle === "string" ? outline.subtitle.trim() : "";
     return sanitizeBlueprintText(
       subtitle || "Напишите «РАЗБОР» и получите структуру, адаптированную под вашу задачу.",
-      240
+      300
     );
   }
 
   if (typeof outline.text === "string" && outline.text.trim()) {
-    return sanitizeBlueprintText(outline.text, 280);
+    return sanitizeBlueprintText(outline.text, 340);
   }
 
   if (typeof outline.body === "string" && outline.body.trim()) {
-    return sanitizeBlueprintText(outline.body, 280);
+    return sanitizeBlueprintText(outline.body, 340);
   }
 
   return "Добавьте короткий тезис и конкретный шаг.";
@@ -1173,7 +1173,7 @@ function buildMainContent(
       ? "text"
       : blueprint.slideType;
   const metrics = resolveTextMetrics(format);
-  const bodyTextLimit = format === "9:16" ? 520 : format === "4:5" ? 440 : 380;
+  const bodyTextLimit = format === "9:16" ? 620 : format === "4:5" ? 560 : 500;
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
@@ -1280,18 +1280,18 @@ function buildMainContent(
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
-        text: compactTextLength(blueprint.body, format === "9:16" ? 300 : 270),
+        text: compactTextLength(blueprint.body, format === "9:16" ? 400 : 340),
         x: metrics.contentX,
         y: imageArea.y + imageArea.height + Math.round(metrics.height * 0.22),
         width: metrics.contentWidth,
         height: Math.max(96, footerTop - (imageArea.y + imageArea.height + Math.round(metrics.height * 0.22)) - 14),
-        preferredFontSize: format === "9:16" ? 45 : 40,
+        preferredFontSize: format === "9:16" ? 43 : 39,
         minFontSize: 26,
         fontFamily: template.bodyFont,
         fontStyle: "normal",
         fill: bodyFill,
         align: "left",
-        lineHeight: 1.2
+        lineHeight: 1.18
       })
     );
 
@@ -1314,18 +1314,18 @@ function buildMainContent(
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
-        text: compactTextLength(blueprint.body, format === "9:16" ? 270 : 230),
+        text: compactTextLength(blueprint.body, format === "9:16" ? 360 : 300),
         x: metrics.contentX,
         y: Math.round(metrics.height * 0.58),
         width: metrics.contentWidth,
         height: Math.max(96, footerTop - Math.round(metrics.height * 0.58) - 18),
-        preferredFontSize: format === "9:16" ? 44 : 40,
+        preferredFontSize: format === "9:16" ? 42 : 39,
         minFontSize: 26,
         fontFamily: template.bodyFont,
         fontStyle: "normal",
         fill: bodyFill,
         align: "left",
-        lineHeight: 1.22
+        lineHeight: 1.18
       })
     ];
   }
@@ -1350,13 +1350,13 @@ function buildMainContent(
       y: metrics.bodyY,
       width: metrics.contentWidth,
       height: Math.max(100, footerTop - metrics.bodyY - 16),
-      preferredFontSize: format === "9:16" ? 46 : 41,
+      preferredFontSize: format === "9:16" ? 44 : 40,
       minFontSize: 25,
       fontFamily: template.bodyFont,
       fontStyle: "normal",
       fill: bodyFill,
       align: "left",
-      lineHeight: 1.22
+      lineHeight: 1.18
     })
   ];
 }
