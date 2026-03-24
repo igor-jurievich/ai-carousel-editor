@@ -1,10 +1,25 @@
 import OpenAI from "openai";
 import { clampSlidesCount } from "@/lib/slides";
-import type { CarouselOutlineSlide, CarouselSlideRole } from "@/types/editor";
+import type {
+  CarouselOutlineSlide,
+  CarouselPostCaption,
+  CarouselSlideRole
+} from "@/types/editor";
 
 type GenerationOptions = {
   niche?: string;
   audience?: string;
+  tone?: string;
+  goal?: string;
+};
+
+type CaptionGenerationInput = {
+  topic: string;
+  slides: CarouselOutlineSlide[];
+  niche?: string;
+  audience?: string;
+  tone?: string;
+  goal?: string;
 };
 
 type CarouselGenerationResult = {
@@ -41,9 +56,7 @@ const FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
 };
 
 const DEFAULT_MODEL_CANDIDATES = [
-  "gpt-5.3",
   "gpt-4.1",
-  "gpt-5.3-mini",
   "gpt-4.1-mini",
   "gpt-4o-mini"
 ] as const;
@@ -187,6 +200,117 @@ export async function generateCarouselFromTopic(
   }
 }
 
+export async function generateCaptionFromCarousel(
+  input: CaptionGenerationInput
+): Promise<CarouselPostCaption> {
+  const topic = normalizeText(input.topic, 220) || "вашей теме";
+  const slides = Array.isArray(input.slides) ? input.slides.slice(0, 10) : [];
+  const fallback = buildCaptionFallback(topic, slides, input.goal);
+
+  if (!slides.length) {
+    return fallback;
+  }
+
+  try {
+    const openai = getOpenAIClient();
+    const models = resolveModelCandidates();
+    let lastError: unknown = null;
+
+    for (const model of models) {
+      try {
+        const response = await openai.responses.create({
+          model,
+          temperature: 0.85,
+          max_output_tokens: 1600,
+          input: [
+            {
+              role: "system",
+              content: [
+                {
+                  type: "input_text",
+                  text: [
+                    "You are a senior Russian Instagram copywriter.",
+                    "Write a post caption based on a finished carousel.",
+                    "Do not repeat slide lines verbatim. Expand meaning and keep it lively.",
+                    "Output strict JSON only.",
+                    "Tone: social-native, concrete, no office language, no robotic templates.",
+                    "Avoid clichés like «в современном мире» and other boilerplate.",
+                    "Do not mention slides by number. Keep smooth narrative flow."
+                  ].join(" ")
+                }
+              ]
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: buildCaptionPrompt({
+                    topic,
+                    slides,
+                    niche: input.niche,
+                    audience: input.audience,
+                    tone: input.tone,
+                    goal: input.goal
+                  })
+                }
+              ]
+            }
+          ],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "carousel_caption",
+              strict: true,
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  text: { type: "string", maxLength: 1800 },
+                  cta: { type: "string", maxLength: 220 },
+                  hashtags: {
+                    type: "array",
+                    minItems: 3,
+                    maxItems: 8,
+                    items: { type: "string", maxLength: 40 }
+                  }
+                },
+                required: ["text", "cta", "hashtags"]
+              }
+            }
+          }
+        });
+
+        const raw = response.output_text?.trim();
+        if (!raw) {
+          throw new Error("OpenAI returned empty caption output.");
+        }
+
+        const parsed = JSON.parse(raw) as {
+          text?: unknown;
+          cta?: unknown;
+          hashtags?: unknown;
+        };
+
+        return normalizeCaption(parsed, fallback);
+      } catch (error) {
+        lastError = error;
+
+        if (!canRetryWithAnotherModel(error)) {
+          throw error;
+        }
+
+        console.warn(`Model "${model}" failed for caption generation. Trying next candidate.`);
+      }
+    }
+
+    throw lastError ?? new Error("Caption generation failed for all model candidates.");
+  } catch (error) {
+    console.error("Caption generation failed. Using deterministic fallback:", error);
+    return fallback;
+  }
+}
+
 function resolveSlidesCount(value?: number | null) {
   const normalized = clampSlidesCount(value);
   return Math.max(8, Math.min(10, normalized));
@@ -204,11 +328,15 @@ function resolveExpectedFlow(targetCount: number) {
 function buildUserPrompt(topic: string, flow: CarouselSlideRole[], options?: GenerationOptions) {
   const niche = normalizeText(options?.niche ?? "", 120);
   const audience = normalizeText(options?.audience ?? "", 160);
+  const tone = normalizeText(options?.tone ?? "", 40);
+  const goal = normalizeText(options?.goal ?? "", 48);
 
   return [
     `Topic: ${topic}`,
     niche ? `Niche: ${niche}` : "",
     audience ? `Audience: ${audience}` : "",
+    tone ? `Tone preference: ${tone}` : "",
+    goal ? `Goal: ${goal}` : "",
     `Slides count: ${flow.length}`,
     `Required flow (strict order): ${flow.join(" -> ")}`,
     "Field rules by type:",
@@ -270,6 +398,52 @@ function buildResponseSchema(slidesCount: number) {
     },
     required: ["slides"]
   };
+}
+
+function buildCaptionPrompt(input: CaptionGenerationInput) {
+  const niche = normalizeText(input.niche ?? "", 120);
+  const audience = normalizeText(input.audience ?? "", 160);
+  const tone = normalizeText(input.tone ?? "", 40);
+  const goal = normalizeText(input.goal ?? "", 48);
+  const slideDigest = input.slides
+    .map((slide, index) => {
+      if (slide.type === "hook" || slide.type === "cta") {
+        return `${index + 1}. ${slide.type}: ${slide.title} — ${slide.subtitle}`;
+      }
+      if (slide.type === "problem" || slide.type === "amplify") {
+        return `${index + 1}. ${slide.type}: ${slide.title} | ${slide.bullets.join(" | ")}`;
+      }
+      if (slide.type === "solution") {
+        return `${index + 1}. solution: ${slide.bullets.join(" | ")}`;
+      }
+      if (slide.type === "mistake" || slide.type === "shift") {
+        return `${index + 1}. ${slide.type}: ${slide.title}`;
+      }
+      if (slide.type === "consequence") {
+        return `${index + 1}. consequence: ${slide.bullets.join(" | ")}`;
+      }
+      return `${index + 1}. example: ${slide.before} => ${slide.after}`;
+    })
+    .join("\n");
+
+  return [
+    `Topic: ${input.topic}`,
+    niche ? `Niche: ${niche}` : "",
+    audience ? `Audience: ${audience}` : "",
+    tone ? `Tone: ${tone}` : "",
+    goal ? `Goal: ${goal}` : "",
+    "Carousel summary:",
+    slideDigest,
+    "Requirements:",
+    "- text: 900-1500 chars, coherent post caption in Russian.",
+    "- include one practical mini-example or mini-story.",
+    "- avoid repeating slide text line-by-line.",
+    "- keep high readability and social tone.",
+    "- cta: one clear next action in 1 sentence.",
+    "- hashtags: 4-8 relevant hashtags."
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function normalizeSlides(
@@ -963,6 +1137,122 @@ function trimToWordBoundary(value: string, maxLength: number) {
   const sliced = value.slice(0, maxLength).trimEnd();
   const lastSpace = sliced.lastIndexOf(" ");
   return (lastSpace > Math.floor(maxLength * 0.55) ? sliced.slice(0, lastSpace) : sliced).trim();
+}
+
+function normalizeCaption(
+  raw: { text?: unknown; cta?: unknown; hashtags?: unknown },
+  fallback: CarouselPostCaption
+): CarouselPostCaption {
+  const text = sanitizeCopyText(normalizeText(raw.text, 1800), 1750) || fallback.text;
+  const cta = sanitizeCopyText(normalizeText(raw.cta, 220), 210) || fallback.cta;
+  const hashtags = normalizeHashtags(raw.hashtags);
+
+  return {
+    text,
+    cta,
+    hashtags: hashtags.length ? hashtags : fallback.hashtags
+  };
+}
+
+function normalizeHashtags(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as string[];
+  }
+
+  const seen = new Set<string>();
+  const hashtags: string[] = [];
+
+  for (const item of value) {
+    const normalized = normalizeText(item, 40)
+      .replace(/\s+/g, "")
+      .replace(/^#+/g, "")
+      .replace(/[^\p{L}\p{N}_-]+/gu, "")
+      .toLowerCase();
+
+    if (!normalized) {
+      continue;
+    }
+
+    const tag = `#${normalized}`;
+    if (seen.has(tag)) {
+      continue;
+    }
+
+    seen.add(tag);
+    hashtags.push(tag);
+
+    if (hashtags.length >= 8) {
+      break;
+    }
+  }
+
+  return hashtags;
+}
+
+function buildCaptionFallback(topic: string, slides: CarouselOutlineSlide[], goal?: string): CarouselPostCaption {
+  const hook = slides.find((slide) => slide.type === "hook");
+  const solution = slides.find((slide) => slide.type === "solution");
+  const firstIdea = hook?.title || buildHookFallbackTitle(topic);
+  const solutionLine =
+    solution && "bullets" in solution && solution.bullets.length
+      ? solution.bullets[0]
+      : "Разбейте тему на короткие, самостоятельные мысли — так дочитывают чаще.";
+  const cta = buildGoalAwareCta(goal);
+
+  const text = trimToWordBoundary(
+    [
+      `${firstIdea}.`,
+      `Главная мысль этой карусели: ${solutionLine}`,
+      "Сфокусируйтесь на одной проблеме аудитории и разверните её через контраст: было -> стало.",
+      "Так текст звучит живо, не теряет ритм и даёт человеку понятный следующий шаг."
+    ].join(" "),
+    1700
+  );
+
+  return {
+    text,
+    cta,
+    hashtags: buildFallbackHashtags(topic)
+  };
+}
+
+function buildGoalAwareCta(goal?: string) {
+  const normalizedGoal = normalizeText(goal, 40).toLowerCase();
+
+  if (normalizedGoal.includes("заяв")) {
+    return "Если хотите такую же структуру под свой продукт, напишите в директ «КАРУСЕЛЬ».";
+  }
+
+  if (normalizedGoal.includes("подпис")) {
+    return "Если было полезно, сохраните пост и подпишитесь — продолжу разборы в этом формате.";
+  }
+
+  return "Сохраните карусель как шпаргалку и напишите «ПЛАН», если нужен разбор под вашу тему.";
+}
+
+function buildFallbackHashtags(topic: string) {
+  const base = normalizeWordTokens(topic)
+    .filter((token) => token.length >= 4 && !TOPIC_STOP_WORDS.has(token))
+    .slice(0, 3)
+    .map((token) => `#${token}`);
+
+  const defaults = ["#контент", "#карусель", "#маркетинг", "#instagram"];
+  const unique = new Set<string>();
+  const result: string[] = [];
+
+  for (const item of [...base, ...defaults]) {
+    const normalized = item.startsWith("#") ? item : `#${item}`;
+    if (unique.has(normalized)) {
+      continue;
+    }
+    unique.add(normalized);
+    result.push(normalized);
+    if (result.length >= 6) {
+      break;
+    }
+  }
+
+  return result;
 }
 
 function canRetryWithAnotherModel(error: unknown) {

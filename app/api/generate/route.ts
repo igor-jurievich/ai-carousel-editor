@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { clampSlidesCount } from "@/lib/slides";
 import { generateCarouselFromTopic } from "@/lib/openai";
-import type { CarouselOutlineSlide } from "@/types/editor";
+import type {
+  CarouselOutlineSlide,
+  CarouselTemplateId,
+  SlideFormat
+} from "@/types/editor";
 
 export const runtime = "nodejs";
 
@@ -43,6 +47,10 @@ export async function POST(request: Request) {
     slidesCount?: unknown;
     niche?: unknown;
     audience?: unknown;
+    tone?: unknown;
+    goal?: unknown;
+    format?: unknown;
+    theme?: unknown;
   };
 
   try {
@@ -51,6 +59,10 @@ export async function POST(request: Request) {
       slidesCount?: unknown;
       niche?: unknown;
       audience?: unknown;
+      tone?: unknown;
+      goal?: unknown;
+      format?: unknown;
+      theme?: unknown;
     };
   } catch {
     return NextResponse.json(
@@ -65,6 +77,10 @@ export async function POST(request: Request) {
   );
   const niche = typeof body.niche === "string" ? body.niche.trim().slice(0, 120) : "";
   const audience = typeof body.audience === "string" ? body.audience.trim().slice(0, 160) : "";
+  const tone = typeof body.tone === "string" ? body.tone.trim().slice(0, 40) : "";
+  const goal = typeof body.goal === "string" ? body.goal.trim().slice(0, 40) : "";
+  const format = resolveFormat(body.format);
+  const theme = resolveTheme(body.theme);
 
   if (!topic) {
     return NextResponse.json({ error: "Введите тему карусели." }, { status: 400 });
@@ -89,7 +105,9 @@ export async function POST(request: Request) {
     const generationResult = await withTimeout(
       generateCarouselFromTopic(topic, slidesCount, {
         niche,
-        audience
+        audience,
+        tone,
+        goal
       }),
       timeoutMs
     );
@@ -106,7 +124,17 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ slides });
+    return NextResponse.json({
+      slides,
+      project: {
+        title: projectTitleFromTopic(topic),
+        topic,
+        format,
+        theme,
+        language: "ru",
+        version: 1
+      }
+    });
   } catch (error) {
     if (error instanceof Error && error.name === "GenerateTimeoutError") {
       return NextResponse.json(
@@ -274,6 +302,23 @@ function isValidSlidesPayload(slides: unknown): slides is CarouselOutlineSlide[]
 
     return false;
   });
+}
+
+function resolveFormat(value: unknown): SlideFormat {
+  return value === "1:1" || value === "4:5" || value === "9:16" ? value : "1:1";
+}
+
+function resolveTheme(value: unknown): CarouselTemplateId {
+  return value === "light" || value === "dark" || value === "color" ? value : "light";
+}
+
+function projectTitleFromTopic(topic: string) {
+  const normalized = topic.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "Новая карусель";
+  }
+
+  return normalized.slice(0, 72);
 }
 
 function isText(value: unknown, minLength = 1) {

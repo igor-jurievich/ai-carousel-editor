@@ -2,7 +2,7 @@
 
 import { useRef, useState, type MutableRefObject, type TouchEvent } from "react";
 import { AppIcon, type AppIconName } from "@/components/icons";
-import type { CanvasElement, TextElement } from "@/types/editor";
+import type { CanvasElement, CarouselPostCaption, TextElement } from "@/types/editor";
 
 export type MobileToolTab =
   | "templates"
@@ -21,7 +21,13 @@ type MobileToolsProps = {
   activeTemplateName: string;
   profileHandle: string;
   profileSubtitle: string;
+  photoSlotEnabled: boolean;
   hasBackgroundImage: boolean;
+  captionResult: CarouselPostCaption | null;
+  isGeneratingCaption: boolean;
+  onGenerateCaption: () => void;
+  onCopyCaption: () => void;
+  onPhotoSlotEnabledChange: (value: boolean) => void;
   slideBackground: string;
   onUploadBackgroundImage: () => void;
   onRemoveBackgroundImage: () => void;
@@ -101,7 +107,13 @@ export function MobileTools({
   activeTemplateName,
   profileHandle,
   profileSubtitle,
+  photoSlotEnabled,
   hasBackgroundImage,
+  captionResult,
+  isGeneratingCaption,
+  onGenerateCaption,
+  onCopyCaption,
+  onPhotoSlotEnabledChange,
   slideBackground,
   onUploadBackgroundImage,
   onRemoveBackgroundImage,
@@ -332,6 +344,15 @@ export function MobileTools({
                   </select>
                 </label>
                 <label className="mobile-switch-row">
+                  <span>Фото-блок</span>
+                  <input
+                    type="checkbox"
+                    checked={photoSlotEnabled}
+                    onChange={(event) => onPhotoSlotEnabledChange(event.target.checked)}
+                    disabled={disabled}
+                  />
+                </label>
+                <label className="mobile-switch-row">
                   <span>Применить для всех слайдов</span>
                   <input
                     type="checkbox"
@@ -345,7 +366,7 @@ export function MobileTools({
                     type="button"
                     className="ghost-chip"
                     onClick={onUploadBackgroundImage}
-                    disabled={disabled}
+                    disabled={disabled || !photoSlotEnabled}
                   >
                     + Выбрать файл
                   </button>
@@ -353,7 +374,7 @@ export function MobileTools({
                     type="button"
                     className="ghost-chip ghost-chip-muted"
                     onClick={onRemoveBackgroundImage}
-                    disabled={!hasBackgroundImage || disabled}
+                    disabled={!hasBackgroundImage || disabled || !photoSlotEnabled}
                   >
                     Очистить фото
                   </button>
@@ -483,6 +504,36 @@ export function MobileTools({
                     disabled={disabled}
                   />
                 </label>
+
+                <div className="field-row field-row-actions">
+                  <button
+                    type="button"
+                    className="ghost-chip"
+                    onClick={onGenerateCaption}
+                    disabled={disabled || isGeneratingCaption}
+                  >
+                    {isGeneratingCaption ? "Генерирую..." : "Подпись к посту"}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-chip ghost-chip-muted"
+                    onClick={onCopyCaption}
+                    disabled={disabled || !captionResult}
+                  >
+                    Копировать
+                  </button>
+                </div>
+
+                {captionResult ? (
+                  <textarea
+                    className="textarea"
+                    value={[captionResult.text, "", captionResult.cta, "", captionResult.hashtags.join(" ")].join(
+                      "\n"
+                    )}
+                    rows={6}
+                    readOnly
+                  />
+                ) : null}
               </div>
             ) : null}
 

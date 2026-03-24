@@ -91,6 +91,7 @@ export type Slide = {
   profileHandle?: string;
   profileSubtitle?: string;
   backgroundImage?: string | null;
+  photoSlotEnabled?: boolean;
   generationRole?: CarouselSlideRole;
   slideType?: CanvasSlideType;
   generationCoreIdea?: string;
@@ -168,7 +169,24 @@ export type CarouselProject = {
   id?: string;
   title: string;
   topic: string;
+  format?: SlideFormat;
+  theme?: CarouselTemplateId;
+  niche?: string;
+  audience?: string;
+  tone?: string;
+  goal?: string;
+  language?: "ru";
+  schemaVersion?: number;
+  caption?: CarouselPostCaption | null;
+  createdAt?: string;
+  updatedAt?: string;
   slides: Slide[];
+};
+
+export type CarouselPostCaption = {
+  text: string;
+  cta: string;
+  hashtags: string[];
 };
 
 export type CarouselTemplate = {

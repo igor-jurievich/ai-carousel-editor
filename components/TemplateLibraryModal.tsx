@@ -8,7 +8,7 @@ import type { CarouselTemplate, CarouselTemplateId } from "@/types/editor";
 type TemplateLibraryModalProps = {
   isOpen: boolean;
   activeTemplateId: CarouselTemplateId;
-  onApplyTemplate: (templateId: CarouselTemplateId) => void;
+  onApplyTemplate: (templateId: CarouselTemplateId, scope: "all" | "current") => void;
   onClose: () => void;
 };
 
@@ -31,6 +31,7 @@ export function TemplateLibraryModal({
 }: TemplateLibraryModalProps) {
   const templates = useMemo(() => getPrimaryTemplates(), []);
   const [activeCategory, setActiveCategory] = useState<CarouselTemplateId>(activeTemplateId);
+  const [applyScope, setApplyScope] = useState<"all" | "current">("all");
 
   useEffect(() => {
     if (!isOpen) {
@@ -38,6 +39,7 @@ export function TemplateLibraryModal({
     }
 
     setActiveCategory(activeTemplateId);
+    setApplyScope("all");
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -50,7 +52,7 @@ export function TemplateLibraryModal({
     return null;
   }
 
-  const visibleTemplates = templates;
+  const visibleTemplates = templates.filter((template) => template.id === activeCategory);
 
   return (
     <div className="editor-modal-overlay" onClick={onClose} role="presentation">
@@ -80,6 +82,23 @@ export function TemplateLibraryModal({
             </button>
           </div>
 
+          <div className="segment-control" style={{ marginBottom: 12 }}>
+            <button
+              type="button"
+              className={`segment-item ${applyScope === "all" ? "active" : ""}`}
+              onClick={() => setApplyScope("all")}
+            >
+              Ко всей карусели
+            </button>
+            <button
+              type="button"
+              className={`segment-item ${applyScope === "current" ? "active" : ""}`}
+              onClick={() => setApplyScope("current")}
+            >
+              Только текущий
+            </button>
+          </div>
+
           <div className="template-library-categories-row">
             {TEMPLATE_CATEGORIES.map((category) => (
               <button
@@ -100,11 +119,9 @@ export function TemplateLibraryModal({
               <button
                 key={template.id}
                 type="button"
-                className={`template-library-card ${
-                  activeTemplateId === template.id || activeCategory === template.id ? "active" : ""
-                }`}
+                className={`template-library-card ${activeTemplateId === template.id ? "active" : ""}`}
                 onClick={() => {
-                  onApplyTemplate(template.id);
+                  onApplyTemplate(template.id, applyScope);
                   onClose();
                 }}
               >

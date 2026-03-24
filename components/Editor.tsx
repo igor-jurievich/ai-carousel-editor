@@ -4,6 +4,7 @@ import { saveAs } from "file-saver";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import type Konva from "konva";
 import { AppIcon } from "@/components/icons";
 import { CanvasEditor } from "@/components/CanvasEditor";
@@ -35,9 +36,12 @@ import {
   DEFAULT_SLIDES_COUNT,
   SLIDES_COUNT_OPTIONS
 } from "@/lib/slides";
+import { getLocalProject, saveLocalProject } from "@/lib/projects";
+import { trackEvent } from "@/lib/telemetry";
 import type {
   CanvasElement,
   CarouselOutlineSlide,
+  CarouselPostCaption,
   CarouselTemplateId,
   Slide,
   SlideFormat,
@@ -75,10 +79,21 @@ type ExportSnapshot = {
   slideFormat: SlideFormat;
 };
 
-export function Editor() {
+type EditorProps = {
+  initialProjectId?: string | null;
+};
+
+export function Editor({ initialProjectId = null }: EditorProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("light", "1:1"));
   const [topic, setTopic] = useState("");
   const [slidesCount, setSlidesCount] = useState(DEFAULT_SLIDES_COUNT);
+  const [projectId, setProjectId] = useState<string | null>(initialProjectId);
+  const [niche, setNiche] = useState("");
+  const [audience, setAudience] = useState("");
+  const [tone, setTone] = useState("balanced");
+  const [goal, setGoal] = useState("engagement");
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
   const [slideFormat, setSlideFormat] = useState<SlideFormat>("1:1");
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -97,8 +112,12 @@ export function Editor() {
   const [mobileBottomOffset, setMobileBottomOffset] = useState(120);
   const [pendingImageSlideId, setPendingImageSlideId] = useState<string | null>(null);
   const [pendingBackgroundSlideId, setPendingBackgroundSlideId] = useState<string | null>(null);
+  const [scrollToSlideRequest, setScrollToSlideRequest] = useState<{ id: string; token: number } | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [fontsReady, setFontsReady] = useState(false);
+  const [isProjectHydrated, setIsProjectHydrated] = useState(false);
+  const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
+  const [captionResult, setCaptionResult] = useState<CarouselPostCaption | null>(null);
   const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([]);
   const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([]);
   const desktopCanvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -110,6 +129,9 @@ export function Editor() {
   const backgroundImageInputRef = useRef<HTMLInputElement | null>(null);
   const generateRequestRef = useRef(0);
   const lastHistoryAtRef = useRef(0);
+  const skipAutosaveRef = useRef(false);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const editorOpenedTrackedRef = useRef(false);
 
   useEffect(() => {
     if (!slides.length) {
@@ -314,6 +336,9 @@ export function Editor() {
     [selectedElement]
   );
   const activeHasBackgroundImage = Boolean(activeSlide?.backgroundImage);
+  const activePhotoSlotEnabled = Boolean(
+    activeSlide?.slideType === "image_text" && activeSlide.photoSlotEnabled !== false
+  );
 
   const editingTextElement = useMemo(() => {
     if (!activeSlide || !editingTextElementId) {
@@ -340,6 +365,117 @@ export function Editor() {
   const exportModeLabel = getExportModeLabel(exportMode);
   const canUndo = historyPast.length > 0;
   const canRedo = historyFuture.length > 0;
+
+  useEffect(() => {
+    if (!initialProjectId) {
+      setIsProjectHydrated(true);
+      return;
+    }
+
+    const existing = getLocalProject(initialProjectId);
+    if (!existing) {
+      setStatus("Проект не найден. Открыта стартовая серия.");
+      setProjectId(null);
+      setIsProjectHydrated(true);
+      return;
+    }
+
+    skipAutosaveRef.current = true;
+    setProjectId(existing.id ?? initialProjectId);
+    setSlides(existing.slides?.length ? cloneSlides(existing.slides) : createStarterSlides("light", "1:1"));
+    setTopic(existing.topic ?? "");
+    setSlidesCount(clampSlidesCount(existing.slides?.length ?? DEFAULT_SLIDES_COUNT));
+    setNiche(existing.niche ?? "");
+    setAudience(existing.audience ?? "");
+    setTone(existing.tone ?? "balanced");
+    setGoal(existing.goal ?? "engagement");
+    setSlideFormat(existing.format ?? "1:1");
+    setActiveSlideId(existing.slides?.[0]?.id ?? null);
+    setCaptionResult(existing.caption ?? null);
+    setSelectedElementId(null);
+    setEditingTextElementId(null);
+    setStatus("Проект загружен.");
+    setIsProjectHydrated(true);
+  }, [initialProjectId]);
+
+  useEffect(() => {
+    if (!isProjectHydrated || isExportRendering || isGenerating) {
+      return;
+    }
+
+    if (skipAutosaveRef.current) {
+      skipAutosaveRef.current = false;
+      return;
+    }
+
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = window.setTimeout(() => {
+      const saved = saveLocalProject({
+        id: projectId ?? undefined,
+        title: projectTitleFromTopic(topic),
+        topic,
+        slides: cloneSlides(slides),
+        format: slideFormat,
+        theme: activeTemplateId,
+        niche: niche.trim() || undefined,
+        audience: audience.trim() || undefined,
+        tone,
+        goal,
+        language: "ru",
+        schemaVersion: 1,
+        caption: captionResult
+      });
+
+      if (!projectId || projectId !== saved.id) {
+        setProjectId(saved.id ?? null);
+      }
+
+      if (saved.id && pathname !== `/editor/${saved.id}`) {
+        router.replace(`/editor/${saved.id}`);
+      }
+    }, 420);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [
+    isProjectHydrated,
+    isExportRendering,
+    isGenerating,
+    projectId,
+    topic,
+    slides,
+    slideFormat,
+    activeTemplateId,
+    niche,
+    audience,
+    tone,
+    goal,
+    captionResult,
+    pathname,
+    router
+  ]);
+
+  useEffect(() => {
+    if (!isProjectHydrated || editorOpenedTrackedRef.current) {
+      return;
+    }
+
+    editorOpenedTrackedRef.current = true;
+    trackEvent({
+      name: "editor_opened",
+      payload: {
+        projectId: projectId ?? "unsaved",
+        format: slideFormat
+      }
+    });
+  }, [isProjectHydrated, projectId, slideFormat]);
 
   useEffect(() => {
     if (!isSlideExportModalOpen) {
@@ -608,6 +744,14 @@ export function Editor() {
       setStatus(
         `Генерирую структуру через OpenAI (${requestedSlidesCount} слайдов, формат ${slideFormat})...`
       );
+      trackEvent({
+        name: "generate_started",
+        payload: {
+          source: "editor",
+          format: slideFormat,
+          slidesCount: requestedSlidesCount
+        }
+      });
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 70000);
 
@@ -618,7 +762,13 @@ export function Editor() {
         },
         body: JSON.stringify({
           topic: normalizedTopic,
-          slidesCount: requestedSlidesCount
+          slidesCount: requestedSlidesCount,
+          niche,
+          audience,
+          tone,
+          goal,
+          format: slideFormat,
+          theme: activeTemplateId
         }),
         signal: controller.signal
       }).finally(() => {
@@ -657,8 +807,25 @@ export function Editor() {
       setActiveSlideId(nextSlides[0]?.id ?? null);
       setSelectedElementId(null);
       setEditingTextElementId(null);
+      setCaptionResult(null);
+      trackEvent({
+        name: "generate_succeeded",
+        payload: {
+          source: "editor",
+          format: slideFormat,
+          slidesCount: nextSlides.length
+        }
+      });
       setStatus(`Создано ${nextSlides.length} слайдов в формате ${slideFormat}.`);
     } catch (error) {
+      trackEvent({
+        name: "generate_failed",
+        payload: {
+          source: "editor",
+          format: slideFormat,
+          reason: error instanceof Error ? error.message.slice(0, 120) : "unknown"
+        }
+      });
       if (requestId === generateRequestRef.current) {
         if (error instanceof DOMException && error.name === "AbortError") {
           setStatus("Генерация заняла слишком много времени. Попробуйте ещё раз.");
@@ -817,9 +984,19 @@ export function Editor() {
       }
 
       if (targetSlide.slideType === "image_text") {
-        updateSlide(targetSlideId, (slide) =>
-          setSlideBackgroundImage(slide, dataUrl, targetSlideIndex, slides.length, slideFormat)
-        );
+        updateSlide(targetSlideId, (slide) => {
+          const withBackground = setSlideBackgroundImage(
+            slide,
+            dataUrl,
+            targetSlideIndex,
+            slides.length,
+            slideFormat
+          );
+          return {
+            ...withBackground,
+            photoSlotEnabled: true
+          };
+        });
         setSelectedElementId(null);
       } else {
         const imageMeta = await readImageMeta(dataUrl);
@@ -853,6 +1030,14 @@ export function Editor() {
       }
 
       setActiveSlideId(targetSlideId);
+      trackEvent({
+        name: "asset_uploaded",
+        payload: {
+          source: "slide_photo",
+          format: slideFormat,
+          slideType: targetSlide.slideType ?? "text"
+        }
+      });
       setStatus(`Изображение "${file.name}" добавлено в макет.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Не удалось добавить изображение.");
@@ -887,11 +1072,21 @@ export function Editor() {
       }
 
       updateSlide(targetSlideId, (slide) =>
-        setSlideBackgroundImage(slide, dataUrl, slideIndex, slides.length, slideFormat)
+        ({
+          ...setSlideBackgroundImage(slide, dataUrl, slideIndex, slides.length, slideFormat),
+          photoSlotEnabled: true
+        })
       );
 
       setActiveSlideId(targetSlideId);
       setSelectedElementId(null);
+      trackEvent({
+        name: "asset_uploaded",
+        payload: {
+          source: "slide_background",
+          format: slideFormat
+        }
+      });
       setStatus(`Фон "${file.name}" добавлен.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Не удалось добавить фоновое изображение.");
@@ -903,7 +1098,62 @@ export function Editor() {
     }
   };
 
-  const handleApplyTemplate = (templateId: CarouselTemplateId) => {
+  const handlePhotoSlotToggle = (enabled: boolean, slideId = activeSlideId ?? "") => {
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
+      return;
+    }
+
+    if (!slideId) {
+      return;
+    }
+
+    const slideIndex = slides.findIndex((slide) => slide.id === slideId);
+    if (slideIndex === -1) {
+      return;
+    }
+
+    updateSlide(slideId, (slide) => {
+      const normalizedSlideType = enabled
+        ? "image_text"
+        : slide.slideType === "image_text"
+          ? slide.slideType
+          : "image_text";
+
+      return applyTemplateToSlide(
+        {
+          ...slide,
+          slideType: normalizedSlideType,
+          photoSlotEnabled: enabled
+        },
+        slide.templateId ?? activeTemplateId,
+        slideIndex,
+        slides.length,
+        slideFormat
+      );
+    });
+
+    setSelectedElementId(null);
+    setEditingTextElementId(null);
+    trackEvent({
+      name: "photo_slot_toggled",
+      payload: {
+        enabled,
+        format: slideFormat,
+        slideId
+      }
+    });
+    setStatus(
+      enabled
+        ? "Фото-блок включен. Можно загрузить изображение."
+        : "Фото-блок выключен: текстовый макет расширен автоматически."
+    );
+  };
+
+  const handleApplyTemplate = (
+    templateId: CarouselTemplateId,
+    scope: "all" | "current" = "all"
+  ) => {
     if (generationLocked) {
       setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
       return;
@@ -912,8 +1162,22 @@ export function Editor() {
     const templateName = getTemplate(templateId).name;
 
     pushHistorySnapshot(true);
-    setSlides((current) => applyTemplateToSlides(current, templateId, slideFormat));
-    setStatus(`Шаблон «${templateName}» применён ко всей карусели.`);
+    if (scope === "current" && activeSlide) {
+      const slideIndex = slides.findIndex((slide) => slide.id === activeSlide.id);
+      if (slideIndex >= 0) {
+        setSlides((current) =>
+          current.map((slide, index) =>
+            index === slideIndex
+              ? applyTemplateToSlide(slide, templateId, index, current.length, slideFormat)
+              : slide
+          )
+        );
+        setStatus(`Шаблон «${templateName}» применён к текущему слайду.`);
+      }
+    } else {
+      setSlides((current) => applyTemplateToSlides(current, templateId, slideFormat));
+      setStatus(`Шаблон «${templateName}» применён ко всей карусели.`);
+    }
 
     setSelectedElementId(null);
     setEditingTextElementId(null);
@@ -1013,6 +1277,89 @@ export function Editor() {
     );
     setSelectedElementId(null);
     setEditingTextElementId(null);
+  };
+
+  const handleGenerateCaption = async () => {
+    if (generationLocked || isGeneratingCaption) {
+      setStatus("Дождитесь завершения текущей операции и повторите.");
+      return;
+    }
+
+    const normalizedTopic = topic.trim();
+    if (!normalizedTopic || normalizedTopic.length < MIN_TOPIC_CHARS) {
+      setStatus("Введите тему карусели перед генерацией подписи.");
+      return;
+    }
+
+    const outline = buildOutlineFromSlides(slides);
+    if (!outline.length) {
+      setStatus("Не удалось собрать содержание слайдов для подписи.");
+      return;
+    }
+
+    try {
+      setIsGeneratingCaption(true);
+      setStatus("Генерирую подпись к посту...");
+
+      const response = await fetch("/api/caption", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          topic: normalizedTopic,
+          niche,
+          audience,
+          tone,
+          goal,
+          slides: outline
+        })
+      });
+
+      const data = (await response.json()) as {
+        caption?: CarouselPostCaption;
+        error?: string;
+      };
+
+      if (!response.ok || !data.caption) {
+        throw new Error(data.error || "Не удалось сгенерировать подпись.");
+      }
+
+      setCaptionResult(data.caption);
+      trackEvent({
+        name: "caption_generated",
+        payload: {
+          format: slideFormat,
+          slidesCount: slides.length
+        }
+      });
+      setStatus("Подпись к посту готова.");
+    } catch (error) {
+      setStatus(resolveUserFacingError(error, "Ошибка генерации подписи. Попробуйте снова."));
+    } finally {
+      setIsGeneratingCaption(false);
+    }
+  };
+
+  const handleCopyCaption = async () => {
+    if (!captionResult) {
+      return;
+    }
+
+    const text = `${captionResult.text}\n\n${captionResult.cta}\n\n${captionResult.hashtags.join(" ")}`.trim();
+
+    try {
+      await navigator.clipboard.writeText(text);
+      trackEvent({
+        name: "caption_copied",
+        payload: {
+          length: text.length
+        }
+      });
+      setStatus("Подпись скопирована в буфер обмена.");
+    } catch {
+      setStatus("Не удалось скопировать подпись. Попробуйте вручную.");
+    }
   };
 
   const updateSelectedTextElement = (
@@ -1169,13 +1516,40 @@ export function Editor() {
     setStatus("Порядок слайдов обновлён.");
   };
 
-  const handleSelectSlide = (slideId: string) => {
+  const handleSelectSlide = (
+    slideId: string,
+    options?: {
+      syncCanvas?: boolean;
+      preserveSelection?: boolean;
+      source?: "list" | "canvas" | "swipe" | "tools" | "system";
+    }
+  ) => {
     if (generationLocked) {
       return;
     }
 
+    if (slideId !== activeSlideId) {
+      trackEvent({
+        name: "slide_selected",
+        payload: {
+          source: options?.source ?? "tools",
+          slideId,
+          format: slideFormat
+        }
+      });
+    }
+
     setActiveSlideId(slideId);
-    setSelectedElementId(null);
+    if (options?.syncCanvas) {
+      setScrollToSlideRequest({
+        id: slideId,
+        token: Date.now()
+      });
+    }
+
+    if (!options?.preserveSelection) {
+      setSelectedElementId(null);
+    }
   };
 
   const handleSelectElement = (slideId: string, elementId: string | null) => {
@@ -1191,6 +1565,27 @@ export function Editor() {
     }
   };
 
+  const handleVisibleSlideChange = (slideId: string) => {
+    if (generationLocked || slideId === activeSlideId) {
+      return;
+    }
+
+    trackEvent({
+      name: "slide_selected",
+      payload: {
+        source: "canvas",
+        slideId,
+        format: slideFormat
+      }
+    });
+
+    setActiveSlideId(slideId);
+    setSelectedElementId(null);
+    if (editingTextElementId) {
+      setEditingTextElementId(null);
+    }
+  };
+
   const handleResetSession = () => {
     if (generationLocked) {
       setStatus("Дождитесь завершения текущей операции и повторите.");
@@ -1202,6 +1597,11 @@ export function Editor() {
     setSlides(starterSlides);
     setTopic("");
     setSlidesCount(DEFAULT_SLIDES_COUNT);
+    setNiche("");
+    setAudience("");
+    setTone("balanced");
+    setGoal("engagement");
+    setCaptionResult(null);
     setActiveSlideId(starterSlides[0]?.id ?? null);
     setSelectedElementId(null);
     setEditingTextElementId(null);
@@ -1359,6 +1759,15 @@ export function Editor() {
         throw new Error("Выберите хотя бы один слайд для экспорта.");
       }
 
+      trackEvent({
+        name: "export_clicked",
+        payload: {
+          mode: exportMode,
+          format: exportFormat,
+          slides: targetSlideIds.length
+        }
+      });
+
       const firstExportSlideIndex = exportSlides.findIndex((slide) => slide.id === targetSlideIds[0]);
 
       setExportSnapshot({
@@ -1396,6 +1805,14 @@ export function Editor() {
               const blob = await dataUrlToBlob(exportDataUrl);
               const slideNumber = firstExportSlideIndex >= 0 ? firstExportSlideIndex + 1 : 1;
               saveAs(blob, `${slugify(projectTitleFromTopic(topic))}-slide${slideNumber}.${imageType}`);
+              trackEvent({
+                name: "export_succeeded",
+                payload: {
+                  mode: imageType,
+                  format: exportFormat,
+                  slides: 1
+                }
+              });
               setStatus(`${imageType.toUpperCase()} скачан.`);
               return;
             }
@@ -1405,6 +1822,14 @@ export function Editor() {
               imageType === "jpg" ? "slides-jpg" : "slides-png",
               imageType
             );
+            trackEvent({
+              name: "export_succeeded",
+              payload: {
+                mode: `${imageType}_zip`,
+                format: exportFormat,
+                slides: targetSlideIds.length
+              }
+            });
             setStatus(`${imageType.toUpperCase()} экспортирован архивом (${targetSlideIds.length} шт.).`);
             return;
           }
@@ -1427,11 +1852,27 @@ export function Editor() {
             }
 
             pdf.save(`${slugify(projectTitleFromTopic(topic))}.pdf`);
+            trackEvent({
+              name: "export_succeeded",
+              payload: {
+                mode: "pdf",
+                format: exportFormat,
+                slides: targetSlideIds.length
+              }
+            });
             setStatus(`PDF экспортирован (${targetSlideIds.length} слайд(ов)).`);
             return;
           }
 
           await exportSlidesAsZip(targetSlideIds, "slides", "png");
+          trackEvent({
+            name: "export_succeeded",
+            payload: {
+              mode: "zip",
+              format: exportFormat,
+              slides: targetSlideIds.length
+            }
+          });
           setStatus(`Архив со слайдами скачан (${targetSlideIds.length} шт.).`);
           return;
         } catch (attemptError) {
@@ -1542,7 +1983,9 @@ export function Editor() {
                 onCommitTextEditing={handleCommitTextEditing}
                 onCancelTextEditing={handleCancelTextEditing}
                 onStartTextEditing={handleStartTextEditing}
-                onSelectSlide={handleSelectSlide}
+                onSelectSlide={(slideId) => handleSelectSlide(slideId, { source: "canvas" })}
+                onVisibleSlideChange={handleVisibleSlideChange}
+                scrollToSlideRequest={scrollToSlideRequest}
                 onSelectElement={handleSelectElement}
                 onUpdateElementPosition={handleUpdateElementPositionBySlide}
                 onTransformElement={handleTransformElementBySlide}
@@ -1572,12 +2015,19 @@ export function Editor() {
                   activeFormat={slideFormat}
                   profileHandle={activeSlide.profileHandle ?? ""}
                   profileSubtitle={activeSlide.profileSubtitle ?? ""}
+                  photoSlotEnabled={activePhotoSlotEnabled}
+                  canUsePhotoSlot
                   hasBackgroundImage={activeHasBackgroundImage}
+                  captionResult={captionResult}
                   exportMode={exportMode}
                   isGenerating={isGenerating}
+                  isGeneratingCaption={isGeneratingCaption}
                   isExporting={isExportRendering}
                   onExportModeChange={setExportMode}
                   onOpenExportModal={handleOpenSlideExportModal}
+                  onGenerateCaption={handleGenerateCaption}
+                  onCopyCaption={handleCopyCaption}
+                  onPhotoSlotEnabledChange={(value) => handlePhotoSlotToggle(value, activeSlide.id)}
                   onUploadBackgroundImage={() => handleAddBackgroundImage(activeSlide.id)}
                   onRemoveBackgroundImage={() => {
                     if (activeSlideIndex === -1) {
@@ -1592,7 +2042,9 @@ export function Editor() {
                   }}
                   onFormatChange={handleFormatChange}
                   onOpenTemplateModal={handleOpenTemplateModal}
-                  onSelectSlide={handleSelectSlide}
+                  onSelectSlide={(slideId) =>
+                    handleSelectSlide(slideId, { syncCanvas: true, source: "list" })
+                  }
                   onInsertSlideAt={handleInsertSlideAt}
                   onDeleteSlide={handleDeleteSlide}
                   onProfileHandleChange={(value) => handleUpdateFooter({ profileHandle: value })}
@@ -1715,7 +2167,9 @@ export function Editor() {
               onCommitTextEditing={handleCommitTextEditing}
               onCancelTextEditing={handleCancelTextEditing}
               onStartTextEditing={handleStartTextEditing}
-              onSelectSlide={handleSelectSlide}
+              onSelectSlide={(slideId) => handleSelectSlide(slideId, { source: "canvas" })}
+              onVisibleSlideChange={handleVisibleSlideChange}
+              scrollToSlideRequest={scrollToSlideRequest}
               onSelectElement={handleSelectElement}
               onUpdateElementPosition={handleUpdateElementPositionBySlide}
               onTransformElement={handleTransformElementBySlide}
@@ -1742,7 +2196,13 @@ export function Editor() {
               activeTemplateName={activeTemplateName}
               profileHandle={activeSlide.profileHandle ?? ""}
               profileSubtitle={activeSlide.profileSubtitle ?? ""}
+              photoSlotEnabled={activePhotoSlotEnabled}
               hasBackgroundImage={activeHasBackgroundImage}
+              captionResult={captionResult}
+              isGeneratingCaption={isGeneratingCaption}
+              onGenerateCaption={handleGenerateCaption}
+              onCopyCaption={handleCopyCaption}
+              onPhotoSlotEnabledChange={(value) => handlePhotoSlotToggle(value, activeSlide.id)}
               slideBackground={activeSlide.background}
               onUploadBackgroundImage={() => handleAddBackgroundImage(activeSlide.id)}
               onRemoveBackgroundImage={() => {
@@ -1918,6 +2378,111 @@ function cloneSlides(slides: Slide[]) {
     ...slide,
     elements: slide.elements.map((element) => ({ ...element }))
   }));
+}
+
+function buildOutlineFromSlides(slides: Slide[]): CarouselOutlineSlide[] {
+  return slides
+    .map((slide, index) => toOutlineSlide(slide, index))
+    .filter((slide): slide is CarouselOutlineSlide => Boolean(slide));
+}
+
+function toOutlineSlide(slide: Slide, index: number): CarouselOutlineSlide | null {
+  const role = slide.generationRole ?? inferRoleByIndex(index);
+  const textLines = extractOrderedTextLines(slide);
+  const title = textLines[0] || `Слайд ${index + 1}`;
+  const bodyLines = textLines.slice(1);
+  const bullets = toBullets(bodyLines.length ? bodyLines : textLines.slice(0, 4));
+
+  if (role === "hook" || role === "cta") {
+    return {
+      type: role,
+      title: trimTextLine(title, 120),
+      subtitle: trimTextLine(bodyLines[0] || "Короткая мысль, которая продолжает главный тезис.", 180)
+    };
+  }
+
+  if (role === "problem" || role === "amplify") {
+    return {
+      type: role,
+      title: trimTextLine(title, 120),
+      bullets: bullets.length ? bullets : [trimTextLine("Ключевая проблема раскрывается в тексте слайда.", 140)]
+    };
+  }
+
+  if (role === "mistake" || role === "shift") {
+    return {
+      type: role,
+      title: trimTextLine(title, 120)
+    };
+  }
+
+  if (role === "consequence" || role === "solution") {
+    return {
+      type: role,
+      bullets: bullets.length ? bullets : [trimTextLine(title, 140)]
+    };
+  }
+
+  if (role === "example") {
+    return {
+      type: "example",
+      before: trimTextLine(title, 160),
+      after: trimTextLine(bodyLines[0] || bodyLines[1] || "Новый подход даёт более понятный и сильный результат.", 160)
+    };
+  }
+
+  return {
+    type: "cta",
+    title: trimTextLine(title, 120),
+    subtitle: trimTextLine(bodyLines[0] || "Сохраните и примените это к своему контенту.", 180)
+  };
+}
+
+function inferRoleByIndex(index: number): CarouselOutlineSlide["type"] {
+  const flow: CarouselOutlineSlide["type"][] = [
+    "hook",
+    "problem",
+    "amplify",
+    "mistake",
+    "consequence",
+    "shift",
+    "solution",
+    "example",
+    "cta"
+  ];
+  if (index < flow.length) {
+    return flow[index];
+  }
+  return "solution";
+}
+
+function extractOrderedTextLines(slide: Slide) {
+  return slide.elements
+    .filter((element): element is TextElement => element.type === "text")
+    .filter((element) => element.metaKey !== "slide-chip-text")
+    .sort((left, right) => left.y - right.y)
+    .flatMap((element) =>
+      element.text
+        .split(/\n+/)
+        .map((line) => trimTextLine(line, 180))
+        .filter(Boolean)
+    )
+    .slice(0, 10);
+}
+
+function toBullets(lines: string[]) {
+  const normalized = lines
+    .map((line) => trimTextLine(line.replace(/^[-•–]\s*/u, ""), 140))
+    .filter(Boolean);
+  return normalized.slice(0, 4);
+}
+
+function trimTextLine(value: string, maxLength: number) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+  return normalized.slice(0, maxLength);
 }
 
 function areStageImagesReady(stage: Konva.Stage) {

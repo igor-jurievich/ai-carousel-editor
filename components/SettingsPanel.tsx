@@ -1,7 +1,7 @@
 "use client";
 
 import { AppIcon } from "@/components/icons";
-import type { Slide, SlideFormat } from "@/types/editor";
+import type { CarouselPostCaption, Slide, SlideFormat } from "@/types/editor";
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
 
@@ -15,12 +15,19 @@ type SettingsPanelProps = {
   activeFormat: SlideFormat;
   profileHandle: string;
   profileSubtitle: string;
+  photoSlotEnabled: boolean;
+  canUsePhotoSlot: boolean;
   hasBackgroundImage: boolean;
+  captionResult: CarouselPostCaption | null;
   exportMode: ExportMode;
   isGenerating?: boolean;
+  isGeneratingCaption?: boolean;
   isExporting?: boolean;
   onExportModeChange: (mode: ExportMode) => void;
   onOpenExportModal: () => void;
+  onGenerateCaption: () => void;
+  onCopyCaption: () => void;
+  onPhotoSlotEnabledChange: (value: boolean) => void;
   onUploadBackgroundImage: () => void;
   onRemoveBackgroundImage: () => void;
   onFormatChange: (format: SlideFormat) => void;
@@ -44,12 +51,19 @@ export function SettingsPanel({
   activeFormat,
   profileHandle,
   profileSubtitle,
+  photoSlotEnabled,
+  canUsePhotoSlot,
   hasBackgroundImage,
+  captionResult,
   exportMode,
   isGenerating = false,
+  isGeneratingCaption = false,
   isExporting = false,
   onExportModeChange,
   onOpenExportModal,
+  onGenerateCaption,
+  onCopyCaption,
+  onPhotoSlotEnabledChange,
   onUploadBackgroundImage,
   onRemoveBackgroundImage,
   onFormatChange,
@@ -194,12 +208,21 @@ export function SettingsPanel({
 
       <section className="settings-card settings-card-photo">
         <h3>Фото</h3>
+        <label className="mobile-switch-row">
+          <span>Фото-блок</span>
+          <input
+            type="checkbox"
+            checked={photoSlotEnabled}
+            onChange={(event) => onPhotoSlotEnabledChange(event.target.checked)}
+            disabled={disabled || !canUsePhotoSlot}
+          />
+        </label>
         <div className="field-row field-row-actions">
           <button
             type="button"
             className="ghost-chip"
             onClick={onUploadBackgroundImage}
-            disabled={disabled}
+            disabled={disabled || !photoSlotEnabled}
           >
             Загрузить
           </button>
@@ -207,13 +230,13 @@ export function SettingsPanel({
             type="button"
             className="ghost-chip ghost-chip-muted"
             onClick={onRemoveBackgroundImage}
-            disabled={!hasBackgroundImage || disabled}
+            disabled={!hasBackgroundImage || disabled || !photoSlotEnabled}
           >
             Удалить
           </button>
         </div>
         <div className="settings-hint">
-          Только ручная загрузка изображений. Автопоиск и AI-картинки отключены.
+          Если фото-блок выключен, контентный блок автоматически расширится.
         </div>
       </section>
 
@@ -264,6 +287,49 @@ export function SettingsPanel({
             {isExporting ? "Экспорт..." : "Выбрать слайды"}
           </button>
         </div>
+      </section>
+
+      <section className="settings-card settings-card-caption">
+        <h3>Подпись к посту</h3>
+        <div className="field-row field-row-actions">
+          <button
+            type="button"
+            className="ghost-chip"
+            onClick={onGenerateCaption}
+            disabled={disabled || isGenerating || isGeneratingCaption}
+          >
+            {isGeneratingCaption ? "Генерирую..." : "Сгенерировать подпись"}
+          </button>
+          <button
+            type="button"
+            className="ghost-chip ghost-chip-muted"
+            onClick={onCopyCaption}
+            disabled={disabled || !captionResult}
+          >
+            Копировать
+          </button>
+        </div>
+
+        {captionResult ? (
+          <>
+            <label className="field-label">
+              Текст
+              <textarea className="field" readOnly value={captionResult.text} rows={6} />
+            </label>
+            <label className="field-label">
+              CTA
+              <textarea className="field" readOnly value={captionResult.cta} rows={2} />
+            </label>
+            <label className="field-label">
+              Хэштеги
+              <textarea className="field" readOnly value={captionResult.hashtags.join(" ")} rows={2} />
+            </label>
+          </>
+        ) : (
+          <div className="settings-hint">
+            Сначала соберите карусель, затем нажмите «Сгенерировать подпись».
+          </div>
+        )}
       </section>
     </>
   );

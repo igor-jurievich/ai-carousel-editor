@@ -1125,6 +1125,10 @@ function buildMainContent(
   palette: SlidePalette,
   format: SlideFormat
 ): CanvasElement[] {
+  const effectiveSlideType: CanvasSlideType =
+    blueprint.slideType === "image_text" && slide.photoSlotEnabled === false
+      ? "text"
+      : blueprint.slideType;
   const metrics = resolveTextMetrics(format);
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
@@ -1157,7 +1161,7 @@ function buildMainContent(
       lineHeight: overrides.lineHeight
     });
 
-  if (blueprint.slideType === "big_text") {
+  if (effectiveSlideType === "big_text") {
     const title = titleElementFor({
       x: metrics.contentX,
       y: Math.round(metrics.height * (format === "9:16" ? 0.40 : 0.42)),
@@ -1171,7 +1175,7 @@ function buildMainContent(
     return composeTitleAndAccentElements({ titleElement: title, palette, template });
   }
 
-  if (blueprint.slideType === "image_text") {
+  if (effectiveSlideType === "image_text") {
     const imageArea = resolveImageArea(format);
     const elements: CanvasElement[] = [];
 
@@ -1250,7 +1254,7 @@ function buildMainContent(
     return elements;
   }
 
-  if (blueprint.slideType === "cta") {
+  if (effectiveSlideType === "cta") {
     const title = titleElementFor({
       x: metrics.contentX,
       y: Math.round(metrics.height * 0.40),
@@ -1321,12 +1325,19 @@ function buildManagedElements(
   totalSlides: number,
   format: SlideFormat
 ) {
+  const effectiveBlueprint: SlideBlueprint =
+    blueprint.slideType === "image_text" && slide.photoSlotEnabled === false
+      ? {
+          ...blueprint,
+          slideType: "text"
+        }
+      : blueprint;
   const template = getTemplate(templateId);
-  const palette = resolveSlidePalette(template, blueprint);
+  const palette = resolveSlidePalette(template, effectiveBlueprint);
 
   const managed: CanvasElement[] = [
     ...buildGridDecoration(format, palette),
-    ...buildMainContent(slide, blueprint, template, palette, format),
+    ...buildMainContent(slide, effectiveBlueprint, template, palette, format),
     ...buildHeaderAndFooter(
       template,
       palette,
@@ -1378,6 +1389,8 @@ function rebuildSlide(
     profileSubtitle: slide.profileSubtitle ?? DEFAULT_PROFILE_SUBTITLE,
     generationRole: blueprint.role,
     slideType: blueprint.slideType,
+    photoSlotEnabled:
+      slide.photoSlotEnabled ?? (blueprint.slideType === "image_text" ? true : false),
     elements: []
   };
 
@@ -1414,6 +1427,7 @@ export function createSlideFromOutline(
     generationRole: blueprint.role,
     generationCoreIdea: blueprint.body,
     slideType: blueprint.slideType,
+    photoSlotEnabled: blueprint.slideType === "image_text",
     elements: []
   };
 

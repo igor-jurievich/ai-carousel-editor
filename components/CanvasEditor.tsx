@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type TouchEvent } from "react";
+import { useEffect, useRef, type TouchEvent } from "react";
 import { SLIDE_FORMAT_DIMENSIONS } from "@/lib/carousel";
 import type { CanvasElement, Slide, SlideFormat, TextElement } from "@/types/editor";
 import { SlideStage } from "@/components/SlideStage";
@@ -38,6 +38,8 @@ type CanvasEditorProps = {
   onMoveSlide: (slideId: string, direction: "up" | "down") => void;
   onDeleteSlide: (slideId: string) => void;
   onOpenTemplateModal: () => void;
+  onVisibleSlideChange?: (slideId: string) => void;
+  scrollToSlideRequest?: { id: string; token: number } | null;
   disabled?: boolean;
   previewMode?: boolean;
   showSlideBadge?: boolean;
@@ -72,6 +74,8 @@ export function CanvasEditor({
   onMoveSlide,
   onDeleteSlide,
   onOpenTemplateModal,
+  onVisibleSlideChange,
+  scrollToSlideRequest,
   disabled = false,
   previewMode = false,
   showSlideBadge = true,
@@ -82,6 +86,94 @@ export function CanvasEditor({
   const activeSlide = slides.find((slide) => slide.id === activeSlideId) ?? slides[0] ?? null;
   const activeSlideIndex = activeSlide ? slides.findIndex((slide) => slide.id === activeSlide.id) : -1;
   const swipeStateRef = useRef<{ x: number; y: number; timestamp: number } | null>(null);
+  const stackScrollRef = useRef<HTMLDivElement | null>(null);
+  const stackSlideRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const visibleFrameRef = useRef<number | null>(null);
+  const lastVisibleSlideIdRef = useRef<string | null>(null);
+
+  const emitMostVisibleSlide = () => {
+    if (mode !== "stack" || !onVisibleSlideChange || !stackScrollRef.current || !slides.length) {
+      return;
+    }
+
+    const root = stackScrollRef.current;
+    const rootRect = root.getBoundingClientRect();
+    const viewportTop = rootRect.top;
+    const viewportBottom = rootRect.bottom;
+    const viewportCenter = (viewportTop + viewportBottom) / 2;
+    let bestId: string | null = null;
+    let bestRatio = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const slide of slides) {
+      const node = stackSlideRefs.current[slide.id];
+      if (!node) {
+        continue;
+      }
+
+      const rect = node.getBoundingClientRect();
+      const overlap = Math.max(0, Math.min(rect.bottom, viewportBottom) - Math.max(rect.top, viewportTop));
+      const ratio = overlap / Math.max(1, rect.height);
+      if (ratio <= 0) {
+        continue;
+      }
+
+      const center = (rect.top + rect.bottom) / 2;
+      const distance = Math.abs(center - viewportCenter);
+
+      if (ratio > bestRatio || (Math.abs(ratio - bestRatio) < 0.02 && distance < bestDistance)) {
+        bestId = slide.id;
+        bestRatio = ratio;
+        bestDistance = distance;
+      }
+    }
+
+    if (bestId && bestId !== lastVisibleSlideIdRef.current) {
+      lastVisibleSlideIdRef.current = bestId;
+      onVisibleSlideChange(bestId);
+    }
+  };
+
+  const scheduleVisibleSlideCheck = () => {
+    if (mode !== "stack") {
+      return;
+    }
+
+    if (visibleFrameRef.current !== null) {
+      cancelAnimationFrame(visibleFrameRef.current);
+    }
+
+    visibleFrameRef.current = requestAnimationFrame(() => {
+      visibleFrameRef.current = null;
+      emitMostVisibleSlide();
+    });
+  };
+
+  useEffect(() => {
+    scheduleVisibleSlideCheck();
+    return () => {
+      if (visibleFrameRef.current !== null) {
+        cancelAnimationFrame(visibleFrameRef.current);
+      }
+    };
+  }, [slides, mode]);
+
+  useEffect(() => {
+    if (mode !== "stack" || !scrollToSlideRequest?.id) {
+      return;
+    }
+
+    const target = stackSlideRefs.current[scrollToSlideRequest.id];
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest"
+    });
+  }, [mode, scrollToSlideRequest]);
 
   if (mode === "single" && activeSlide) {
     const isEditingActiveSlide = editingTextElement && activeSlide.id === activeSlideId;
@@ -329,7 +421,11 @@ export function CanvasEditor({
             <span className="status-pill">{formatLabel}</span>
           </div>
 
-          <div className="slides-stack">
+          <div
+            className="slides-stack"
+            ref={stackScrollRef}
+            onScroll={scheduleVisibleSlideCheck}
+          >
             <InsertButton onClick={() => onInsertSlideAt(0)} />
 
             {slides.map((slide, index) => {
@@ -341,7 +437,13 @@ export function CanvasEditor({
                   : null;
 
               return (
-                <div key={slide.id} className="slide-stack-block">
+                <div
+                  key={slide.id}
+                  className="slide-stack-block"
+                  ref={(node) => {
+                    stackSlideRefs.current[slide.id] = node;
+                  }}
+                >
                   <div
                     className={`slide-stack-shell ${isActive ? "active" : ""}`}
                     onClick={(event) => {
