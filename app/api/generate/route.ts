@@ -45,6 +45,7 @@ export async function POST(request: Request) {
   let body: {
     topic?: unknown;
     slidesCount?: unknown;
+    slides?: unknown;
     niche?: unknown;
     audience?: unknown;
     tone?: unknown;
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
     body = (await request.json()) as {
       topic?: unknown;
       slidesCount?: unknown;
+      slides?: unknown;
       niche?: unknown;
       audience?: unknown;
       tone?: unknown;
@@ -75,7 +77,9 @@ export async function POST(request: Request) {
 
   const topic = typeof body.topic === "string" ? body.topic.trim() : "";
   const slidesCount = clampSlidesCount(
-    typeof body.slidesCount === "number" ? body.slidesCount : Number(body.slidesCount)
+    typeof body.slidesCount === "number"
+      ? body.slidesCount
+      : Number(body.slidesCount ?? body.slides)
   );
   const niche = typeof body.niche === "string" ? body.niche.trim().slice(0, 120) : "";
   const audience = typeof body.audience === "string" ? body.audience.trim().slice(0, 160) : "";

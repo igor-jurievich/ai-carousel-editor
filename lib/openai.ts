@@ -66,21 +66,30 @@ const DEFAULT_MODEL_CANDIDATES = [
 ] as const;
 
 const BANNED_TEMPLATE_PATTERNS: RegExp[] = [
-  /\bв\s+современном\s+мире\b/iu,
-  /\bважно\s+понимать\b/iu,
-  /\bключ\s+к\s+успеху\b/iu,
-  /\bгде\s+ломается\s+поток\b/iu,
-  /\bпо\s+теме\b/iu,
-  /\bв\s+теме\b/iu,
-  /\bразбор\s+под\s+ваш\s+кейс\b/iu
+  /(?:^|[^\p{L}])в\s+современном\s+мире(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])важно\s+понимать(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])ключ\s+к\s+успеху(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])где\s+ломается\s+поток(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])по\s+теме(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])в\s+теме(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])разбор\s+под\s+ваш\s+кейс(?=$|[^\p{L}])/iu
 ];
 
 const WEAK_SHIFT_PATTERNS: RegExp[] = [
-  /\bважно\s+выслушать\b/iu,
-  /\bважнее\s+всего\b/iu,
-  /\bпора\s+смотреть\b/iu,
-  /\bнужно\s+просто\b/iu,
-  /\bглавное\s+—?\s*быть\s+собой\b/iu
+  /(?:^|[^\p{L}])важно\s+выслушать(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])важнее\s+всего(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])пора\s+смотреть(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])нужно\s+просто(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])главное\s+—?\s*быть\s+собой(?=$|[^\p{L}])/iu
+];
+
+const WEAK_ROLE_TITLE_PATTERNS: RegExp[] = [
+  /^что\s+это\s+значит(\s+для\s+вас)?\??$/iu,
+  /^что\s+делать\s+по\s+шагам\??$/iu,
+  /^что\s+изменится,\s*если\s+оставить\s+как\s+есть\??$/iu,
+  /^готов[а-яё]*\s+объединить\s+усилия\??$/iu,
+  /^пора\s+работать\s+как\s+одна\s+команда\??$/iu,
+  /^вместе\s+тестировать\s+новые\s+подходы\??$/iu
 ];
 
 function resolveModelCandidates() {
@@ -202,24 +211,52 @@ export async function generateCarouselFromTopic(
           const topicRelevantSlides = isOutlineTopicRelevant(polishedSlides, cleanedTopic)
             ? polishedSlides
             : buildFallbackSlides(cleanedTopic, expectedFlow, options);
+          const qualityGuardedSlides = enforceSlideQuality(
+            topicRelevantSlides,
+            expectedFlow,
+            cleanedTopic,
+            options
+          );
+          const quality = evaluateSlideQuality(qualityGuardedSlides, expectedFlow, cleanedTopic);
 
           if (topicRelevantSlides !== polishedSlides) {
             console.warn("Generated outline was strongly off-topic. Using deterministic fallback slides.");
           }
 
-          if (hasBannedTemplateLanguage(topicRelevantSlides)) {
+          if (!quality.ok) {
+            const reason = quality.reasons.join("; ") || "low narrative quality";
+            if (attempt < 2) {
+              console.warn(
+                `Model "${model}" attempt ${attempt} returned weak copy (${reason}). Retrying.`
+              );
+              continue;
+            }
+
+            lastError = new Error(`Low-quality generation from model "${model}": ${reason}`);
+            console.warn(
+              `Model "${model}" produced weak copy after retries (${reason}). Trying next candidate.`
+            );
+            continue;
+          }
+
+          if (hasBannedTemplateLanguage(qualityGuardedSlides)) {
             if (attempt < 2) {
               console.warn(`Model "${model}" attempt ${attempt} returned templated language. Retrying.`);
               continue;
             }
             return {
-              slides: stripBannedTemplateLanguage(topicRelevantSlides, expectedFlow, cleanedTopic, options),
+              slides: stripBannedTemplateLanguage(
+                qualityGuardedSlides,
+                expectedFlow,
+                cleanedTopic,
+                options
+              ),
               promptVariant
             };
           }
 
           return {
-            slides: topicRelevantSlides,
+            slides: qualityGuardedSlides,
             promptVariant
           };
         } catch (error) {
@@ -724,7 +761,7 @@ function applyFinalCopyPolish(
         cleanShift.length < 16;
 
       if (weakShift) {
-        shift.title = buildShiftFallback(buildTopicFocus(topic));
+        shift.title = buildRoleTitleFallback("shift", topic);
       } else {
         shift.title = cleanShift;
       }
@@ -737,9 +774,7 @@ function applyFinalCopyPolish(
       const ctaVariants = buildCtaVariants(options?.goal, topic);
       const normalizedTitle = sanitizeTitleValue(cta.title, 84);
       const normalizedSubtitle = sanitizeCopyText(normalizeText(cta.subtitle, 138), 132);
-      const hasAction = /\b(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите)\b/iu.test(
-        normalizedSubtitle
-      );
+      const hasAction = hasActionVerb(normalizedSubtitle);
       const weakTitle =
         !normalizedTitle ||
         /\b(готов[а-яё]*|объединить\s+усилия|поехали|пора\s+действовать|давайте\s+начнем)\b/iu.test(
@@ -754,6 +789,303 @@ function applyFinalCopyPolish(
   }
 
   return nextSlides;
+}
+
+function enforceSlideQuality(
+  slides: CarouselOutlineSlide[],
+  expectedFlow: CarouselSlideRole[],
+  topic: string,
+  options?: GenerationOptions
+): CarouselOutlineSlide[] {
+  return expectedFlow.map((role, index) => {
+    const current = slides[index];
+    const fallback = normalizeSlideByType(role, null, topic, index, options);
+
+    if (!current || current.type !== role) {
+      return fallback;
+    }
+
+    if (role === "hook") {
+      const hook = current as Extract<CarouselOutlineSlide, { type: "hook" }>;
+      const title = sanitizeTitleValue(hook.title, 84);
+      const subtitle = sanitizeCopyText(normalizeText(hook.subtitle, 138), 132);
+      const weakTitle =
+        !title ||
+        startsWithGenericMistakeLead(title) ||
+        hasLegacyTemplatePhrase(title) ||
+        isWeakRoleTitle(title);
+
+      return {
+        type: "hook",
+        title: weakTitle ? buildHookFallbackTitle(topic) : title,
+        subtitle: subtitle || buildHookFallbackSubtitle(topic)
+      };
+    }
+
+    if (role === "problem") {
+      const problem = current as Extract<CarouselOutlineSlide, { type: "problem" }>;
+      const problemFallback = fallback as Extract<CarouselOutlineSlide, { type: "problem" }>;
+      const title = sanitizeTitleValue(problem.title, 80);
+      const bullets = normalizeBullets(problem.bullets, problemFallback.bullets);
+      const denseBullets = bullets.filter((item) => countWords(item) >= 4);
+      return {
+        type: "problem",
+        title:
+          !title || startsWithGenericMistakeLead(title) || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
+            ? buildRoleTitleFallback("problem", topic)
+            : title,
+        bullets: (denseBullets.length >= 2 ? denseBullets : problemFallback.bullets).slice(0, 4)
+      };
+    }
+
+    if (role === "amplify") {
+      const amplify = current as Extract<CarouselOutlineSlide, { type: "amplify" }>;
+      const amplifyFallback = fallback as Extract<CarouselOutlineSlide, { type: "amplify" }>;
+      const title = sanitizeTitleValue(amplify.title, 80);
+      const bullets = normalizeBullets(amplify.bullets, amplifyFallback.bullets);
+      const denseBullets = bullets.filter((item) => countWords(item) >= 4);
+      return {
+        type: "amplify",
+        title:
+          !title || startsWithGenericMistakeLead(title) || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
+            ? buildRoleTitleFallback("amplify", topic)
+            : title,
+        bullets: (denseBullets.length >= 2 ? denseBullets : amplifyFallback.bullets).slice(0, 4)
+      };
+    }
+
+    if (role === "mistake") {
+      const mistake = current as Extract<CarouselOutlineSlide, { type: "mistake" }>;
+      const title = sanitizeTitleValue(mistake.title, 92);
+      const weakTitle =
+        !title ||
+        startsWithGenericMistakeLead(title) ||
+        hasLegacyTemplatePhrase(title) ||
+        isWeakRoleTitle(title) ||
+        countWords(title) < 4;
+
+      return {
+        type: "mistake",
+        title: weakTitle ? buildRoleTitleFallback("mistake", topic) : title
+      };
+    }
+
+    if (role === "consequence") {
+      const consequence = current as Extract<CarouselOutlineSlide, { type: "consequence" }>;
+      const consequenceFallback = fallback as Extract<CarouselOutlineSlide, { type: "consequence" }>;
+      const bullets = normalizeBullets(consequence.bullets, consequenceFallback.bullets);
+      const denseBullets = bullets.filter((item) => countWords(item) >= 4);
+      return {
+        type: "consequence",
+        bullets: (denseBullets.length >= 2 ? denseBullets : consequenceFallback.bullets).slice(0, 4)
+      };
+    }
+
+    if (role === "shift") {
+      const shift = current as Extract<CarouselOutlineSlide, { type: "shift" }>;
+      const title = sanitizeTitleValue(shift.title, 92);
+      const weakTitle =
+        !title ||
+        startsWithGenericMistakeLead(title) ||
+        hasLegacyTemplatePhrase(title) ||
+        isWeakRoleTitle(title) ||
+        countWords(title) < 4;
+
+      return {
+        type: "shift",
+        title: weakTitle ? buildRoleTitleFallback("shift", topic) : title
+      };
+    }
+
+    if (role === "solution") {
+      const solution = current as Extract<CarouselOutlineSlide, { type: "solution" }>;
+      const solutionFallback = fallback as Extract<CarouselOutlineSlide, { type: "solution" }>;
+      const bullets = normalizeBullets(solution.bullets, solutionFallback.bullets);
+      const denseBullets = bullets.filter((item) => countWords(item) >= 4);
+      return {
+        type: "solution",
+        bullets: (denseBullets.length >= 2 ? denseBullets : solutionFallback.bullets).slice(0, 4)
+      };
+    }
+
+    if (role === "example") {
+      const example = current as Extract<CarouselOutlineSlide, { type: "example" }>;
+      const exampleFallback = fallback as Extract<CarouselOutlineSlide, { type: "example" }>;
+      const before = sanitizeCopyText(normalizeText(example.before, 128), 122);
+      const after = sanitizeCopyText(normalizeText(example.after, 128), 122);
+      const beforeLooksWeak = !before || countWords(before) < 4;
+      const afterLooksWeak = !after || countWords(after) < 4;
+      return {
+        type: "example",
+        before: beforeLooksWeak ? exampleFallback.before : before,
+        after: afterLooksWeak ? exampleFallback.after : after
+      };
+    }
+
+    const cta = current as Extract<CarouselOutlineSlide, { type: "cta" }>;
+    const ctaVariants = buildCtaVariants(options?.goal, topic);
+    const title = sanitizeTitleValue(cta.title, 84);
+    const subtitle = sanitizeCopyText(normalizeText(cta.subtitle, 138), 132);
+    const hasAction = hasActionVerb(subtitle);
+    return {
+      type: "cta",
+      title:
+        !title || countWords(title) < 2 || isWeakRoleTitle(title) || hasLegacyTemplatePhrase(title)
+          ? buildCtaTitleFallback(options?.goal, topic)
+          : title,
+      subtitle: hasAction ? subtitle : ctaVariants.selected
+    };
+  });
+}
+
+function evaluateSlideQuality(
+  slides: CarouselOutlineSlide[],
+  expectedFlow: CarouselSlideRole[],
+  topic: string
+) {
+  const reasons: string[] = [];
+
+  if (slides.length !== expectedFlow.length) {
+    reasons.push("unexpected slide count");
+    return { ok: false, reasons };
+  }
+
+  const topicStemSet = buildTopicStemSet(topic);
+  const topicCoverage =
+    topicStemSet.size === 0
+      ? slides.length
+      : slides.filter((slide) => hasTopicStemMatch(collectSlideCopy(slide), topicStemSet)).length;
+
+  if (topicCoverage < 2) {
+    reasons.push("weak topic coverage");
+  }
+
+  for (let index = 0; index < expectedFlow.length; index += 1) {
+    const role = expectedFlow[index];
+    const slide = slides[index];
+
+    if (!slide || slide.type !== role) {
+      reasons.push(`flow mismatch at ${index + 1}`);
+      continue;
+    }
+
+    if (role === "hook") {
+      const hook = slide as Extract<CarouselOutlineSlide, { type: "hook" }>;
+      if (countWords(hook.title) < 4 || countWords(hook.subtitle) < 5 || isWeakRoleTitle(hook.title)) {
+        reasons.push("weak hook");
+      }
+      continue;
+    }
+
+    if (role === "problem") {
+      const problem = slide as Extract<CarouselOutlineSlide, { type: "problem" }>;
+      if (!Array.isArray(problem.bullets) || problem.bullets.length < 2) {
+        reasons.push("thin bullets on problem");
+        continue;
+      }
+
+      const hasDetailedBullet = problem.bullets.some((item) => countWords(item) >= 5);
+      if (!hasDetailedBullet) {
+        reasons.push("low detail on problem");
+      }
+      continue;
+    }
+
+    if (role === "amplify") {
+      const amplify = slide as Extract<CarouselOutlineSlide, { type: "amplify" }>;
+      if (!Array.isArray(amplify.bullets) || amplify.bullets.length < 2) {
+        reasons.push("thin bullets on amplify");
+        continue;
+      }
+
+      const hasDetailedBullet = amplify.bullets.some((item) => countWords(item) >= 5);
+      if (!hasDetailedBullet) {
+        reasons.push("low detail on amplify");
+      }
+      continue;
+    }
+
+    if (role === "mistake") {
+      const mistake = slide as Extract<CarouselOutlineSlide, { type: "mistake" }>;
+      if (countWords(mistake.title) < 4 || isWeakRoleTitle(mistake.title)) {
+        reasons.push("weak mistake");
+      }
+      continue;
+    }
+
+    if (role === "consequence") {
+      const consequence = slide as Extract<CarouselOutlineSlide, { type: "consequence" }>;
+      if (!Array.isArray(consequence.bullets) || consequence.bullets.length < 2) {
+        reasons.push("thin bullets on consequence");
+        continue;
+      }
+
+      const hasDetailedBullet = consequence.bullets.some((item) => countWords(item) >= 5);
+      if (!hasDetailedBullet) {
+        reasons.push("low detail on consequence");
+      }
+      continue;
+    }
+
+    if (role === "shift") {
+      const shift = slide as Extract<CarouselOutlineSlide, { type: "shift" }>;
+      if (countWords(shift.title) < 4 || isWeakRoleTitle(shift.title)) {
+        reasons.push("weak shift");
+      }
+      continue;
+    }
+
+    if (role === "solution") {
+      const solution = slide as Extract<CarouselOutlineSlide, { type: "solution" }>;
+      if (!Array.isArray(solution.bullets) || solution.bullets.length < 2) {
+        reasons.push("thin bullets on solution");
+        continue;
+      }
+
+      const hasDetailedBullet = solution.bullets.some((item) => countWords(item) >= 5);
+      if (!hasDetailedBullet) {
+        reasons.push("low detail on solution");
+      }
+      continue;
+    }
+
+    if (role === "example") {
+      const example = slide as Extract<CarouselOutlineSlide, { type: "example" }>;
+      if (countWords(example.before) < 4 || countWords(example.after) < 4) {
+        reasons.push("weak example");
+      }
+      continue;
+    }
+
+    const cta = slide as Extract<CarouselOutlineSlide, { type: "cta" }>;
+    if (countWords(cta.title) < 2 || !hasActionVerb(cta.subtitle)) {
+      reasons.push("weak cta");
+    }
+  }
+
+  return {
+    ok: reasons.length === 0,
+    reasons
+  };
+}
+
+function countWords(value: string) {
+  return normalizeWordTokens(value).length;
+}
+
+function hasActionVerb(value: string) {
+  return /(?:^|[^\p{L}])(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите|подпишитесь|выберите)(?=$|[^\p{L}])/iu.test(
+    value
+  );
+}
+
+function isWeakRoleTitle(value: string) {
+  const normalized = sanitizeTitleValue(value, 96).toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  return WEAK_ROLE_TITLE_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
 function buildHookCandidates(topic: string, options?: GenerationOptions) {
@@ -1000,7 +1332,7 @@ function normalizeSlideByType(
       title:
         (rawTitle && !startsWithGenericMistakeLead(rawTitle) && !hasLegacyTemplatePhrase(rawTitle)
           ? rawTitle
-          : "") || trimToWordBoundary(`Почему контент про ${topicFocus} быстро пролистывают`, 80),
+          : "") || buildRoleTitleFallback("problem", topic),
       bullets: normalizeBullets(safe.bullets, [
         "Формулировка звучит слишком общей и не цепляет с первых строк.",
         "Тема есть, но человеку непонятно, какую пользу он получит дальше.",
@@ -1016,7 +1348,7 @@ function normalizeSlideByType(
       title:
         (rawTitle && !startsWithGenericMistakeLead(rawTitle) && !hasLegacyTemplatePhrase(rawTitle)
           ? rawTitle
-          : "") || trimToWordBoundary("Дальше эффект накапливается и просадка становится заметной", 80),
+          : "") || buildRoleTitleFallback("amplify", topic),
       bullets: normalizeBullets(safe.bullets, [
         "Просмотры есть, но сохранений и пересылок почти не появляется.",
         "Часть аудитории не доходит до сути и теряет интерес по дороге.",
@@ -1031,7 +1363,7 @@ function normalizeSlideByType(
       type: "mistake",
       title:
         (rawTitle && !hasLegacyTemplatePhrase(rawTitle) ? rawTitle : "") ||
-        trimToWordBoundary(`Ложная установка про ${topicFocus}, которая режет результат`, 92)
+        buildRoleTitleFallback("mistake", topic)
     };
   }
 
@@ -1054,7 +1386,7 @@ function normalizeSlideByType(
         (rawTitle && !startsWithGenericMistakeLead(rawTitle) && !hasLegacyTemplatePhrase(rawTitle)
           ? rawTitle
           : "") ||
-        buildShiftFallback(topicFocus)
+        buildRoleTitleFallback("shift", topic)
     };
   }
 
@@ -1145,6 +1477,28 @@ function buildCtaTitleFallback(goal: string | undefined, topic: string) {
   return trimToWordBoundary(`Хотите усилить ${focus} без шаблонных фраз?`, 84);
 }
 
+function buildRoleTitleFallback(role: CarouselSlideRole, topic: string) {
+  const focus = buildTopicFocus(topic);
+
+  if (role === "problem") {
+    return trimToWordBoundary(`Где в ${focus} читатель теряет интерес`, 80);
+  }
+
+  if (role === "amplify") {
+    return trimToWordBoundary(`Почему это бьёт по результату сильнее, чем кажется`, 80);
+  }
+
+  if (role === "mistake") {
+    return trimToWordBoundary(`Миф про ${focus}, который тормозит рост`, 92);
+  }
+
+  if (role === "shift") {
+    return trimToWordBoundary(`Поворот, после которого ${focus} начинает работать`, 92);
+  }
+
+  return trimToWordBoundary(`Как усилить ${focus} на практике`, 84);
+}
+
 function normalizeText(value: unknown, maxLength: number) {
   if (typeof value !== "string") {
     return "";
@@ -1190,16 +1544,6 @@ function buildHookFallbackSubtitle(topic: string) {
   ];
 
   return trimToWordBoundary(pickVariantByTopic(topicFocus, variants), 132);
-}
-
-function buildShiftFallback(topicFocus: string) {
-  const variants = [
-    `Парадокс: меньше давления — больше отклика в ${topicFocus}.`,
-    "Сначала ясность и доверие. Только потом предложение.",
-    `Поворот: люди не покупают напор, они покупают понятность в ${topicFocus}.`
-  ];
-
-  return trimToWordBoundary(pickVariantByTopic(topicFocus, variants), 92);
 }
 
 function pickVariantByTopic(topic: string, variants: string[]) {
@@ -1316,7 +1660,7 @@ function startsWithGenericMistakeLead(value: string) {
 }
 
 function hasLegacyTemplatePhrase(value: string) {
-  return /\b(по\s+теме|в\s+теме|где\s+ломается\s+поток|где\s+теряется\s+внимание|что\s+это\s+стоит\s+в\s+теме|разбор\s+под\s+ваш\s+кейс)\b/iu.test(
+  return /(?:^|[^\p{L}])(по\s+теме|в\s+теме|где\s+ломается\s+поток|где\s+теряется\s+внимание|что\s+это\s+стоит\s+в\s+теме|разбор\s+под\s+ваш\s+кейс)(?=$|[^\p{L}])/iu.test(
     value
   );
 }
@@ -1500,7 +1844,10 @@ function addTopicAnchorToTitle(title: string, topicAnchor: string) {
     return `Про ${topicAnchor}`;
   }
 
-  const alreadyAnchored = new RegExp(`\\b${escapeRegExp(topicAnchor)}\\b`, "iu").test(normalizedTitle);
+  const alreadyAnchored = new RegExp(
+    `(?:^|[^\\p{L}\\p{N}])${escapeRegExp(topicAnchor)}(?=$|[^\\p{L}\\p{N}])`,
+    "iu"
+  ).test(normalizedTitle);
   if (alreadyAnchored) {
     return normalizedTitle;
   }
@@ -1625,6 +1972,7 @@ function buildGoalAwareCta(goal?: string) {
 
 function buildCtaVariants(goal?: string, topic?: string) {
   const normalizedGoal = normalizeText(goal, 40).toLowerCase();
+  const topicFocus = buildTopicFocus(topic ?? "");
 
   const aggressive = isLeadsGoal(normalizedGoal)
     ? "Напишите «ПЛАН» в директ — соберу структуру под ваши заявки."
@@ -1632,7 +1980,10 @@ function buildCtaVariants(goal?: string, topic?: string) {
 
   const soft = isFollowersGoal(normalizedGoal)
     ? "Сохраните пост и подпишитесь — разберу следующий кейс в этом формате."
-    : "Сохраните карусель как чек-лист и отметьте, на каком шаге вы буксуете.";
+    : trimToWordBoundary(
+        `Сохраните карусель и проверьте, где в ${topicFocus} вы теряете отклик.`,
+        210
+      );
 
   return {
     aggressive: trimToWordBoundary(aggressive, 210),

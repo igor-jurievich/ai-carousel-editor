@@ -1173,6 +1173,7 @@ function buildMainContent(
       ? "text"
       : blueprint.slideType;
   const metrics = resolveTextMetrics(format);
+  const bodyTextLimit = format === "9:16" ? 520 : format === "4:5" ? 440 : 380;
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
@@ -1279,7 +1280,7 @@ function buildMainContent(
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
-        text: compactTextLength(blueprint.body, 250),
+        text: compactTextLength(blueprint.body, format === "9:16" ? 300 : 270),
         x: metrics.contentX,
         y: imageArea.y + imageArea.height + Math.round(metrics.height * 0.22),
         width: metrics.contentWidth,
@@ -1313,7 +1314,7 @@ function buildMainContent(
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
-        text: compactTextLength(blueprint.body, 210),
+        text: compactTextLength(blueprint.body, format === "9:16" ? 270 : 230),
         x: metrics.contentX,
         y: Math.round(metrics.height * 0.58),
         width: metrics.contentWidth,
@@ -1344,7 +1345,7 @@ function buildMainContent(
     createFittedTextElement({
       role: "body",
       metaKey: "managed-body",
-      text: compactTextLength(blueprint.body, 380),
+      text: compactTextLength(blueprint.body, bodyTextLimit),
       x: metrics.contentX,
       y: metrics.bodyY,
       width: metrics.contentWidth,

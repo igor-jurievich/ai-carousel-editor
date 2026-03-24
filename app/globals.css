@@ -3728,14 +3728,32 @@ button:disabled {
 
   .mobile-editor-shell {
     overflow-x: hidden;
+    width: 100%;
   }
 
   .mobile-side-insert {
     display: none !important;
+    pointer-events: none !important;
   }
 
   .mobile-topbar {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    grid-template-columns: none !important;
+  }
+
+  .mobile-top-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .mobile-top-center {
+    flex: 0 0 auto;
+    min-width: 0;
   }
 
   .mobile-icon-button {
@@ -3750,15 +3768,23 @@ button:disabled {
   }
 
   .mobile-export-button {
-    min-width: 126px !important;
+    min-width: 120px !important;
     height: 44px !important;
     font-size: 14px !important;
     padding: 0 12px !important;
+    flex: 1 1 auto;
+    max-width: 100%;
+    white-space: nowrap;
   }
 
   .mobile-canvas-zone {
     padding-inline: 8px;
     padding-bottom: calc(var(--mobile-bottom-offset, 88px) + 92px + env(safe-area-inset-bottom)) !important;
+    overflow-x: clip;
+  }
+
+  .mobile-canvas-frame {
+    padding-inline: clamp(10px, 4vw, 20px) !important;
   }
 
   .mobile-bottom-toolbar-v2 {
@@ -3777,11 +3803,25 @@ button:disabled {
   }
 
   .mobile-tool-sheet-v2 {
-    max-height: min(52svh, 520px) !important;
+    left: 0;
+    right: 0;
+    max-height: min(56dvh, 540px) !important;
+  }
+
+  .mobile-tool-sheet-v2 .mobile-tool-sheet-body {
+    overscroll-behavior: contain;
   }
 }
 
 @media (max-width: 420px) {
+  .mobile-topbar {
+    gap: 6px !important;
+  }
+
+  .mobile-top-left {
+    gap: 6px;
+  }
+
   .mobile-icon-button {
     width: 40px !important;
     height: 40px !important;
@@ -3794,9 +3834,20 @@ button:disabled {
   }
 
   .mobile-export-button {
-    min-width: 112px !important;
+    min-width: 106px !important;
     height: 40px !important;
     font-size: 13px !important;
     padding: 0 10px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .mobile-export-button {
+    min-width: 94px !important;
+    padding: 0 8px !important;
+  }
+
+  .mobile-export-button span {
+    font-size: 12px !important;
   }
 }
