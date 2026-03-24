@@ -2041,7 +2041,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   activeTemplateName={activeTemplateName}
                   activeFormat={slideFormat}
                   profileHandle={activeSlide.profileHandle ?? ""}
-                  profileSubtitle={activeSlide.profileSubtitle ?? ""}
+                  profileSubtitle={normalizeProfileSubtitleForUi(activeSlide.profileSubtitle ?? "")}
                   photoSlotEnabled={activePhotoSlotEnabled}
                   canUsePhotoSlot
                   hasBackgroundImage={activeHasBackgroundImage}
@@ -2075,7 +2075,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   onInsertSlideAt={handleInsertSlideAt}
                   onDeleteSlide={handleDeleteSlide}
                   onProfileHandleChange={(value) => handleUpdateFooter({ profileHandle: value })}
-                  onProfileSubtitleChange={(value) => handleUpdateFooter({ profileSubtitle: value })}
+                  onProfileSubtitleChange={(value) =>
+                    handleUpdateFooter({ profileSubtitle: normalizeProfileSubtitleForUi(value) })
+                  }
                   disabled={generationLocked}
                   previewMode={isPreviewMode}
                 />
@@ -2222,7 +2224,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               selectedTextElement={selectedTextElement}
               activeTemplateName={activeTemplateName}
               profileHandle={activeSlide.profileHandle ?? ""}
-              profileSubtitle={activeSlide.profileSubtitle ?? ""}
+              profileSubtitle={normalizeProfileSubtitleForUi(activeSlide.profileSubtitle ?? "")}
               photoSlotEnabled={activePhotoSlotEnabled}
               hasBackgroundImage={activeHasBackgroundImage}
               captionResult={captionResult}
@@ -2245,7 +2247,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               }}
               onOpenTemplateModal={handleOpenTemplateModal}
               onProfileHandleChange={(value) => handleUpdateFooter({ profileHandle: value })}
-              onProfileSubtitleChange={(value) => handleUpdateFooter({ profileSubtitle: value })}
+              onProfileSubtitleChange={(value) =>
+                handleUpdateFooter({ profileSubtitle: normalizeProfileSubtitleForUi(value) })
+              }
               onSlideBackgroundChange={handleSlideBackgroundColorChange}
               onSelectedTextChange={handleSelectedTextChange}
               onSelectedTextColorChange={handleSelectedTextColorChange}
@@ -2339,6 +2343,15 @@ function isTextEntryElement(element: Element | null) {
   const input = element as HTMLInputElement;
   const type = input.type.toLowerCase();
   return !["checkbox", "radio", "range", "button", "submit", "reset", "file"].includes(type);
+}
+
+function normalizeProfileSubtitleForUi(value: string) {
+  const normalized = value.trim();
+  if (!normalized) {
+    return "";
+  }
+
+  return /^надпись$/iu.test(normalized) ? "" : normalized;
 }
 
 async function waitForNextFrame() {

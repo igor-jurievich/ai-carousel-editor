@@ -332,33 +332,16 @@ export function CanvasEditor({
               </div>
             </div>
 
-            {previewMode ? null : (
-              <>
-                <button
-                  type="button"
-                  className="mobile-side-insert mobile-side-insert-left"
-                  onClick={() => onInsertSlideAt(activeSlideIndex, "text")}
-                  aria-label="Добавить слайд перед текущим"
-                  disabled={disabled}
-                >
-                  <AppIcon name="plus" size={21} />
-                </button>
-
-                <button
-                  type="button"
-                  className="mobile-side-insert mobile-side-insert-right"
-                  onClick={() => onInsertSlideAt(activeSlideIndex + 1, "text")}
-                  aria-label="Добавить слайд после текущего"
-                  disabled={disabled}
-                >
-                  <AppIcon name="plus" size={21} />
-                </button>
-              </>
-            )}
           </div>
 
           {previewMode ? null : (
             <div className="mobile-slide-tools">
+              <MobileIconButton
+                icon="plus"
+                title="Добавить слайд"
+                onClick={() => onInsertSlideAt(activeSlideIndex + 1, "text")}
+                disabled={disabled}
+              />
               <MobileIconButton
                 icon="templates"
                 title="Выбрать шаблон"

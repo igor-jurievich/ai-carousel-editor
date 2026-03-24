@@ -258,7 +258,7 @@ export function SettingsPanel({
             className="field"
             value={profileSubtitle}
             onChange={(event) => onProfileSubtitleChange(event.target.value)}
-            placeholder="Надпись"
+            placeholder="Подпись (необязательно)"
             disabled={disabled}
           />
         </label>

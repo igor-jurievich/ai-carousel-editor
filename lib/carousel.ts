@@ -20,7 +20,7 @@ import {
 
 export const SLIDE_SIZE = 1080;
 export const DEFAULT_PROFILE_HANDLE = "@username";
-export const DEFAULT_PROFILE_SUBTITLE = "Надпись";
+export const DEFAULT_PROFILE_SUBTITLE = "";
 export { clampSlidesCount, DEFAULT_SLIDES_COUNT, MAX_SLIDES_COUNT, MIN_SLIDES_COUNT };
 
 export const SLIDE_FORMAT_DIMENSIONS: Record<
@@ -232,7 +232,7 @@ const TITLE_DEDUPE_STOP_WORDS = new Set([
   "до"
 ]);
 const LEGACY_TITLE_TEMPLATE_RE =
-  /\b(в\s+теме|где\s+ломается\s+поток|что\s+это\s+стоит\s+в\s+теме|разбор\s+под\s+ваш\s+кейс)\b/iu;
+  /\b(по\s+теме|в\s+теме|где\s+ломается\s+поток|что\s+это\s+стоит\s+в\s+теме|разбор\s+под\s+ваш\s+кейс)\b/iu;
 
 function shouldDedupeTitleToken(token: string) {
   return token.length >= 4 && !TITLE_DEDUPE_STOP_WORDS.has(token);
@@ -819,6 +819,11 @@ function readTitle(role: CarouselSlideRole, outline: OutlineLike) {
     }
   }
 
+  const derived = deriveTitleFromOutline(role, outline);
+  if (derived) {
+    return derived;
+  }
+
   return fallbackTitleByRole(role);
 }
 
@@ -844,11 +849,11 @@ function fallbackTitleByRole(role: CarouselSlideRole) {
   }
 
   if (role === "problem") {
-    return "Где теряется внимание";
+    return "Где сейчас ломается отклик";
   }
 
   if (role === "amplify") {
-    return "Почему это бьет по результату";
+    return "Почему просадка нарастает";
   }
 
   if (role === "mistake") {
@@ -860,11 +865,11 @@ function fallbackTitleByRole(role: CarouselSlideRole) {
   }
 
   if (role === "shift") {
-    return "Как сменить фокус";
+    return "Где поменять подход";
   }
 
   if (role === "solution") {
-    return "Что делать по шагам";
+    return "Рабочий план по шагам";
   }
 
   if (role === "example") {
@@ -876,6 +881,34 @@ function fallbackTitleByRole(role: CarouselSlideRole) {
   }
 
   return "Новый слайд";
+}
+
+function deriveTitleFromOutline(role: CarouselSlideRole, outline: OutlineLike) {
+  const firstBullet = Array.isArray(outline.bullets)
+    ? sanitizeBlueprintText(String(outline.bullets[0] ?? ""), 84, true)
+    : "";
+
+  if (firstBullet) {
+    if (role === "solution") {
+      return compactTextLength(`Шаг 1: ${firstBullet}`, titleMaxLengthByRole(role));
+    }
+
+    if (role === "consequence") {
+      return compactTextLength(`К чему это ведет: ${firstBullet}`, titleMaxLengthByRole(role));
+    }
+
+    return compactTextLength(firstBullet, titleMaxLengthByRole(role));
+  }
+
+  if (role === "example") {
+    const before = typeof outline.before === "string" ? sanitizeBlueprintText(outline.before, 84) : "";
+    const after = typeof outline.after === "string" ? sanitizeBlueprintText(outline.after, 84) : "";
+    if (before || after) {
+      return compactTextLength("Разбор: до и после", titleMaxLengthByRole(role));
+    }
+  }
+
+  return "";
 }
 
 function readBody(role: CarouselSlideRole, outline: OutlineLike) {
@@ -890,7 +923,7 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
   if (role === "problem" || role === "amplify" || role === "consequence" || role === "solution") {
     const bullets = Array.isArray(outline.bullets)
       ? outline.bullets
-          .map((item) => sanitizeBlueprintText(String(item), 82))
+          .map((item) => sanitizeBlueprintText(String(item), 108))
           .filter(Boolean)
           .slice(0, 4)
       : [];
@@ -900,14 +933,14 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
     }
 
     if (typeof outline.text === "string" && outline.text.trim()) {
-      return sanitizeBlueprintText(outline.text, 260);
+      return sanitizeBlueprintText(outline.text, 340);
     }
 
     if (role === "consequence") {
-      return "→ Падает доверие к вашей экспертизе\n→ Контент сложнее дочитывают до конца\n→ Результат нестабилен даже при регулярных публикациях";
+      return "→ Теряется доверие и решения откладываются\n→ Контент дочитывают хуже, чем могли бы\n→ Вы тратите больше времени при том же результате";
     }
 
-    return "→ Одна мысль на один слайд\n→ Конкретный пример вместо абстракции\n→ Ясное действие после чтения";
+    return "→ Покажите один ключевой шаг без воды\n→ Добавьте конкретику: кейс, цифру или ситуацию\n→ Закройте слайд простым действием для читателя";
   }
 
   if (role === "example") {
@@ -1045,13 +1078,13 @@ function buildHeaderAndFooter(
   const { width } = metrics;
   const bodyColor = palette.bodyColor;
   const handleText = profileHandle.trim() || DEFAULT_PROFILE_HANDLE;
-  const subtitleText = profileSubtitle.trim() || DEFAULT_PROFILE_SUBTITLE;
+  const subtitleText = normalizeProfileSubtitle(profileSubtitle);
   const captionFontSize = format === "9:16" ? 40 : 38;
   const counterFontSize = format === "9:16" ? 39 : 37;
   const subtitleFontSize = format === "9:16" ? 42 : 40;
   const arrowFontSize = format === "9:16" ? 64 : 58;
 
-  return [
+  const items: TextElement[] = [
     createFittedTextElement({
       role: "caption",
       metaKey: "profile-handle",
@@ -1083,23 +1116,31 @@ function buildHeaderAndFooter(
       fill: bodyColor,
       align: "right",
       lineHeight: 1.1
-    }),
-    createFittedTextElement({
-      role: "caption",
-      metaKey: "profile-subtitle",
-      text: subtitleText,
-      x: metrics.contentX,
-      y: metrics.footerY,
-      width: Math.round(width * 0.45),
-      height: 48,
-      preferredFontSize: subtitleFontSize,
-      minFontSize: 24,
-      fontFamily: template.bodyFont,
-      fontStyle: "normal",
-      fill: bodyColor,
-      align: "left",
-      lineHeight: 1.1
-    }),
+    })
+  ];
+
+  if (subtitleText) {
+    items.push(
+      createFittedTextElement({
+        role: "caption",
+        metaKey: "profile-subtitle",
+        text: subtitleText,
+        x: metrics.contentX,
+        y: metrics.footerY,
+        width: Math.round(width * 0.45),
+        height: 48,
+        preferredFontSize: subtitleFontSize,
+        minFontSize: 24,
+        fontFamily: template.bodyFont,
+        fontStyle: "normal",
+        fill: bodyColor,
+        align: "left",
+        lineHeight: 1.1
+      })
+    );
+  }
+
+  items.push(
     createTextElement({
       role: "caption",
       metaKey: "footer-arrow",
@@ -1115,7 +1156,9 @@ function buildHeaderAndFooter(
       align: "right",
       lineHeight: 1
     })
-  ];
+  );
+
+  return items;
 }
 
 function buildMainContent(
@@ -1301,7 +1344,7 @@ function buildMainContent(
     createFittedTextElement({
       role: "body",
       metaKey: "managed-body",
-      text: compactTextLength(blueprint.body, 300),
+      text: compactTextLength(blueprint.body, 380),
       x: metrics.contentX,
       y: metrics.bodyY,
       width: metrics.contentWidth,
@@ -1386,7 +1429,7 @@ function rebuildSlide(
     background: palette.background,
     templateId,
     profileHandle: slide.profileHandle ?? DEFAULT_PROFILE_HANDLE,
-    profileSubtitle: slide.profileSubtitle ?? DEFAULT_PROFILE_SUBTITLE,
+    profileSubtitle: normalizeProfileSubtitle(slide.profileSubtitle),
     generationRole: blueprint.role,
     slideType: blueprint.slideType,
     photoSlotEnabled:
@@ -1720,7 +1763,10 @@ export function updateSlideFooter(
     {
       ...slide,
       profileHandle: updates.profileHandle ?? slide.profileHandle,
-      profileSubtitle: updates.profileSubtitle ?? slide.profileSubtitle
+      profileSubtitle:
+        updates.profileSubtitle !== undefined
+          ? normalizeProfileSubtitle(updates.profileSubtitle)
+          : slide.profileSubtitle
     },
     index,
     totalSlides,
@@ -1728,6 +1774,19 @@ export function updateSlideFooter(
     format,
     customElements
   );
+}
+
+function normalizeProfileSubtitle(value?: string) {
+  const cleaned = (value ?? "").trim();
+  if (!cleaned) {
+    return "";
+  }
+
+  if (/^надпись$/iu.test(cleaned)) {
+    return "";
+  }
+
+  return cleaned;
 }
 
 export function setSlideBackgroundImage(

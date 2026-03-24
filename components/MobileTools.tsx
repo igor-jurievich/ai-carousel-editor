@@ -10,6 +10,7 @@ export type MobileToolTab =
   | "background"
   | "style"
   | "text"
+  | "post"
   | "font"
   | "size";
 
@@ -52,6 +53,7 @@ const TOOLBAR_ITEMS: Array<{ id: MobileToolTab; icon: AppIconName; label: string
   { id: "background", icon: "background", label: "Фон" },
   { id: "style", icon: "style", label: "Стиль" },
   { id: "text", icon: "text", label: "Текст" },
+  { id: "post", icon: "edit", label: "Пост" },
   { id: "font", icon: "font", label: "Шрифт" },
   { id: "size", icon: "size", label: "Размер" }
 ];
@@ -500,11 +502,16 @@ export function MobileTools({
                     className="field"
                     value={profileSubtitle}
                     onChange={(event) => onProfileSubtitleChange(event.target.value)}
-                    placeholder="Надпись"
+                    placeholder="Подпись (необязательно)"
                     disabled={disabled}
                   />
                 </label>
+              </div>
+            ) : null}
 
+            {activeTab === "post" ? (
+              <div className="settings-block">
+                <span className="settings-label">Подпись к посту</span>
                 <div className="field-row field-row-actions">
                   <button
                     type="button"
@@ -512,7 +519,7 @@ export function MobileTools({
                     onClick={onGenerateCaption}
                     disabled={disabled || isGeneratingCaption}
                   >
-                    {isGeneratingCaption ? "Генерирую..." : "Подпись к посту"}
+                    {isGeneratingCaption ? "Генерирую..." : "Сгенерировать"}
                   </button>
                   <button
                     type="button"
@@ -538,10 +545,14 @@ export function MobileTools({
                     ]
                       .filter(Boolean)
                       .join("\n")}
-                    rows={6}
+                    rows={8}
                     readOnly
                   />
-                ) : null}
+                ) : (
+                  <div className="settings-hint">
+                    Сначала сгенерируйте карусель, затем нажмите «Сгенерировать».
+                  </div>
+                )}
               </div>
             ) : null}
 
@@ -704,6 +715,10 @@ function getTabTitle(tab: MobileToolTab) {
 
   if (tab === "font") {
     return "Шрифты";
+  }
+
+  if (tab === "post") {
+    return "Подпись к посту";
   }
 
   return "Размер текста";

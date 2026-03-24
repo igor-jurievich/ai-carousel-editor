@@ -143,7 +143,7 @@ export async function generateCarouselFromTopic(
                       "Write concise, conversational, high-signal Russian copy without fluff and without robotic phrasing.",
                       "Adapt voice to topic and audience. Keep it native for Instagram/Telegram style content.",
                       "Keep each slide self-contained and readable on a mobile card.",
-                      "Keep text short: title up to ~10 words, subtitle up to ~18 words, bullets up to ~14 words.",
+                      "Keep text compact but substantial: title up to ~12 words, subtitle up to ~24 words, bullets up to ~20 words.",
                       "Start from the provided topic. Do not default to sales/real-estate language if topic is different.",
                       "If topic is educational/health/lifestyle/psychology etc, keep vocabulary in that domain.",
                       "Avoid generic opener like «Одна ошибка…» unless the topic explicitly asks for mistakes.",
@@ -429,7 +429,7 @@ function buildUserPrompt(
     "For fields that are not used by the current type, return empty string \"\" or empty array [].",
     "Tone: vivid, social-native, high signal, no bureaucratic wording.",
     "Each slide should carry a strong standalone idea with natural spoken Russian.",
-    "Bullets must be short: 1 sentence each, 2-4 bullets, no long clauses.",
+    "Bullets must be concise but meaningful: 1 short sentence each, 2-4 bullets, include concrete detail instead of generic slogans.",
     "Keep wording topic-specific. Avoid universal sales jargon if topic is not sales-related.",
     "Avoid stale templates like «в теме ...», «одна ошибка ...», «где ломается поток ...».",
     "Ban phrases: «в современном мире», «важно понимать», «ключ к успеху».",
@@ -737,11 +737,18 @@ function applyFinalCopyPolish(
       const ctaVariants = buildCtaVariants(options?.goal, topic);
       const normalizedTitle = sanitizeTitleValue(cta.title, 84);
       const normalizedSubtitle = sanitizeCopyText(normalizeText(cta.subtitle, 138), 132);
-      const hasAction = /\b(напиши|напишите|сохраните|оставьте|отправьте|ответьте)\b/iu.test(
+      const hasAction = /\b(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите)\b/iu.test(
         normalizedSubtitle
       );
+      const weakTitle =
+        !normalizedTitle ||
+        /\b(готов[а-яё]*|объединить\s+усилия|поехали|пора\s+действовать|давайте\s+начнем)\b/iu.test(
+          normalizedTitle
+        );
 
-      cta.title = normalizedTitle || trimToWordBoundary("Хотите забрать рабочий шаблон?", 84);
+      cta.title = weakTitle
+        ? buildCtaTitleFallback(options?.goal, topic)
+        : normalizedTitle;
       cta.subtitle = hasAction ? normalizedSubtitle : ctaVariants.selected;
     }
   }
@@ -1102,7 +1109,7 @@ function normalizeBullets(value: unknown, fallback: string[]) {
   const cleaned: string[] = [];
 
   for (const item of value) {
-    const normalized = sanitizeCopyText(normalizeText(item, 90), 86);
+    const normalized = sanitizeCopyText(normalizeText(item, 128), 122);
     if (!normalized) {
       continue;
     }
@@ -1121,6 +1128,21 @@ function normalizeBullets(value: unknown, fallback: string[]) {
   }
 
   return cleaned.length ? cleaned : fallback;
+}
+
+function buildCtaTitleFallback(goal: string | undefined, topic: string) {
+  const normalizedGoal = normalizeText(goal, 40).toLowerCase();
+  const focus = buildTopicFocus(topic);
+
+  if (isLeadsGoal(normalizedGoal)) {
+    return trimToWordBoundary("Нужна структура, которая доводит до заявки?", 84);
+  }
+
+  if (isFollowersGoal(normalizedGoal)) {
+    return trimToWordBoundary("Хотите карусели, которые сохраняют и пересылают?", 84);
+  }
+
+  return trimToWordBoundary(`Хотите усилить ${focus} без шаблонных фраз?`, 84);
 }
 
 function normalizeText(value: unknown, maxLength: number) {

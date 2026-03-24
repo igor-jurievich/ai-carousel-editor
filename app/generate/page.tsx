@@ -216,14 +216,14 @@ export default function GeneratePage() {
               ))}
             </div>
 
-            <details className="settings-card" style={{ marginTop: 12 }}>
-              <summary style={{ cursor: "pointer", fontWeight: 700 }}>Дополнительные настройки</summary>
-              <div className="field-row" style={{ marginTop: 12, gap: 12, flexWrap: "wrap" }}>
-                <label className="field-label" style={{ minWidth: 220 }}>
+            <details className="settings-card generate-advanced" style={{ marginTop: 12 }}>
+              <summary className="generate-advanced-summary">Дополнительные настройки</summary>
+              <div className="generate-advanced-grid">
+                <label className="field-label generate-advanced-field">
                   Ниша
                   <input className="field" value={niche} onChange={(event) => setNiche(event.target.value)} />
                 </label>
-                <label className="field-label" style={{ minWidth: 220 }}>
+                <label className="field-label generate-advanced-field">
                   Целевая аудитория
                   <input
                     className="field"
@@ -231,7 +231,7 @@ export default function GeneratePage() {
                     onChange={(event) => setAudience(event.target.value)}
                   />
                 </label>
-                <label className="field-label">
+                <label className="field-label generate-advanced-field">
                   Тон
                   <select className="field" value={tone} onChange={(event) => setTone(event.target.value)}>
                     <option value="soft">Мягкий</option>
@@ -239,7 +239,7 @@ export default function GeneratePage() {
                     <option value="sharp">Острый</option>
                   </select>
                 </label>
-                <label className="field-label">
+                <label className="field-label generate-advanced-field">
                   Цель
                   <select className="field" value={goal} onChange={(event) => setGoal(event.target.value)}>
                     <option value="engagement">Вовлечение</option>
@@ -247,7 +247,7 @@ export default function GeneratePage() {
                     <option value="warming">Прогрев</option>
                   </select>
                 </label>
-                <label className="field-label">
+                <label className="field-label generate-advanced-field">
                   Формат
                   <select
                     className="field"
@@ -259,7 +259,7 @@ export default function GeneratePage() {
                     <option value="9:16">9:16</option>
                   </select>
                 </label>
-                <label className="field-label">
+                <label className="field-label generate-advanced-field">
                   Тема
                   <select
                     className="field"
@@ -271,7 +271,7 @@ export default function GeneratePage() {
                     <option value="color">Цветная</option>
                   </select>
                 </label>
-                <label className="field-label">
+                <label className="field-label generate-advanced-field">
                   Количество карточек
                   <select
                     className="field"

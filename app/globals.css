@@ -812,6 +812,22 @@ button:disabled {
   color: #56615f;
 }
 
+.generate-advanced-summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.generate-advanced-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.generate-advanced-field {
+  min-width: 0;
+}
+
 .field,
 .select,
 .textarea {
@@ -2744,6 +2760,105 @@ button:disabled {
 }
 
 @media (max-width: 768px) {
+  .generate-advanced-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .generate-advanced .field,
+  .generate-advanced .select,
+  .generate-advanced .textarea {
+    min-width: 0;
+  }
+
+  .mobile-editor-shell {
+    overflow-x: hidden;
+  }
+
+  .mobile-topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .mobile-icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .mobile-compact-select {
+    width: 98px;
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .mobile-export-button {
+    min-width: 132px;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .mobile-canvas-zone {
+    padding-bottom: calc(var(--mobile-bottom-offset, 88px) + 92px + env(safe-area-inset-bottom));
+    padding-inline: 8px;
+  }
+
+  .mobile-side-insert {
+    display: none;
+  }
+
+  .mobile-bottom-toolbar-v2 {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .mobile-bottom-toolbar-v2::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-bottom-tool {
+    flex: 0 0 78px;
+    min-height: 62px;
+  }
+
+  .mobile-tool-sheet-v2 {
+    max-height: min(52svh, 520px);
+  }
+}
+
+@media (max-width: 420px) {
+  .mobile-top-left {
+    gap: 6px;
+  }
+
+  .mobile-icon-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .mobile-compact-select {
+    width: 88px;
+    height: 40px;
+    font-size: 14px;
+  }
+
+  .mobile-export-button {
+    min-width: 118px;
+    height: 40px;
+    font-size: 13px;
+    padding: 0 10px;
+  }
+
+  .mobile-canvas-frame {
+    padding-inline: 20px;
+  }
+}
+
+@media (max-width: 360px) {
+  .mobile-bottom-tool {
+    flex-basis: 72px;
+  }
+}
+
+@media (max-width: 768px) {
   .page-shell {
     padding: 0;
     min-height: 100svh;
@@ -3595,5 +3710,93 @@ button:disabled {
 
   .template-library-card-meta strong {
     font-size: 15px;
+  }
+}
+
+/* Final mobile stability overrides */
+@media (max-width: 768px) {
+  .generate-advanced-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .generate-advanced .field,
+  .generate-advanced .select,
+  .generate-advanced .textarea,
+  .generate-advanced-field {
+    min-width: 0 !important;
+  }
+
+  .mobile-editor-shell {
+    overflow-x: hidden;
+  }
+
+  .mobile-side-insert {
+    display: none !important;
+  }
+
+  .mobile-topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .mobile-icon-button {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  .mobile-compact-select {
+    width: 96px !important;
+    height: 44px !important;
+    font-size: 16px !important;
+  }
+
+  .mobile-export-button {
+    min-width: 126px !important;
+    height: 44px !important;
+    font-size: 14px !important;
+    padding: 0 12px !important;
+  }
+
+  .mobile-canvas-zone {
+    padding-inline: 8px;
+    padding-bottom: calc(var(--mobile-bottom-offset, 88px) + 92px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .mobile-bottom-toolbar-v2 {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .mobile-bottom-toolbar-v2::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-bottom-tool {
+    flex: 0 0 78px !important;
+    min-height: 62px !important;
+  }
+
+  .mobile-tool-sheet-v2 {
+    max-height: min(52svh, 520px) !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .mobile-icon-button {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  .mobile-compact-select {
+    width: 88px !important;
+    height: 40px !important;
+    font-size: 14px !important;
+  }
+
+  .mobile-export-button {
+    min-width: 112px !important;
+    height: 40px !important;
+    font-size: 13px !important;
+    padding: 0 10px !important;
   }
 }
