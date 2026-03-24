@@ -4,7 +4,7 @@ import { saveAs } from "file-saver";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type Konva from "konva";
 import { AppIcon } from "@/components/icons";
 import { CanvasEditor } from "@/components/CanvasEditor";
@@ -86,6 +86,7 @@ type EditorProps = {
 export function Editor({ initialProjectId = null }: EditorProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [slides, setSlides] = useState<Slide[]>(() => createStarterSlides("light", "1:1"));
   const [topic, setTopic] = useState("");
   const [slidesCount, setSlidesCount] = useState(DEFAULT_SLIDES_COUNT);
@@ -133,6 +134,34 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const skipAutosaveRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
   const editorOpenedTrackedRef = useRef(false);
+  const initialMobileToolAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (initialMobileToolAppliedRef.current || typeof window === "undefined") {
+      return;
+    }
+
+    const toolFromQuery = searchParams.get("tool");
+    const shouldOpenPostTool = window.innerWidth <= MOBILE_BREAKPOINT && toolFromQuery === "post";
+
+    if (shouldOpenPostTool) {
+      setMobileToolTab("post");
+      setStatus("Открыта вкладка «Пост»: здесь можно сгенерировать подпись к карусели.");
+    }
+
+    initialMobileToolAppliedRef.current = true;
+
+    if (!toolFromQuery) {
+      return;
+    }
+
+    const nextQuery = new URLSearchParams(searchParams.toString());
+    nextQuery.delete("tool");
+    nextQuery.delete("from");
+    const nextQueryString = nextQuery.toString();
+    const nextPath = nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
+    router.replace(nextPath, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   useEffect(() => {
     if (!slides.length) {

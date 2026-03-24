@@ -49,11 +49,11 @@ type MobileToolsProps = {
 
 const TOOLBAR_ITEMS: Array<{ id: MobileToolTab; icon: AppIconName; label: string }> = [
   { id: "templates", icon: "templates", label: "Шаблоны" },
+  { id: "post", icon: "edit", label: "Пост" },
   { id: "color", icon: "palette", label: "Цвет" },
   { id: "background", icon: "background", label: "Фон" },
   { id: "style", icon: "style", label: "Стиль" },
   { id: "text", icon: "text", label: "Текст" },
-  { id: "post", icon: "edit", label: "Пост" },
   { id: "font", icon: "font", label: "Шрифт" },
   { id: "size", icon: "size", label: "Размер" }
 ];

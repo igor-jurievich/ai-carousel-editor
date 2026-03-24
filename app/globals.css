@@ -279,6 +279,17 @@ button:disabled {
   box-shadow: none;
 }
 
+.btn.secondary {
+  background: #ffffff;
+  color: #2f4e52;
+  border: 1px solid rgba(179, 198, 194, 0.95);
+  box-shadow: none;
+}
+
+.btn.secondary:hover:not(:disabled) {
+  box-shadow: 0 8px 16px rgba(34, 55, 52, 0.08);
+}
+
 .prompt-status {
   display: flex;
   align-items: center;
@@ -3741,6 +3752,9 @@ button:disabled {
     align-items: center;
     gap: 8px;
     grid-template-columns: none !important;
+    width: 100%;
+    max-width: 100%;
+    overflow: clip;
   }
 
   .mobile-top-left {
@@ -3754,6 +3768,7 @@ button:disabled {
   .mobile-top-center {
     flex: 0 0 auto;
     min-width: 0;
+    max-width: 100%;
   }
 
   .mobile-icon-button {
@@ -3775,6 +3790,8 @@ button:disabled {
     flex: 1 1 auto;
     max-width: 100%;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .mobile-canvas-zone {
@@ -3806,6 +3823,8 @@ button:disabled {
     left: 0;
     right: 0;
     max-height: min(56dvh, 540px) !important;
+    width: 100%;
+    max-width: 100%;
   }
 
   .mobile-tool-sheet-v2 .mobile-tool-sheet-body {

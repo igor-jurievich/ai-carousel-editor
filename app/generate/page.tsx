@@ -144,7 +144,7 @@ export default function GeneratePage() {
     }
   };
 
-  const handleOpenInEditor = () => {
+  const handleOpenInEditor = (tool?: "post") => {
     if (!previewSlides?.length) {
       return;
     }
@@ -178,9 +178,15 @@ export default function GeneratePage() {
       payload: {
         source: "generate_page",
         projectId: saved.id,
-        format: resolvedFormat
+        format: resolvedFormat,
+        requestedTool: tool ?? "none"
       }
     });
+
+    if (tool === "post") {
+      router.push(`/editor/${saved.id}?tool=post&from=generate`);
+      return;
+    }
 
     router.push(`/editor/${saved.id}`);
   };
@@ -319,10 +325,16 @@ export default function GeneratePage() {
                 </div>
               ))}
             </div>
-            <div className="field-row" style={{ marginTop: 14 }}>
-              <button type="button" className="btn" onClick={handleOpenInEditor}>
+            <div className="field-row field-row-actions" style={{ marginTop: 14 }}>
+              <button type="button" className="btn" onClick={() => handleOpenInEditor()}>
                 Открыть в редакторе
               </button>
+              <button type="button" className="btn secondary" onClick={() => handleOpenInEditor("post")}>
+                Открыть + пост
+              </button>
+            </div>
+            <div className="settings-hint" style={{ marginTop: 10 }}>
+              На мобильной версии генерация подписи к карусели находится во вкладке «Пост» внутри редактора.
             </div>
           </section>
         ) : null}
