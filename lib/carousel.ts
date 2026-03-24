@@ -849,11 +849,11 @@ function fallbackTitleByRole(role: CarouselSlideRole) {
   }
 
   if (role === "problem") {
-    return "Где сейчас ломается отклик";
+    return "Почему читатель теряет нить на старте";
   }
 
   if (role === "amplify") {
-    return "Почему просадка нарастает";
+    return "Как эта просадка накапливается";
   }
 
   if (role === "mistake") {
@@ -861,19 +861,19 @@ function fallbackTitleByRole(role: CarouselSlideRole) {
   }
 
   if (role === "consequence") {
-    return "Что изменится, если оставить как есть";
+    return "К чему это приводит в поведении аудитории";
   }
 
   if (role === "shift") {
-    return "Где поменять подход";
+    return "Что поменять в логике подачи";
   }
 
   if (role === "solution") {
-    return "Рабочий план по шагам";
+    return "План, который можно внедрить сегодня";
   }
 
   if (role === "example") {
-    return "Как переформулировать мысль";
+    return "Мини-кейс: как звучит до и после";
   }
 
   if (role === "cta") {
@@ -923,7 +923,7 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
   if (role === "problem" || role === "amplify" || role === "consequence" || role === "solution") {
     const bullets = Array.isArray(outline.bullets)
       ? outline.bullets
-          .map((item) => sanitizeBlueprintText(String(item), 108))
+          .map((item) => sanitizeBlueprintText(String(item), 120))
           .filter(Boolean)
           .slice(0, 4)
       : [];
@@ -937,10 +937,10 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
     }
 
     if (role === "consequence") {
-      return "→ Теряется доверие и решения откладываются\n→ Контент дочитывают хуже, чем могли бы\n→ Вы тратите больше времени при том же результате";
+      return "→ Подписчики читают, но не доходят до действия и не возвращаются к материалу\n→ Экспертность воспринимается слабее из-за нечеткой логики подачи\n→ Команда тратит больше времени, а результат по отклику остается нестабильным";
     }
 
-    return "→ Покажите один ключевой шаг без воды\n→ Добавьте конкретику: кейс, цифру или ситуацию\n→ Закройте слайд простым действием для читателя";
+    return "→ Покажите одну ключевую мысль и сразу добавьте практический контекст\n→ Подкрепите тезис фактом: цифрой, ситуацией или коротким кейсом\n→ Закройте слайд действием, которое читатель может сделать прямо сейчас";
   }
 
   if (role === "example") {

@@ -2206,6 +2206,32 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           </details>
 
           <div className="mobile-status-pill">{status}</div>
+          <div className="mobile-status-actions" aria-label="Быстрые действия мобильного редактора">
+            <button
+              type="button"
+              className={`mobile-status-action ${mobileToolTab === "post" ? "active" : ""}`}
+              onClick={() => setMobileToolTab("post")}
+              disabled={generationLocked}
+            >
+              Пост
+            </button>
+            <button
+              type="button"
+              className={`mobile-status-action ${mobileToolTab === "text" ? "active" : ""}`}
+              onClick={() => setMobileToolTab("text")}
+              disabled={generationLocked}
+            >
+              Текст
+            </button>
+            <button
+              type="button"
+              className={`mobile-status-action ${mobileToolTab === "templates" ? "active" : ""}`}
+              onClick={() => setMobileToolTab("templates")}
+              disabled={generationLocked}
+            >
+              Шаблон
+            </button>
+          </div>
 
           <section className="mobile-canvas-zone" ref={mobileCanvasHostRef}>
             <CanvasEditor

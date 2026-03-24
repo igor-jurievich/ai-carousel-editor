@@ -89,7 +89,11 @@ const WEAK_ROLE_TITLE_PATTERNS: RegExp[] = [
   /^что\s+изменится,\s*если\s+оставить\s+как\s+есть\??$/iu,
   /^готов[а-яё]*\s+объединить\s+усилия\??$/iu,
   /^пора\s+работать\s+как\s+одна\s+команда\??$/iu,
-  /^вместе\s+тестировать\s+новые\s+подходы\??$/iu
+  /^вместе\s+тестировать\s+новые\s+подходы\??$/iu,
+  /^как\s+переформулировать\s+мысль\??$/iu,
+  /^всё\s+держится\s+на\s+отдельных\s+звеньях\??$/iu,
+  /^разные\s+цели\s+—?\s*слепые\s+зоны\??$/iu,
+  /^что\s+теряет\s+бизнес\s+из[-\s]за\s+разногласий\??$/iu
 ];
 
 function resolveModelCandidates() {
@@ -466,9 +470,11 @@ function buildUserPrompt(
     "For fields that are not used by the current type, return empty string \"\" or empty array [].",
     "Tone: vivid, social-native, high signal, no bureaucratic wording.",
     "Each slide should carry a strong standalone idea with natural spoken Russian.",
-    "Bullets must be concise but meaningful: 1 short sentence each, 2-4 bullets, include concrete detail instead of generic slogans.",
+    "Bullets must be concise but meaningful: 2-4 bullets, each ~8-16 words with concrete detail instead of generic slogans.",
+    "For problem/amplify/consequence/solution include at least one concrete symptom, cost, or action in bullets.",
     "Keep wording topic-specific. Avoid universal sales jargon if topic is not sales-related.",
     "Avoid stale templates like «в теме ...», «одна ошибка ...», «где ломается поток ...».",
+    "Avoid generic headings like «Что делать по шагам», «Что это значит для вас», «Что изменится, если оставить как есть».",
     "Ban phrases: «в современном мире», «важно понимать», «ключ к успеху».",
     ...variantRules,
     "Avoid title collisions and duplicated words inside one line.",
@@ -1334,9 +1340,9 @@ function normalizeSlideByType(
           ? rawTitle
           : "") || buildRoleTitleFallback("problem", topic),
       bullets: normalizeBullets(safe.bullets, [
-        "Формулировка звучит слишком общей и не цепляет с первых строк.",
-        "Тема есть, но человеку непонятно, какую пользу он получит дальше.",
-        "Сильная мысль теряется в длинных фразах и лишних пояснениях."
+        "Читатель видит общие фразы и не понимает, что делать именно ему.",
+        "Польза заявлена, но нет конкретного результата или понятного критерия успеха.",
+        "Первые экраны перегружены, поэтому важная мысль теряется еще до сути."
       ])
     };
   }
@@ -1350,9 +1356,9 @@ function normalizeSlideByType(
           ? rawTitle
           : "") || buildRoleTitleFallback("amplify", topic),
       bullets: normalizeBullets(safe.bullets, [
-        "Просмотры есть, но сохранений и пересылок почти не появляется.",
-        "Часть аудитории не доходит до сути и теряет интерес по дороге.",
-        "На контент уходит время, а результат остается неровным."
+        "Когда смысл неясен на старте, до финальных слайдов доходит только часть аудитории.",
+        "Алгоритм видит слабые досмотры, и следующие публикации получают меньше охвата.",
+        "Вы тратите время на контент, который не превращается в диалоги и входящие."
       ])
     };
   }
@@ -1371,9 +1377,9 @@ function normalizeSlideByType(
     return {
       type: "consequence",
       bullets: normalizeBullets(safe.bullets, [
-        "Аудитория листает дальше, не доходя до главного.",
-        "Экспертность считывается слабее, чем могла бы.",
-        "Контент есть, а системного эффекта по отклику нет."
+        "Даже сильная экспертиза выглядит как у всех, потому что не считывается отличимый фокус.",
+        "Подписчик уходит без действия: не сохраняет, не пишет и не возвращается к публикации.",
+        "Команда выгорает: усилий много, а предсказуемого результата по отклику мало."
       ])
     };
   }
@@ -1394,9 +1400,9 @@ function normalizeSlideByType(
     return {
       type: "solution",
       bullets: normalizeBullets(safe.bullets, [
-        "Держите одну мысль на слайд, чтобы взгляд не распадался.",
-        "Подкрепляйте тезис фактом, мини-примером или короткой цифрой.",
-        "В конце оставляйте простой следующий шаг без лишнего давления."
+        "Начинайте с боли в одном предложении и сразу показывайте понятный выигрыш для читателя.",
+        "На каждом слайде добавляйте факт: цифру, ситуацию из практики или мини-кейс.",
+        "Закрывайте блок действием: вопрос, чек-поинт или шаг, который легко сделать сразу."
       ])
     };
   }
@@ -1481,19 +1487,19 @@ function buildRoleTitleFallback(role: CarouselSlideRole, topic: string) {
   const focus = buildTopicFocus(topic);
 
   if (role === "problem") {
-    return trimToWordBoundary(`Где в ${focus} читатель теряет интерес`, 80);
+    return trimToWordBoundary(`Почему ${focus} не цепляет с первого экрана`, 80);
   }
 
   if (role === "amplify") {
-    return trimToWordBoundary(`Почему это бьёт по результату сильнее, чем кажется`, 80);
+    return trimToWordBoundary(`Что в ${focus} усиливает просадку`, 80);
   }
 
   if (role === "mistake") {
-    return trimToWordBoundary(`Миф про ${focus}, который тормозит рост`, 92);
+    return trimToWordBoundary(`Незаметный просчет в ${focus}, который режет результат`, 92);
   }
 
   if (role === "shift") {
-    return trimToWordBoundary(`Поворот, после которого ${focus} начинает работать`, 92);
+    return trimToWordBoundary(`Как повернуть ${focus}, чтобы появился отклик`, 92);
   }
 
   return trimToWordBoundary(`Как усилить ${focus} на практике`, 84);
@@ -1530,7 +1536,7 @@ function buildHookFallbackTitle(topic: string) {
     `Как усилить ${topicFocus} так, чтобы дочитывали до конца`,
     `Что в ${topicFocus} реально цепляет с первого экрана`,
     `Сильный вход в ${topicFocus}: фраза, которая удерживает внимание`,
-    `Где в ${topicFocus} лежит быстрый рычаг роста отклика`
+    `Быстрый рычаг в ${topicFocus}, который усиливает отклик`
   ];
   return trimToWordBoundary(pickVariantByTopic(topicFocus, variants), 72);
 }
