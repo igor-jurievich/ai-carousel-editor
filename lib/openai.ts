@@ -70,6 +70,7 @@ const BANNED_TEMPLATE_PATTERNS: RegExp[] = [
   /\bважно\s+понимать\b/iu,
   /\bключ\s+к\s+успеху\b/iu,
   /\bгде\s+ломается\s+поток\b/iu,
+  /\bпо\s+теме\b/iu,
   /\bв\s+теме\b/iu,
   /\bразбор\s+под\s+ваш\s+кейс\b/iu
 ];
@@ -687,14 +688,28 @@ function applyFinalCopyPolish(
   if (hookIndex >= 0) {
     const hook = nextSlides[hookIndex];
     if (hook?.type === "hook") {
-      const candidates = buildHookCandidates(topic, options);
-      const currentScore = scoreHookCandidate(hook.title, hook.subtitle);
-      const best = pickBestHookCandidate(candidates);
-      const bestScore = best ? scoreHookCandidate(best.title, best.subtitle) : -1;
+      const normalizedTitle = sanitizeTitleValue(hook.title, 84);
+      const normalizedSubtitle = sanitizeCopyText(normalizeText(hook.subtitle, 138), 132);
+      const combinedHook = `${normalizedTitle} ${normalizedSubtitle}`.trim();
+      const shouldRepairHook =
+        !normalizedTitle ||
+        startsWithGenericMistakeLead(normalizedTitle) ||
+        hasLegacyTemplatePhrase(combinedHook) ||
+        BANNED_TEMPLATE_PATTERNS.some((pattern) => pattern.test(combinedHook));
 
-      if (best && (currentScore < 2 || bestScore > currentScore + 2)) {
-        hook.title = best.title;
-        hook.subtitle = best.subtitle;
+      if (shouldRepairHook) {
+        const candidates = buildHookCandidates(topic, options);
+        const best = pickBestHookCandidate(candidates);
+        if (!best) {
+          hook.title = buildHookFallbackTitle(topic);
+          hook.subtitle = normalizedSubtitle || buildHookFallbackSubtitle(topic);
+        } else {
+          hook.title = best.title;
+          hook.subtitle = best.subtitle;
+        }
+      } else {
+        hook.title = normalizedTitle;
+        hook.subtitle = normalizedSubtitle || buildHookFallbackSubtitle(topic);
       }
     }
   }
@@ -740,21 +755,21 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
   const isAdContext = /\b(реклам|клик|лендинг|заяв|лид|воронк)\b/iu.test(normalizedTopic);
   const isCallContext = /\b(звон|созвон|переговор|клиент\s+пропал)\b/iu.test(normalizedTopic);
   const goalCue = normalizeText(options?.goal ?? "", 30).toLowerCase();
+  const isQuestionAnchor = /^(как|почему|зачем|что|когда|где)\b/iu.test(topicAnchor);
 
   const firstTitle = isCallContext
     ? "Созвон прошёл. Почему дальше тишина?"
     : isAdContext
       ? "Клики есть. Почему заявок нет?"
-      : trimToWordBoundary(`Почему по теме «${topicAnchor}» нет результата?`, 72);
+      : isQuestionAnchor
+        ? trimToWordBoundary(topicAnchor.replace(/[.?!…]+$/u, "") + "?", 72)
+        : trimToWordBoundary(`${upperFirst(topicAnchor)}: где теряется результат`, 72);
 
   const firstSubtitle = isCallContext
     ? "Разберём, какая фраза ломает доверие в первые 2 минуты."
     : isAdContext
       ? "Покажу, где после клика теряется доверие и деньги."
-      : trimToWordBoundary(
-          `Покажу 3 точки, где обычно теряется отклик по теме «${topicAnchor}».`,
-          132
-        );
+      : "Разберём 3 узких места и соберём рабочий ход без шаблонных фраз.";
 
   const candidates = [
     {
@@ -1196,40 +1211,27 @@ function buildTopicFocus(topic: string) {
 function extractHookAnchor(topic: string) {
   const normalized = normalizeText(topic, 140)
     .replace(/[.?!…]+$/u, "")
-    .replace(/^как\s+/iu, "")
     .trim();
 
   if (!normalized) {
     return "вашей теме";
   }
 
-  const betweenMatch = normalized.match(/между\s+(.+)$/iu);
-  if (betweenMatch?.[1]) {
-    return trimToWordBoundary(betweenMatch[1].trim(), 40);
+  if (normalized.length <= 56) {
+    return normalized;
   }
 
-  const actionMatch = normalized.match(
-    /(объяснять|удерживать|повысить|увеличить|снизить|сделать|упаковать|привлечь|получать|наладить)\s+(.+)$/iu
-  );
-  if (actionMatch?.[2]) {
-    return trimToWordBoundary(actionMatch[2].trim(), 40);
+  const parts = normalized
+    .split(/[—–:]/u)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const firstPart = parts[0];
+  if (firstPart && firstPart.length >= 16) {
+    return trimToWordBoundary(firstPart, 56);
   }
 
-  const afterColon = normalized.split(/[—–:]/u).at(-1)?.trim();
-  if (afterColon && afterColon.length >= 8 && afterColon.length <= 56) {
-    return trimToWordBoundary(afterColon, 40);
-  }
-
-  const tokens = normalizeWordTokens(normalized)
-    .filter((token) => token.length >= 4 && !TOPIC_STOP_WORDS.has(token))
-    .slice(-3);
-
-  if (!tokens.length) {
-    return trimToWordBoundary(normalized, 40);
-  }
-
-  const anchor = tokens.slice(0, 3).join(" ");
-  return trimToWordBoundary(anchor, 40);
+  return trimToWordBoundary(normalized, 56);
 }
 
 function sanitizeCopyText(value: string, maxLength: number) {
@@ -1292,9 +1294,17 @@ function startsWithGenericMistakeLead(value: string) {
 }
 
 function hasLegacyTemplatePhrase(value: string) {
-  return /\b(в\s+теме|где\s+ломается\s+поток|где\s+теряется\s+внимание|что\s+это\s+стоит\s+в\s+теме|разбор\s+под\s+ваш\s+кейс)\b/iu.test(
+  return /\b(по\s+теме|в\s+теме|где\s+ломается\s+поток|где\s+теряется\s+внимание|что\s+это\s+стоит\s+в\s+теме|разбор\s+под\s+ваш\s+кейс)\b/iu.test(
     value
   );
+}
+
+function upperFirst(value: string) {
+  if (!value) {
+    return "";
+  }
+
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function sanitizeTitleValue(value: unknown, maxLength: number) {
