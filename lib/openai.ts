@@ -1972,7 +1972,6 @@ function buildGoalAwareCta(goal?: string) {
 
 function buildCtaVariants(goal?: string, topic?: string) {
   const normalizedGoal = normalizeText(goal, 40).toLowerCase();
-  const topicFocus = buildTopicFocus(topic ?? "");
 
   const aggressive = isLeadsGoal(normalizedGoal)
     ? "Напишите «ПЛАН» в директ — соберу структуру под ваши заявки."
@@ -1981,7 +1980,7 @@ function buildCtaVariants(goal?: string, topic?: string) {
   const soft = isFollowersGoal(normalizedGoal)
     ? "Сохраните пост и подпишитесь — разберу следующий кейс в этом формате."
     : trimToWordBoundary(
-        `Сохраните карусель и выберите первый шаг для «${topicFocus}».`,
+        "Сохраните карусель и выберите первый шаг, который внедрите сегодня.",
         210
       );
 
