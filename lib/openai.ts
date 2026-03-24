@@ -1981,7 +1981,7 @@ function buildCtaVariants(goal?: string, topic?: string) {
   const soft = isFollowersGoal(normalizedGoal)
     ? "Сохраните пост и подпишитесь — разберу следующий кейс в этом формате."
     : trimToWordBoundary(
-        `Сохраните карусель и проверьте, где в ${topicFocus} вы теряете отклик.`,
+        `Сохраните карусель и выберите первый шаг для «${topicFocus}».`,
         210
       );
 
