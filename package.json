@@ -9,7 +9,10 @@
     "typecheck": "tsc --noEmit",
     "smoke:generate": "node scripts/smoke-generate.mjs",
     "quality:generate": "node scripts/quality-gate.mjs",
-    "smoke:mobile": "node scripts/mobile-ui-smoke.mjs"
+    "quality:baseline:update": "node scripts/quality-baseline-update.mjs",
+    "quality:baseline:diff": "node scripts/quality-baseline-diff.mjs",
+    "smoke:mobile": "node scripts/mobile-ui-smoke.mjs",
+    "smoke:export": "node scripts/export-smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

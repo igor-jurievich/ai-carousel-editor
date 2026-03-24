@@ -50,14 +50,36 @@ jobs:
       - name: Mobile UI smoke
         run: SMOKE_BASE_URL=http://127.0.0.1:3000 npm run smoke:mobile
 
-      - name: API quality gate (requires OPENAI key)
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
+      - name: Export smoke
+        run: EXPORT_SMOKE_BASE_URL=http://127.0.0.1:3000 npm run smoke:export
+
+      - name: API quality gate quick (PR, requires OPENAI key)
+        if: ${{ secrets.OPENAI_API_KEY != '' && github.event_name == 'pull_request' }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           QUALITY_BASE_URL: http://127.0.0.1:3000
           QUALITY_TOPICS_LIMIT: 2
           QUALITY_RUNS: 1
         run: npm run quality:generate
+
+      - name: API quality gate full matrix (main/manual, requires OPENAI key)
+        if: ${{ secrets.OPENAI_API_KEY != '' && github.event_name != 'pull_request' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QUALITY_BASE_URL: http://127.0.0.1:3000
+          QUALITY_TOPICS_LIMIT: 5
+          QUALITY_RUNS: 1
+        run: npm run quality:generate
+
+      - name: Quality baseline diff
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        env:
+          QUALITY_REPORT_PATH: test-results/quality-gate-latest.json
+          QUALITY_BASELINE_PATH: quality/quality-baseline.json
+          QUALITY_ALLOWED_FAILURE_DELTA: 1
+          QUALITY_ALLOWED_FAILURE_RATE_DELTA: 0.03
+          QUALITY_ALLOWED_CATEGORY_DELTA: 1
+        run: npm run quality:baseline:diff
 
       - name: Upload reports
         if: always()

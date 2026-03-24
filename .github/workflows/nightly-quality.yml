@@ -32,10 +32,24 @@ jobs:
           QUALITY_RUNS: 1
         run: npm run quality:generate
 
+      - name: Quality baseline diff
+        env:
+          QUALITY_REPORT_PATH: test-results/quality-gate-latest.json
+          QUALITY_BASELINE_PATH: quality/quality-baseline.json
+          QUALITY_ALLOWED_FAILURE_DELTA: 2
+          QUALITY_ALLOWED_FAILURE_RATE_DELTA: 0.05
+          QUALITY_ALLOWED_CATEGORY_DELTA: 2
+        run: npm run quality:baseline:diff
+
       - name: Production mobile smoke
         env:
           SMOKE_BASE_URL: https://ai-carousel-editor.vercel.app
         run: npm run smoke:mobile
+
+      - name: Production export smoke
+        env:
+          EXPORT_SMOKE_BASE_URL: https://ai-carousel-editor.vercel.app
+        run: npm run smoke:export
 
       - name: Upload reports
         if: always()

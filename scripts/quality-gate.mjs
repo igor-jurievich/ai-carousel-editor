@@ -46,6 +46,23 @@ const WEAK_TITLE_PATTERNS = [
 const ACTION_VERB_RE =
   /(?:^|[^\p{L}])(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите|подпишитесь|выберите)(?=$|[^\p{L}])/iu;
 
+const FAILURE_CATEGORY_ORDER = [
+  "slides_shape",
+  "flow_mismatch",
+  "hook_quality",
+  "topic_alignment",
+  "weak_title",
+  "duplicate_title",
+  "banned_phrase",
+  "thin_bullets",
+  "short_title",
+  "example_quality",
+  "cta_quality",
+  "project_meta",
+  "network",
+  "other"
+];
+
 const TOPIC_STOP_WORDS = new Set([
   "как",
   "что",
@@ -85,6 +102,77 @@ function parseCsvSubset(raw, allowed) {
     .filter((item) => allowed.includes(item));
 
   return picked.length ? picked : allowed;
+}
+
+function classifyFailure(error) {
+  const normalized = normalize(error).toLowerCase();
+
+  if (normalized.includes("slides length")) {
+    return "slides_shape";
+  }
+
+  if (normalized.includes("expected type")) {
+    return "flow_mismatch";
+  }
+
+  if (normalized.includes("hook starts") || normalized.includes("hook is missing")) {
+    return "hook_quality";
+  }
+
+  if (normalized.includes("weakly aligned")) {
+    return "topic_alignment";
+  }
+
+  if (normalized.includes("weak title")) {
+    return "weak_title";
+  }
+
+  if (normalized.includes("duplicate title")) {
+    return "duplicate_title";
+  }
+
+  if (normalized.includes("contains banned phrase")) {
+    return "banned_phrase";
+  }
+
+  if (normalized.includes("bullets are too short") || normalized.includes("has less than 2 bullets")) {
+    return "thin_bullets";
+  }
+
+  if (normalized.includes("title is too short")) {
+    return "short_title";
+  }
+
+  if (normalized.includes("example slide")) {
+    return "example_quality";
+  }
+
+  if (normalized.includes("cta ")) {
+    return "cta_quality";
+  }
+
+  if (normalized.includes("project.format mismatch") || normalized.includes("project.theme mismatch")) {
+    return "project_meta";
+  }
+
+  if (normalized.startsWith("http")) {
+    return "network";
+  }
+
+  return "other";
+}
+
+function buildFailureSummary(failures) {
+  const summary = {};
+
+  for (const failure of failures) {
+    for (const error of failure.errors) {
+      const category = classifyFailure(error);
+      summary[category] = (summary[category] || 0) + 1;
+    }
+  }
+
+  return summary;
 }
 
 function countWords(value) {
@@ -357,6 +445,7 @@ async function main() {
     formats: ACTIVE_FORMATS,
     themes: ACTIVE_THEMES,
     failed: failures.length,
+    failureSummary: buildFailureSummary(failures),
     samples,
     failures
   };
@@ -370,6 +459,21 @@ async function main() {
   process.stdout.write(`base: ${BASE_URL}\n`);
   process.stdout.write(`cases: ${total}\n`);
   process.stdout.write(`failed: ${failures.length}\n`);
+  if (Object.keys(report.failureSummary).length > 0) {
+    process.stdout.write("failure summary:\n");
+    for (const key of FAILURE_CATEGORY_ORDER) {
+      if (!report.failureSummary[key]) {
+        continue;
+      }
+      process.stdout.write(`  ${key}: ${report.failureSummary[key]}\n`);
+    }
+    for (const [key, value] of Object.entries(report.failureSummary)) {
+      if (FAILURE_CATEGORY_ORDER.includes(key)) {
+        continue;
+      }
+      process.stdout.write(`  ${key}: ${value}\n`);
+    }
+  }
   process.stdout.write(`report: ${outputPath}\n`);
 
   if (samples.length > 0) {
