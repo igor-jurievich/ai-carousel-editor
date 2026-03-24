@@ -741,7 +741,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     updateElementBySlide(activeSlide.id, elementId, updater, options);
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (options?: { openPostTool?: boolean; source?: "editor" | "mobile" }) => {
     if (isGenerating) {
       return;
     }
@@ -771,6 +771,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     const requestId = generateRequestRef.current + 1;
     generateRequestRef.current = requestId;
     const requestedSlidesCount = clampSlidesCount(slidesCount);
+    const source = options?.source ?? "editor";
+    const openPostTool = Boolean(options?.openPostTool);
 
     try {
       setIsGenerating(true);
@@ -780,10 +782,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       trackEvent({
         name: "generate_started",
         payload: {
-          source: "editor",
+          source,
           format: slideFormat,
           slidesCount: requestedSlidesCount,
-          promptVariant
+          promptVariant,
+          openPostTool
         }
       });
       const controller = new AbortController();
@@ -853,20 +856,27 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       trackEvent({
         name: "generate_succeeded",
         payload: {
-          source: "editor",
+          source,
           format: slideFormat,
           slidesCount: nextSlides.length,
-          promptVariant: data.project?.promptVariant ?? "B"
+          promptVariant: data.project?.promptVariant ?? "B",
+          openPostTool
         }
       });
-      setStatus(`Создано ${nextSlides.length} слайдов в формате ${slideFormat}.`);
+      if (openPostTool && window.innerWidth <= MOBILE_BREAKPOINT) {
+        setMobileToolTab("post");
+        setStatus(`Создано ${nextSlides.length} слайдов. Открыта вкладка «Пост».`);
+      } else {
+        setStatus(`Создано ${nextSlides.length} слайдов в формате ${slideFormat}.`);
+      }
     } catch (error) {
       trackEvent({
         name: "generate_failed",
         payload: {
-          source: "editor",
+          source,
           format: slideFormat,
-          reason: error instanceof Error ? error.message.slice(0, 120) : "unknown"
+          reason: error instanceof Error ? error.message.slice(0, 120) : "unknown",
+          openPostTool
         }
       });
       if (requestId === generateRequestRef.current) {
@@ -2193,14 +2203,24 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                     ))}
                   </select>
                 </label>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={handleGenerate}
-                  disabled={generationLocked}
-                >
-                  {isGenerating ? "Генерирую..." : "Сгенерировать"}
-                </button>
+                <div className="mobile-generate-actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => void handleGenerate({ source: "mobile" })}
+                    disabled={generationLocked}
+                  >
+                    {isGenerating ? "Генерирую..." : "Сгенерировать"}
+                  </button>
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={() => void handleGenerate({ source: "mobile", openPostTool: true })}
+                    disabled={generationLocked}
+                  >
+                    {isGenerating ? "Подождите..." : "Сгенерировать + пост"}
+                  </button>
+                </div>
               </div>
             </div>
           </details>

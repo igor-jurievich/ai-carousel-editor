@@ -39,6 +39,24 @@ npm run build
 npm run start
 ```
 
+## Quality smoke
+
+```bash
+# API quality matrix (topics x formats x themes)
+npm run quality:generate
+```
+
+Параметры (опционально):
+
+- `QUALITY_BASE_URL` — URL приложения (по умолчанию `http://localhost:3000`)
+- `QUALITY_RUNS` — число прогонов матрицы (по умолчанию `1`)
+- `QUALITY_TIMEOUT_MS` — timeout одного запроса (по умолчанию `80000`)
+- `QUALITY_TOPICS_LIMIT` — ограничить число тем для быстрого прогона
+- `QUALITY_FORMATS` — форматы через запятую, например `1:1,4:5`
+- `QUALITY_THEMES` — темы через запятую, например `light,dark`
+
+Отчёт сохраняется в `test-results/quality-gate-latest.json`.
+
 ## Environment variables
 
 Создайте `.env.local` на основе `.env.example`:
