@@ -1,0 +1,25 @@
+# Dependencies
+node_modules
+
+# Build/runtime artifacts
+.next
+.next*
+.next-dev
+.next-dev*
+dist
+coverage
+tsconfig.tsbuildinfo
+
+# Test artifacts
+playwright-report
+test-results
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Env files
+.env
+.env.local
+.env.*
