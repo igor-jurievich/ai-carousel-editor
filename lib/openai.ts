@@ -1440,7 +1440,7 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
     : isAdContext
       ? "Покажу, где после клика теряется доверие и деньги."
       : trimToWordBoundary(
-          `Покажу, где в «${buildCompactTopicFocus(topic, 34)}» теряется отклик и какой шаг возвращает интерес.`,
+          `Покажу, как раскрыть «${buildCompactTopicFocus(topic, 34)}» так, чтобы люди дочитывали и сохраняли.`,
           132
         );
 
@@ -1450,14 +1450,14 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
       subtitle: trimToWordBoundary(firstSubtitle, 132)
     },
     {
-      title: trimToWordBoundary(`Почему в «${buildCompactTopicFocus(topic, 30)}» отклик слабеет?`, 72),
+      title: trimToWordBoundary(`Почему «${buildCompactTopicFocus(topic, 30)}» пролистывают слишком быстро?`, 72),
       subtitle: trimToWordBoundary(
-        `Разберём, какой участок в «${buildCompactTopicFocus(topic, 30)}» обычно режет результат.`,
+        "Разберём, какая формулировка убивает интерес в первых слайдах и чем её заменить.",
         132
       )
     },
     {
-      title: trimToWordBoundary(`Где в «${buildCompactTopicFocus(topic, 28)}» теряется результат?`, 72),
+      title: trimToWordBoundary(`Как сделать «${buildCompactTopicFocus(topic, 28)}» понятным и цепляющим?`, 72),
       subtitle: trimToWordBoundary(
         goalCue.includes("заяв")
           ? "Соберём структуру, которая доводит до заявки, а не до пролистывания."

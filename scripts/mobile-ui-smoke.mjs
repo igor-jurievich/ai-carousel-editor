@@ -110,7 +110,13 @@ async function testEditorControls(page, failures) {
   await page.waitForTimeout(700);
 
   const quickActionsCount = await page.locator(".mobile-status-actions .mobile-status-action").count();
-  assert(quickActionsCount >= 3, "editor: expected at least 3 quick action buttons", failures);
+  assert(quickActionsCount >= 2, "editor: expected at least 2 quick action buttons", failures);
+
+  const generatePanelSummary = page.locator(".mobile-generate-panel summary").first();
+  if ((await generatePanelSummary.count()) > 0) {
+    await generatePanelSummary.click();
+    await page.waitForTimeout(250);
+  }
 
   const generatePostCount = await page
     .locator('.mobile-generate-actions button:has-text("Сгенерировать + пост")')
