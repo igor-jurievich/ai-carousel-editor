@@ -4289,3 +4289,40 @@ button:disabled {
     padding: 0 8px !important;
   }
 }
+
+/* Wave 2 mobile finish overrides */
+@media (max-width: 768px) {
+  .mobile-slide-tools {
+    width: 100% !important;
+    max-width: 100% !important;
+    justify-content: flex-start !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-inline: 4px;
+  }
+
+  .mobile-slide-tools::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-slide-tool {
+    flex: 0 0 auto !important;
+  }
+
+  .mobile-tool-sheet-v2 {
+    max-height: min(60dvh, 560px) !important;
+  }
+
+  .mobile-tool-sheet-v2 .mobile-tool-sheet-body {
+    max-height: calc(min(60dvh, 560px) - 78px) !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .mobile-slide-tools-hint {
+    display: none !important;
+  }
+}

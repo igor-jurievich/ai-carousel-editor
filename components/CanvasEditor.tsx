@@ -391,7 +391,7 @@ export function CanvasEditor({
           )}
           {previewMode ? null : (
             <p className="mobile-slide-tools-hint">
-              Листайте свайпом или кнопками ←/→. Кнопка <strong>«Слайд»</strong> добавляет новый слайд.
+              Листайте свайпом или кнопками ←/→. Кнопка <strong>«Добавить»</strong> создаёт новый слайд.
             </p>
           )}
         </div>

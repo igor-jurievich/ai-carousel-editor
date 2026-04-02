@@ -2265,6 +2265,17 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           <div className="mobile-status-actions" aria-label="Быстрые действия мобильного редактора">
             <button
               type="button"
+              className="mobile-status-action"
+              onClick={() => {
+                openMobileGeneratePanel(true);
+                setStatus("Введите тему и нажмите «Сгенерировать + пост».");
+              }}
+              disabled={generationLocked}
+            >
+              Новая + пост
+            </button>
+            <button
+              type="button"
               className={`mobile-status-action ${mobileToolTab === "post" ? "active" : ""}`}
               onClick={() => setMobileToolTab("post")}
               disabled={generationLocked}
@@ -2286,17 +2297,6 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               disabled={generationLocked}
             >
               Шаблон
-            </button>
-            <button
-              type="button"
-              className="mobile-status-action"
-              onClick={() => {
-                openMobileGeneratePanel(true);
-                setStatus("Введите тему и нажмите «Сгенерировать + пост».");
-              }}
-              disabled={generationLocked}
-            >
-              Новая+пост
             </button>
           </div>
 
