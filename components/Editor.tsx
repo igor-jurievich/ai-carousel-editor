@@ -2296,7 +2296,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               }}
               disabled={generationLocked}
             >
-              Новая + пост
+              Новая+пост
             </button>
           </div>
 
