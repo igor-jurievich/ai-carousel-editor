@@ -337,26 +337,30 @@ export function CanvasEditor({
           {previewMode ? null : (
             <div className="mobile-slide-tools" aria-label="Управление слайдами">
               <MobileIconButton
-                icon="plus"
+                icon="layers"
                 title="Добавить слайд"
+                label="Слайд"
                 onClick={() => onInsertSlideAt(activeSlideIndex + 1, "text")}
                 disabled={disabled}
               />
               <MobileIconButton
                 icon="templates"
                 title="Выбрать шаблон"
+                label="Шаблон"
                 onClick={onOpenTemplateModal}
                 disabled={disabled}
               />
               <MobileIconButton
                 icon="layers"
                 title="Добавить текстовый слой"
+                label="Текст"
                 onClick={() => onAddTextToSlide(activeSlide.id)}
                 disabled={disabled}
               />
               <MobileIconButton
                 icon="chevron-left"
                 title="Предыдущий слайд"
+                label="Назад"
                 onClick={() => {
                   if (canGoPrev) {
                     onSelectSlide(slides[activeSlideIndex - 1].id);
@@ -367,6 +371,7 @@ export function CanvasEditor({
               <MobileIconButton
                 icon="chevron-right"
                 title="Следующий слайд"
+                label="Вперёд"
                 onClick={() => {
                   if (canGoNext) {
                     onSelectSlide(slides[activeSlideIndex + 1].id);
@@ -377,6 +382,7 @@ export function CanvasEditor({
               <MobileIconButton
                 icon="trash"
                 title="Удалить слайд"
+                label="Удалить"
                 onClick={() => onDeleteSlide(activeSlide.id)}
                 disabled={slides.length <= 1 || disabled}
                 destructive
@@ -385,7 +391,7 @@ export function CanvasEditor({
           )}
           {previewMode ? null : (
             <p className="mobile-slide-tools-hint">
-              Листайте свайпом или кнопками ←/→. Кнопка <strong>+</strong> добавляет новый слайд.
+              Листайте свайпом или кнопками ←/→. Кнопка <strong>«Слайд»</strong> добавляет новый слайд.
             </p>
           )}
         </div>
@@ -684,12 +690,14 @@ function ToolButton({
 function MobileIconButton({
   icon,
   title,
+  label,
   onClick,
   destructive = false,
   disabled = false
 }: {
   icon: AppIconName;
   title: string;
+  label?: string;
   onClick: () => void;
   destructive?: boolean;
   disabled?: boolean;
@@ -699,6 +707,7 @@ function MobileIconButton({
       type="button"
       className={`mobile-slide-tool ${destructive ? "is-destructive" : ""}`}
       title={title}
+      aria-label={title}
       disabled={disabled}
       onClick={(event) => {
         event.stopPropagation();
@@ -711,6 +720,7 @@ function MobileIconButton({
       <span className="mobile-slide-tool-icon">
         <AppIcon name={icon} size={18} />
       </span>
+      {label ? <span className="mobile-slide-tool-label">{label}</span> : null}
     </button>
   );
 }

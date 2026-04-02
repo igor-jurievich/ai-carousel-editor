@@ -70,6 +70,18 @@ export default function GeneratePage() {
     });
   }, [previewSlides]);
 
+  const advancedFieldStyle = {
+    minWidth: 0,
+    width: "100%"
+  } as const;
+
+  const advancedInputStyle = {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box"
+  } as const;
+
   const handleGenerate = async () => {
     if (!canGenerate) {
       return;
@@ -208,7 +220,7 @@ export default function GeneratePage() {
               rows={4}
               maxLength={MAX_TOPIC_CHARS}
             />
-            <div className="field-row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <div className="field-row" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {PRESET_TOPICS.map((preset) => (
                 <button
                   key={preset}
@@ -225,38 +237,55 @@ export default function GeneratePage() {
             <details className="settings-card generate-advanced" style={{ marginTop: 12 }}>
               <summary className="generate-advanced-summary">Дополнительные настройки</summary>
               <div className="generate-advanced-grid">
-                <label className="field-label generate-advanced-field">
+                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
                   Ниша
-                  <input className="field" value={niche} onChange={(event) => setNiche(event.target.value)} />
+                  <input
+                    className="field"
+                    style={advancedInputStyle}
+                    value={niche}
+                    onChange={(event) => setNiche(event.target.value)}
+                  />
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
                   Целевая аудитория
                   <input
                     className="field"
+                    style={advancedInputStyle}
                     value={audience}
                     onChange={(event) => setAudience(event.target.value)}
                   />
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
                   Тон
-                  <select className="field" value={tone} onChange={(event) => setTone(event.target.value)}>
+                  <select
+                    className="field"
+                    style={advancedInputStyle}
+                    value={tone}
+                    onChange={(event) => setTone(event.target.value)}
+                  >
                     <option value="soft">Мягкий</option>
                     <option value="balanced">Сбалансированный</option>
                     <option value="sharp">Острый</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
                   Цель
-                  <select className="field" value={goal} onChange={(event) => setGoal(event.target.value)}>
+                  <select
+                    className="field"
+                    style={advancedInputStyle}
+                    value={goal}
+                    onChange={(event) => setGoal(event.target.value)}
+                  >
                     <option value="engagement">Вовлечение</option>
                     <option value="leads">Заявки</option>
                     <option value="warming">Прогрев</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
                   Формат
                   <select
                     className="field"
+                    style={advancedInputStyle}
                     value={format}
                     onChange={(event) => setFormat(event.target.value as SlideFormat)}
                   >
@@ -265,10 +294,11 @@ export default function GeneratePage() {
                     <option value="9:16">9:16</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
                   Тема
                   <select
                     className="field"
+                    style={advancedInputStyle}
                     value={theme}
                     onChange={(event) => setTheme(event.target.value as CarouselTemplateId)}
                   >
@@ -277,10 +307,11 @@ export default function GeneratePage() {
                     <option value="color">Цветная</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
                   Количество карточек
                   <select
                     className="field"
+                    style={advancedInputStyle}
                     value={slidesCount}
                     onChange={(event) => setSlidesCount(clampSlidesCount(Number(event.target.value)))}
                   >

@@ -2247,7 +2247,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onClick={() => setMobileToolTab("post")}
               disabled={generationLocked}
             >
-              Пост / подпись
+              Пост (AI)
             </button>
             <button
               type="button"
@@ -2477,7 +2477,15 @@ function prepareSlidesForExport(
   templateId: CarouselTemplateId,
   slideFormat: SlideFormat
 ) {
-  const themedSlides = applyTemplateToSlides(cloneSlides(sourceSlides), templateId, slideFormat);
+  const themedSlides = cloneSlides(sourceSlides).map((slide, index, items) =>
+    applyTemplateToSlide(
+      slide,
+      slide.templateId ?? templateId,
+      index,
+      items.length,
+      slideFormat
+    )
+  );
 
   return themedSlides.map((slide, index) => {
     if (slide.slideType !== "image_text") {
@@ -2494,7 +2502,7 @@ function prepareSlidesForExport(
         ...slide,
         slideType: "text"
       },
-      templateId,
+      slide.templateId ?? templateId,
       index,
       themedSlides.length,
       slideFormat

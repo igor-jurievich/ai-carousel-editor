@@ -4162,4 +4162,21 @@ button:disabled {
     font-size: 11px;
     line-height: 1.15;
   }
+
+  .mobile-slide-tool {
+    width: 58px !important;
+    height: 62px !important;
+    gap: 2px !important;
+    align-content: center !important;
+    justify-items: center !important;
+  }
+
+  .mobile-slide-tool-label {
+    display: block !important;
+    font-size: 10px;
+    line-height: 1.05;
+    font-weight: 700;
+    color: inherit;
+    letter-spacing: 0.01em;
+  }
 }

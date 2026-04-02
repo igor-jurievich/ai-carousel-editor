@@ -112,7 +112,9 @@ async function testEditorControls(page, failures) {
   const quickActionsCount = await page.locator(".mobile-status-actions .mobile-status-action").count();
   assert(quickActionsCount >= 3, "editor: expected at least 3 quick action buttons", failures);
 
-  const generatePostCount = await page.locator('button:has-text("Сгенерировать + пост")').count();
+  const generatePostCount = await page
+    .locator('.mobile-generate-actions button:has-text("Сгенерировать + пост")')
+    .count();
   assert(generatePostCount >= 1, "editor: missing mobile button 'Сгенерировать + пост'", failures);
 
   const sideInsertCount = await page.locator(".mobile-side-insert").count();
@@ -141,8 +143,20 @@ async function testGenerateAndOpenPostFlow(page, failures) {
   await page.waitForTimeout(500);
   await page.locator(".mobile-generate-panel summary").click();
   await page.locator(".mobile-generate-body textarea").fill("Тестовая тема для мобильного прогона");
-  await page.locator('button:has-text("Сгенерировать + пост")').click();
-  await page.waitForTimeout(700);
+  const generateResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/generate") && response.request().method() === "POST",
+    { timeout: 12000 }
+  );
+  await page.locator('.mobile-generate-actions button:has-text("Сгенерировать + пост")').click();
+  await generateResponse;
+  await page.waitForFunction(
+    () => {
+      const status = document.querySelector(".mobile-status-pill")?.textContent || "";
+      const title = document.querySelector(".mobile-tool-sheet-v2 h3")?.textContent || "";
+      return status.includes("Открыта вкладка «Пост»") || /Подпись к посту/i.test(title);
+    },
+    { timeout: 12000 }
+  );
 
   const statusText = (await page.locator(".mobile-status-pill").first().textContent()) || "";
   assert(
@@ -151,6 +165,7 @@ async function testGenerateAndOpenPostFlow(page, failures) {
     failures
   );
 
+  await page.locator(".mobile-tool-sheet-v2 h3").first().waitFor({ state: "visible", timeout: 12000 });
   const sheetTitle = await page.locator(".mobile-tool-sheet-v2 h3").first().textContent();
   assert(
     normalize(sheetTitle) === "Подпись к посту",

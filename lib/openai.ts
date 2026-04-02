@@ -114,6 +114,13 @@ const WEAK_ROLE_TITLE_PATTERNS: RegExp[] = [
   /^[\p{L}-]+\s+[\p{L}-]{4,}ть:\s+как\b/iu
 ];
 
+const WEAK_BULLET_PATTERNS: RegExp[] = [
+  /(?:^|[^\p{L}])(важно\s+понимать|нужно\s+просто|следует\s+помнить|в\s+целом|в\s+общем|как\s+правило)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(работайте\s+системно|держите\s+фокус|будьте\s+на\s+связи)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(улучшить|усилить|повысить)\s+(процесс|эффективность|результат)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(делать\s+контент|вести\s+соцсети|развивать\s+блог)\s*(?:регулярно)?(?=$|[^\p{L}])/iu
+];
+
 function resolveModelCandidates() {
   return [
     process.env.OPENAI_GENERATION_MODEL?.trim(),
@@ -158,7 +165,7 @@ export async function generateCarouselFromTopic(
         try {
           const response = await openai.responses.create({
             model,
-            temperature: 0.82,
+            temperature: 0.78,
             max_output_tokens: 2600,
             input: [
               {
@@ -184,6 +191,7 @@ export async function generateCarouselFromTopic(
                       "Avoid boilerplate phrases like «в теме ...», «где ломается поток», «что это стоит в теме».",
                       "Do not force the words «кейс», «разбор», «поток», «лиды» unless the topic needs them.",
                       "Avoid repeated words, broken compounds and malformed line fragments.",
+                      "For problem/amplify/solution bullets avoid abstract office wording like «работайте системно», «важно понимать», «улучшить процесс».",
                       "No clichés and no mechanical template substitutions.",
                       "Do not invent extra fields or extra slide types."
                     ].join(" ")
@@ -612,6 +620,7 @@ function buildUserPrompt(
     "Each slide should carry a strong standalone idea with natural spoken Russian.",
     "Bullets must be concise but meaningful: 3-4 bullets when natural, each ~9-18 words with concrete detail instead of generic slogans.",
     "For problem/amplify/consequence/solution include at least one concrete symptom, cost, or action in bullets.",
+    "Avoid abstract bullets like «важно понимать», «нужно просто», «улучшить процесс» without a concrete situation.",
     "Keep wording topic-specific. Avoid universal sales jargon if topic is not sales-related.",
     "Do not use broken hook syntax like «эксперту повысить: ...» or «психологу объяснять: ...».",
     ...buildDomainPromptAddendum(topicDomain),
@@ -888,6 +897,8 @@ function applyFinalCopyPolish(
       const combinedHook = `${normalizedTitle} ${normalizedSubtitle}`.trim();
       const shouldRepairHook =
         !normalizedTitle ||
+        hasDanglingTail(normalizedTitle) ||
+        isHookEchoingTopic(normalizedTitle, topic) ||
         hasAwkwardHookTitle(normalizedTitle) ||
         startsWithGenericMistakeLead(normalizedTitle) ||
         hasLegacyTemplatePhrase(combinedHook) ||
@@ -910,6 +921,11 @@ function applyFinalCopyPolish(
       } else {
         hook.title = normalizedTitle;
         hook.subtitle = normalizedSubtitle || buildHookFallbackSubtitle(topic);
+      }
+
+      const anchoredHook = `${hook.title} ${hook.subtitle}`.trim();
+      if (!hasPrimaryTopicAnchor(anchoredHook, topic)) {
+        hook.title = addTopicAnchorToTitle(hook.title, buildTopicAnchorLabel(topic));
       }
     }
   }
@@ -980,6 +996,8 @@ function enforceSlideQuality(
       );
       const weakTitle =
         !title ||
+        hasDanglingTail(title) ||
+        isHookEchoingTopic(title, topic) ||
         hasAwkwardHookTitle(title) ||
         startsWithGenericMistakeLead(title) ||
         hasLegacyTemplatePhrase(title) ||
@@ -997,14 +1015,14 @@ function enforceSlideQuality(
       const problemFallback = fallback as Extract<CarouselOutlineSlide, { type: "problem" }>;
       const title = sanitizeTitleValue(problem.title, 80);
       const bullets = normalizeBullets(problem.bullets, problemFallback.bullets);
-      const denseBullets = bullets.filter((item) => countWords(item) >= 4);
+      const strongBullets = pickStrongBullets(bullets, problemFallback.bullets);
       return {
         type: "problem",
         title:
           !title || startsWithGenericMistakeLead(title) || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
             ? buildRoleTitleFallback("problem", topic, options)
             : title,
-        bullets: (denseBullets.length >= 2 ? denseBullets : problemFallback.bullets).slice(0, 4)
+        bullets: strongBullets
       };
     }
 
@@ -1013,14 +1031,14 @@ function enforceSlideQuality(
       const amplifyFallback = fallback as Extract<CarouselOutlineSlide, { type: "amplify" }>;
       const title = sanitizeTitleValue(amplify.title, 80);
       const bullets = normalizeBullets(amplify.bullets, amplifyFallback.bullets);
-      const denseBullets = bullets.filter((item) => countWords(item) >= 4);
+      const strongBullets = pickStrongBullets(bullets, amplifyFallback.bullets);
       return {
         type: "amplify",
         title:
           !title || startsWithGenericMistakeLead(title) || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
             ? buildRoleTitleFallback("amplify", topic, options)
             : title,
-        bullets: (denseBullets.length >= 2 ? denseBullets : amplifyFallback.bullets).slice(0, 4)
+        bullets: strongBullets
       };
     }
 
@@ -1044,10 +1062,10 @@ function enforceSlideQuality(
       const consequence = current as Extract<CarouselOutlineSlide, { type: "consequence" }>;
       const consequenceFallback = fallback as Extract<CarouselOutlineSlide, { type: "consequence" }>;
       const bullets = normalizeBullets(consequence.bullets, consequenceFallback.bullets);
-      const denseBullets = bullets.filter((item) => countWords(item) >= 4);
+      const strongBullets = pickStrongBullets(bullets, consequenceFallback.bullets);
       return {
         type: "consequence",
-        bullets: (denseBullets.length >= 2 ? denseBullets : consequenceFallback.bullets).slice(0, 4)
+        bullets: strongBullets
       };
     }
 
@@ -1071,10 +1089,10 @@ function enforceSlideQuality(
       const solution = current as Extract<CarouselOutlineSlide, { type: "solution" }>;
       const solutionFallback = fallback as Extract<CarouselOutlineSlide, { type: "solution" }>;
       const bullets = normalizeBullets(solution.bullets, solutionFallback.bullets);
-      const denseBullets = bullets.filter((item) => countWords(item) >= 4);
+      const strongBullets = pickStrongBullets(bullets, solutionFallback.bullets);
       return {
         type: "solution",
-        bullets: (denseBullets.length >= 2 ? denseBullets : solutionFallback.bullets).slice(0, 4)
+        bullets: strongBullets
       };
     }
 
@@ -1144,7 +1162,13 @@ function evaluateSlideQuality(
 
     if (role === "hook") {
       const hook = slide as Extract<CarouselOutlineSlide, { type: "hook" }>;
-      if (countWords(hook.title) < 4 || countWords(hook.subtitle) < 5 || isWeakRoleTitle(hook.title)) {
+      if (
+        countWords(hook.title) < 4 ||
+        countWords(hook.subtitle) < 5 ||
+        isWeakRoleTitle(hook.title) ||
+        isHookEchoingTopic(hook.title, topic) ||
+        hasDanglingTail(hook.title)
+      ) {
         reasons.push("weak hook");
       }
       continue;
@@ -1161,6 +1185,9 @@ function evaluateSlideQuality(
       if (!hasDetailedBullet) {
         reasons.push("low detail on problem");
       }
+      if (problem.bullets.some((item) => isWeakBulletText(item))) {
+        reasons.push("low detail on problem");
+      }
       continue;
     }
 
@@ -1173,6 +1200,9 @@ function evaluateSlideQuality(
 
       const hasDetailedBullet = amplify.bullets.some((item) => countWords(item) >= 5);
       if (!hasDetailedBullet) {
+        reasons.push("low detail on amplify");
+      }
+      if (amplify.bullets.some((item) => isWeakBulletText(item))) {
         reasons.push("low detail on amplify");
       }
       continue;
@@ -1197,6 +1227,9 @@ function evaluateSlideQuality(
       if (!hasDetailedBullet) {
         reasons.push("low detail on consequence");
       }
+      if (consequence.bullets.some((item) => isWeakBulletText(item))) {
+        reasons.push("low detail on consequence");
+      }
       continue;
     }
 
@@ -1217,6 +1250,9 @@ function evaluateSlideQuality(
 
       const hasDetailedBullet = solution.bullets.some((item) => countWords(item) >= 5);
       if (!hasDetailedBullet) {
+        reasons.push("low detail on solution");
+      }
+      if (solution.bullets.some((item) => isWeakBulletText(item))) {
         reasons.push("low detail on solution");
       }
       continue;
@@ -1252,6 +1288,35 @@ function hasActionVerb(value: string) {
   );
 }
 
+function isWeakBulletText(value: string) {
+  const normalized = sanitizeCopyText(normalizeText(value, 140), 132).toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  if (hasLegacyTemplatePhrase(normalized)) {
+    return true;
+  }
+
+  return WEAK_BULLET_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function pickStrongBullets(
+  bullets: string[],
+  fallback: string[],
+  minimum = 2
+) {
+  const strong = bullets
+    .filter((item) => countWords(item) >= 4)
+    .filter((item) => !isWeakBulletText(item));
+
+  if (strong.length >= minimum) {
+    return strong.slice(0, 4);
+  }
+
+  return fallback.slice(0, 4);
+}
+
 function isWeakRoleTitle(value: string) {
   const normalized = sanitizeTitleValue(value, 96).toLowerCase();
   if (!normalized) {
@@ -1263,12 +1328,19 @@ function isWeakRoleTitle(value: string) {
 
 function buildHookCandidates(topic: string, options?: GenerationOptions) {
   const normalizedTopic = normalizeText(topic, 220).toLowerCase();
+  const cleanTopic = normalizeText(topic, 96)
+    .replace(/[.?!…]+$/u, "")
+    .trim();
   const topicAnchor = extractHookAnchor(topic);
   const topicDomain = resolveTopicDomain(topic, options);
   const isAdContext = /\b(реклам|клик|лендинг|заяв|лид|воронк)\b/iu.test(normalizedTopic);
   const isCallContext = /\b(звон|созвон|переговор|клиент\s+пропал)\b/iu.test(normalizedTopic);
   const goalCue = normalizeText(options?.goal ?? "", 30).toLowerCase();
-  const isQuestionAnchor = /^(как|почему|зачем|что|когда|где)\b/iu.test(topicAnchor);
+  const safeQuestionAnchor = removeDanglingTail(trimToWordBoundary(cleanTopic || topicAnchor, 74));
+  const canUseQuestionAnchor =
+    !!safeQuestionAnchor &&
+    countWords(safeQuestionAnchor) >= 4 &&
+    !hasAwkwardHookTitle(safeQuestionAnchor);
   const tensionTitle =
     topicDomain === "education"
       ? "Уроки идут, а прогресса не видно: где узкое место?"
@@ -1290,15 +1362,21 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
     ? "Созвон прошёл. Почему дальше тишина?"
     : isAdContext
       ? "Клики есть. Почему заявок нет?"
-      : isQuestionAnchor
-        ? trimToWordBoundary(topicAnchor.replace(/[.?!…]+$/u, "") + "?", 72)
-        : trimToWordBoundary(`${upperFirst(topicAnchor)}: где теряется результат`, 72);
+      : canUseQuestionAnchor
+        ? trimToWordBoundary(
+            /[?]$/u.test(safeQuestionAnchor) ? safeQuestionAnchor : `${safeQuestionAnchor}?`,
+            72
+          )
+        : tensionTitle;
 
   const firstSubtitle = isCallContext
     ? "Разберём, какая фраза ломает доверие в первые 2 минуты."
     : isAdContext
       ? "Покажу, где после клика теряется доверие и деньги."
-      : "Разберём 3 узких места и соберём рабочий ход без шаблонных фраз.";
+      : trimToWordBoundary(
+          `Покажу, где в «${buildCompactTopicFocus(topic, 34)}» теряется отклик и какой шаг возвращает интерес.`,
+          132
+        );
 
   const candidates = [
     {
@@ -1306,14 +1384,14 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
       subtitle: trimToWordBoundary(firstSubtitle, 132)
     },
     {
-      title: trimToWordBoundary(tensionTitle, 72),
+      title: trimToWordBoundary(`Почему в «${buildCompactTopicFocus(topic, 30)}» отклик слабеет?`, 72),
       subtitle: trimToWordBoundary(
-        "Разберём, где именно теряется путь читателя от интереса к действию.",
+        `Разберём, какой участок в «${buildCompactTopicFocus(topic, 30)}» обычно режет результат.`,
         132
       )
     },
     {
-      title: "Где после первого экрана теряется результат?",
+      title: trimToWordBoundary(`Где в «${buildCompactTopicFocus(topic, 28)}» теряется результат?`, 72),
       subtitle: trimToWordBoundary(
         goalCue.includes("заяв")
           ? "Соберём структуру, которая доводит до заявки, а не до пролистывания."
@@ -1593,7 +1671,7 @@ function normalizeSlideByType(
   }
 
   const ctaTitle = sanitizeTitleValue(safe.title, 84);
-  const goalAwareCta = buildGoalAwareCta(options?.goal);
+  const goalAwareCta = buildGoalAwareCta(options?.goal, topic);
   return {
     type: "cta",
     title: ctaTitle || trimToWordBoundary("Хотите адаптацию под свою тему?", 84),
@@ -2162,42 +2240,33 @@ function buildHookFallbackTitle(topic: string) {
   const cleanTopic = normalizeText(topic, 96)
     .replace(/[.?!…]+$/u, "")
     .trim();
-  const domain = resolveTopicDomain(topic);
 
   if (!cleanTopic) {
     return "Идея, которая усиливает ваш контент";
   }
 
-  if (/^(как|почему|когда|зачем|что)\b/iu.test(cleanTopic)) {
-    return trimToWordBoundary(cleanTopic, 72);
+  const safeQuestion = removeDanglingTail(trimToWordBoundary(cleanTopic, 74));
+  if (safeQuestion && countWords(safeQuestion) >= 3) {
+    return /[?]$/u.test(safeQuestion) ? safeQuestion : `${safeQuestion}?`;
   }
 
-  const topicFocus = buildCompactTopicFocus(cleanTopic, 28);
-  const domainCue =
-    domain === "education"
-      ? "читают до конца"
-      : domain === "psychology" || domain === "health"
-        ? "лучше понимают с первого раза"
-        : domain === "finance"
-          ? "решения принимаются спокойнее"
-          : domain === "fitness" || domain === "beauty"
-            ? "возвращаются чаще"
-            : "появляется живой отклик";
+  const topicFocus = buildCompactTopicFocus(cleanTopic, 42);
   const variants = [
-    `${upperFirst(topicFocus)}: как удержать внимание до финала`,
-    `${upperFirst(topicFocus)}: что включает интерес с первого экрана`,
-    `${upperFirst(topicFocus)}: один ход, после которого ${domainCue}`,
-    `${upperFirst(topicFocus)}: как подать мысль сильнее и конкретнее`
+    `Где теряется внимание в «${topicFocus}»?`,
+    `Почему в «${topicFocus}» пропадает отклик?`,
+    `Что в «${topicFocus}» мешает дочитыванию?`,
+    `Как в «${topicFocus}» включить интерес?`
   ];
-  return trimToWordBoundary(pickVariantByTopic(topicFocus, variants), 72);
+  const picked = trimToWordBoundary(pickVariantByTopic(topicFocus, variants), 72);
+  return removeDanglingTail(picked) || "Идея, которая усиливает ваш контент";
 }
 
 function buildHookFallbackSubtitle(topic: string) {
   const topicFocus = buildTopicFocus(topic);
   const variants = [
-    `Покажу короткую структуру по ${topicFocus} без воды и штампов.`,
-    "Только практичные формулировки, которые можно применить сразу после чтения.",
-    "Соберем живую карусельную логику: крючок, напряжение, решение и CTA."
+    `Покажу структуру по ${topicFocus}: что сказать, чтобы читатель дошёл до действия.`,
+    "Разберём реальные формулировки вместо общих советов — с примерами под тему.",
+    "Соберём цепочку: крючок, напряжение, разворот и ясный CTA без давления."
   ];
 
   return trimToWordBoundary(pickVariantByTopic(topicFocus, variants), 132);
@@ -2212,23 +2281,54 @@ function pickVariantByTopic(topic: string, variants: string[]) {
   return variants[Math.abs(seed) % variants.length] ?? variants[0] ?? "";
 }
 
+function normalizeFocusLead(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const words = trimmed.split(/\s+/u).filter(Boolean);
+  const infinitiveIndex = words.findIndex((word) => /[\p{L}-]{4,}(?:ть|ти)$/iu.test(word));
+  const hasDativeLead =
+    infinitiveIndex >= 1 &&
+    infinitiveIndex <= 3 &&
+    words
+      .slice(0, infinitiveIndex)
+      .some((word) => /[\p{L}-]+(?:у|ю|ам|ям|е|ом|ем)$/iu.test(word));
+
+  // Remove awkward "кому + (описание) + инфинитив" lead-ins:
+  // "психологу объяснять ...", "репетитору английского удерживать ..."
+  if (hasDativeLead) {
+    const tail = words.slice(infinitiveIndex + 1).join(" ").trim();
+    if (tail) {
+      return tail;
+    }
+  }
+
+  return trimmed;
+}
+
 function buildTopicFocus(topic: string) {
-  const cleaned = normalizeText(topic, 84)
-    .replace(/^как\s+/iu, "")
+  const cleaned = normalizeText(topic, 120)
+    .replace(/^(как|почему|зачем|что)\s+/iu, "")
     .replace(/[.?!…]+$/u, "")
     .trim();
 
-  if (!cleaned) {
+  const leadNormalized = normalizeFocusLead(cleaned)
+    .replace(/^по\s+теме\s+/iu, "")
+    .replace(/^тема\s*[:—-]\s*/iu, "")
+    .trim();
+
+  if (!leadNormalized) {
     return "вашей теме";
   }
 
-  if (cleaned.length <= 52) {
-    return cleaned;
+  const compact = removeDanglingTail(trimToWordBoundary(leadNormalized, 58));
+  if (compact.length >= 8) {
+    return compact;
   }
 
-  const sliced = cleaned.slice(0, 52).trimEnd();
-  const lastSpace = sliced.lastIndexOf(" ");
-  return (lastSpace > 26 ? sliced.slice(0, lastSpace) : sliced).trimEnd();
+  return removeDanglingTail(trimToWordBoundary(leadNormalized, 52)) || "вашей теме";
 }
 
 function buildCompactTopicFocus(topic: string, maxLength = 42) {
@@ -2240,7 +2340,7 @@ function buildCompactTopicFocus(topic: string, maxLength = 42) {
     return "вашей теме";
   }
 
-  return trimToWordBoundary(focus, maxLength);
+  return removeDanglingTail(trimToWordBoundary(focus, maxLength)) || "вашей теме";
 }
 
 function extractHookAnchor(topic: string) {
@@ -2252,7 +2352,7 @@ function extractHookAnchor(topic: string) {
     return "вашей теме";
   }
 
-  if (normalized.length <= 56) {
+  if (normalized.length <= 74) {
     return normalized;
   }
 
@@ -2263,10 +2363,26 @@ function extractHookAnchor(topic: string) {
 
   const firstPart = parts[0];
   if (firstPart && firstPart.length >= 16) {
-    return trimToWordBoundary(firstPart, 56);
+    return trimToWordBoundary(firstPart, 74);
   }
 
-  return trimToWordBoundary(normalized, 56);
+  return trimToWordBoundary(normalized, 74);
+}
+
+function hasDanglingTail(value: string) {
+  return /\b(и|а|но|или|что|чтобы|потому|когда|где|как|если|по|в|на|для|с|к|от|из|у|до|за|без|при|о|об|обо|над|под|между|через|про|который|которого|которой|которые|первого|второго|третьего|четвертого|пятого|обычно|живой|стабильному)\s*$/iu.test(
+    value.trim()
+  );
+}
+
+function removeDanglingTail(value: string) {
+  return value
+    .replace(
+      /\b(и|а|но|или|что|чтобы|потому|когда|где|как|если|по|в|на|для|с|к|от|из|у|до|за|без|при|о|об|обо|над|под|между|через|про|который|которого|которой|которые|первого|второго|третьего|четвертого|пятого|обычно|живой|стабильному)\s*$/iu,
+      ""
+    )
+    .replace(/[,:;—–-]+\s*$/u, "")
+    .trim();
 }
 
 function sanitizeCopyText(value: string, maxLength: number) {
@@ -2304,7 +2420,16 @@ function sanitizeCopyText(value: string, maxLength: number) {
     return "";
   }
 
-  return trimToWordBoundary(cleaned, maxLength);
+  const trimmed = trimToWordBoundary(cleaned, maxLength);
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/[.?!…]$/u.test(trimmed)) {
+    return trimmed;
+  }
+
+  return removeDanglingTail(trimmed);
 }
 
 function normalizeWordTokens(value: string) {
@@ -2341,8 +2466,59 @@ function hasAwkwardHookTitle(value: string) {
 
   return (
     /^[\p{L}-]+(?:у|ю)\s+[\p{L}-]{4,}ть\s*:/iu.test(normalized) ||
-    /^[\p{L}-]+\s+[\p{L}-]{4,}ть:\s+как\b/iu.test(normalized)
+    /^[\p{L}-]+\s+[\p{L}-]{4,}ть:\s+как\b/iu.test(normalized) ||
+    /«[^»]*\b(и|а|но|или|к|по|на|для|без|от)\s*»/iu.test(normalized)
   );
+}
+
+function isHookEchoingTopic(title: string, topic: string) {
+  const titleNormalized = normalizeWordTokens(
+    normalizeText(removeDanglingTail(title), 140)
+      .replace(/[«»“”„]/gu, " ")
+      .replace(/[!?.,:;—–-]+/gu, " ")
+  );
+  const topicNormalized = normalizeWordTokens(
+    normalizeText(topic, 180)
+      .replace(/[«»“”„]/gu, " ")
+      .replace(/[!?.,:;—–-]+/gu, " ")
+  );
+
+  if (titleNormalized.length < 4 || topicNormalized.length < 4) {
+    return false;
+  }
+
+  const titleCore = titleNormalized.filter((token) => !TOPIC_STOP_WORDS.has(token));
+  const topicCore = topicNormalized.filter((token) => !TOPIC_STOP_WORDS.has(token));
+
+  if (titleCore.length < 3 || topicCore.length < 3) {
+    return false;
+  }
+
+  const titleJoined = titleCore.join(" ");
+  const topicJoined = topicCore.join(" ");
+
+  if (titleJoined === topicJoined) {
+    return true;
+  }
+
+  if (
+    (topicJoined.includes(titleJoined) || titleJoined.includes(topicJoined)) &&
+    Math.abs(topicJoined.length - titleJoined.length) <= 14
+  ) {
+    return true;
+  }
+
+  const topicSet = new Set(topicCore.map((token) => topicStem(token)));
+  let overlap = 0;
+
+  for (const token of titleCore) {
+    const stem = topicStem(token);
+    if (topicSet.has(stem)) {
+      overlap += 1;
+    }
+  }
+
+  return overlap / Math.min(titleCore.length, topicCore.length) >= 0.9;
 }
 
 function hasLegacyTemplatePhrase(value: string) {
@@ -2487,8 +2663,7 @@ function hasTopicStemMatch(copy: string, topicStems: Set<string>) {
 function buildPrimaryTopicAnchors(topic: string) {
   return normalizeWordTokens(normalizeText(topic, 180))
     .filter((token) => token.length >= 4 && !TOPIC_STOP_WORDS.has(token))
-    .slice(0, 4)
-    .map((token) => token.slice(0, 5));
+    .slice(0, 4);
 }
 
 function hasPrimaryTopicAnchor(copy: string, topic: string) {
@@ -2505,10 +2680,7 @@ function hasPrimaryTopicAnchor(copy: string, topic: string) {
   }
 
   return anchors.some((anchor) =>
-    copyTokens.some((token) => {
-      const tokenPrefix = token.slice(0, 5);
-      return tokenPrefix.startsWith(anchor) || anchor.startsWith(tokenPrefix);
-    })
+    copyTokens.some((token) => token.startsWith(anchor) || anchor.startsWith(token))
   );
 }
 
@@ -2687,23 +2859,28 @@ function buildCaptionFallback(topic: string, slides: CarouselOutlineSlide[], goa
   };
 }
 
-function buildGoalAwareCta(goal?: string) {
-  return buildCtaVariants(goal).selected;
+function buildGoalAwareCta(goal?: string, topic?: string) {
+  return buildCtaVariants(goal, topic).selected;
 }
 
 function buildCtaVariants(goal?: string, topic?: string) {
   const normalizedGoal = normalizeText(goal, 40).toLowerCase();
+  const domain = resolveTopicDomain(topic ?? "");
+  const focus = buildCompactTopicFocus(topic ?? "", 34);
 
   const aggressive = isLeadsGoal(normalizedGoal)
     ? "Напишите «ПЛАН» в директ — соберу структуру под ваши заявки."
-    : "Напишите «СКРИПТ» в директ — пришлю короткий шаблон под вашу тему.";
+    : pickVariantByTopic(topic ?? domain, [
+        `Напишите «КАРКАС» в директ — пришлю короткий шаблон под «${focus}».`,
+        `Напишите «ШАБЛОН» в директ — отправлю готовый скелет под «${focus}».`
+      ]);
 
   const soft = isFollowersGoal(normalizedGoal)
-    ? "Сохраните пост и подпишитесь — разберу следующий кейс в этом формате."
-    : trimToWordBoundary(
-        "Сохраните карусель и выберите первый шаг, который внедрите сегодня.",
-        210
-      );
+    ? pickVariantByTopic(topic ?? domain, [
+        "Сохраните пост и подпишитесь — разберу следующий кейс в этом формате.",
+        "Сохраните карусель и перешлите коллеге, с кем хотите сверить подход."
+      ])
+    : buildDomainSoftCta(domain, focus, topic);
 
   return {
     aggressive: trimToWordBoundary(aggressive, 210),
@@ -2734,6 +2911,49 @@ function isLeadsGoal(goal: string) {
 function isFollowersGoal(goal: string) {
   const normalized = goal.toLowerCase();
   return normalized.includes("подпис") || normalized.includes("follow") || normalized.includes("follower");
+}
+
+function buildDomainSoftCta(domain: TopicDomain, focus: string, topicSeed?: string) {
+  const variantsByDomain: Record<TopicDomain, string[]> = {
+    education: [
+      "Сохраните карусель и возьмите один приём на ближайший урок.",
+      "Сохраните и протестируйте один шаг на следующем занятии."
+    ],
+    psychology: [
+      "Сохраните схему и используйте её в следующей консультации.",
+      "Сохраните карусель и попробуйте один вопрос уже в ближайшей сессии."
+    ],
+    health: [
+      "Сохраните памятку и проверьте, какой шаг можно внедрить уже сегодня.",
+      "Сохраните карусель, чтобы вернуться к схеме без спешки и паники."
+    ],
+    fitness: [
+      "Сохраните план и выполните первый шаг уже на этой неделе.",
+      "Сохраните карусель и отметьте один шаг, который внедрите на ближайшей тренировке."
+    ],
+    beauty: [
+      "Сохраните разбор и внедрите один шаг с ближайшим клиентом.",
+      "Сохраните карусель и проверьте, как меняется отклик после первого шага."
+    ],
+    finance: [
+      "Сохраните чек-лист и сверяйте с ним решения перед следующим вложением.",
+      "Сохраните карусель и выберите один шаг, который снизит тревогу в финансах."
+    ],
+    creator: [
+      "Сохраните карусель и выберите пункт, который внедрите в ближайшем посте.",
+      `Сохраните разбор по «${focus}» и используйте его в следующей публикации.`
+    ],
+    sales: [
+      "Сохраните карусель и внедрите первый шаг в работу уже сегодня.",
+      "Сохраните пост и выберите один пункт, который добавите в воронку на этой неделе."
+    ],
+    general: [
+      "Сохраните карусель и выберите первый шаг, который внедрите сегодня.",
+      `Сохраните разбор по «${focus}» и вернитесь к нему перед следующей публикацией.`
+    ]
+  };
+
+  return pickVariantByTopic(topicSeed ?? domain, variantsByDomain[domain] ?? variantsByDomain.general);
 }
 
 function formatCaptionText(value: string) {
