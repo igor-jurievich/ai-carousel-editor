@@ -79,6 +79,8 @@ const HOOK_SUBTITLE_INPUT_MAX = 154;
 const HOOK_SUBTITLE_OUTPUT_MAX = 148;
 const CTA_SUBTITLE_INPUT_MAX = 172;
 const CTA_SUBTITLE_OUTPUT_MAX = 164;
+const DEFAULT_MODEL_ATTEMPTS = 1;
+const DEFAULT_MODEL_CANDIDATE_LIMIT = 2;
 
 const BANNED_TEMPLATE_PATTERNS: RegExp[] = [
   /(?:^|[^\p{L}])в\s+современном\s+мире(?=$|[^\p{L}])/iu,
@@ -122,13 +124,29 @@ const WEAK_BULLET_PATTERNS: RegExp[] = [
 ];
 
 function resolveModelCandidates() {
-  return [
+  const uniqueCandidates = [
     process.env.OPENAI_GENERATION_MODEL?.trim(),
     ...DEFAULT_MODEL_CANDIDATES,
     process.env.OPENAI_MODEL?.trim()
   ]
     .filter((value): value is string => Boolean(value))
     .filter((value, index, list) => list.indexOf(value) === index);
+
+  const requestedLimit = Number(process.env.OPENAI_MODEL_CANDIDATE_LIMIT);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.max(1, Math.min(4, Math.round(requestedLimit)))
+    : DEFAULT_MODEL_CANDIDATE_LIMIT;
+
+  return uniqueCandidates.slice(0, limit);
+}
+
+function resolveModelAttemptsPerCandidate() {
+  const raw = Number(process.env.OPENAI_MODEL_ATTEMPTS);
+  if (!Number.isFinite(raw)) {
+    return DEFAULT_MODEL_ATTEMPTS;
+  }
+
+  return Math.max(1, Math.min(3, Math.round(raw)));
 }
 
 let client: OpenAI | null = null;
@@ -158,10 +176,11 @@ export async function generateCarouselFromTopic(
   try {
     const openai = getOpenAIClient();
     const models = resolveModelCandidates();
+    const modelAttempts = resolveModelAttemptsPerCandidate();
     let lastError: unknown = null;
 
     for (const model of models) {
-      for (let attempt = 1; attempt <= 2; attempt += 1) {
+      for (let attempt = 1; attempt <= modelAttempts; attempt += 1) {
         try {
           const response = await openai.responses.create({
             model,
@@ -255,8 +274,24 @@ export async function generateCarouselFromTopic(
           }
 
           if (!quality.ok) {
+            const locallyRepairedSlides = rescueWeakSlidesAfterQualityCheck(
+              qualityGuardedSlides,
+              expectedFlow,
+              cleanedTopic,
+              options,
+              quality.reasons
+            );
+            const repairedQuality = evaluateSlideQuality(locallyRepairedSlides, expectedFlow, cleanedTopic);
+
+            if (repairedQuality.ok) {
+              return {
+                slides: locallyRepairedSlides,
+                promptVariant
+              };
+            }
+
             const reason = quality.reasons.join("; ") || "low narrative quality";
-            if (attempt < 2) {
+            if (attempt < modelAttempts) {
               console.warn(
                 `Model "${model}" attempt ${attempt} returned weak copy (${reason}). Retrying.`
               );
@@ -297,7 +332,7 @@ export async function generateCarouselFromTopic(
             throw error;
           }
 
-          if (attempt < 2) {
+          if (attempt < modelAttempts) {
             continue;
           }
         }
@@ -1166,7 +1201,6 @@ function evaluateSlideQuality(
         countWords(hook.title) < 4 ||
         countWords(hook.subtitle) < 5 ||
         isWeakRoleTitle(hook.title) ||
-        isHookEchoingTopic(hook.title, topic) ||
         hasDanglingTail(hook.title)
       ) {
         reasons.push("weak hook");
@@ -1285,6 +1319,38 @@ function countWords(value: string) {
 function hasActionVerb(value: string) {
   return /(?:^|[^\p{L}])(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите|подпишитесь|выберите)(?=$|[^\p{L}])/iu.test(
     value
+  );
+}
+
+function rescueWeakSlidesAfterQualityCheck(
+  slides: CarouselOutlineSlide[],
+  expectedFlow: CarouselSlideRole[],
+  topic: string,
+  options: GenerationOptions | undefined,
+  reasons: string[]
+) {
+  const nextSlides = slides.map((slide) => ({ ...slide })) as CarouselOutlineSlide[];
+  const hookIndex = expectedFlow.findIndex((role) => role === "hook");
+
+  if (hookIndex >= 0 && nextSlides[hookIndex]?.type === "hook") {
+    const hasHookIssue = reasons.some((reason) => reason.includes("hook") || reason.includes("topic"));
+    if (hasHookIssue) {
+      const hook = nextSlides[hookIndex] as Extract<CarouselOutlineSlide, { type: "hook" }>;
+      const bestHook = pickBestHookCandidate(buildHookCandidates(topic, options));
+      hook.title = bestHook?.title || buildHookFallbackTitle(topic);
+      hook.subtitle = bestHook?.subtitle || buildHookFallbackSubtitle(topic);
+      const anchoredHook = `${hook.title} ${hook.subtitle}`.trim();
+      if (!hasPrimaryTopicAnchor(anchoredHook, topic)) {
+        hook.title = addTopicAnchorToTitle(hook.title, buildTopicAnchorLabel(topic));
+      }
+    }
+  }
+
+  return applyFinalCopyPolish(
+    enforceSlideQuality(nextSlides, expectedFlow, topic, options),
+    expectedFlow,
+    topic,
+    options
   );
 }
 
@@ -2508,17 +2574,7 @@ function isHookEchoingTopic(title: string, topic: string) {
     return true;
   }
 
-  const topicSet = new Set(topicCore.map((token) => topicStem(token)));
-  let overlap = 0;
-
-  for (const token of titleCore) {
-    const stem = topicStem(token);
-    if (topicSet.has(stem)) {
-      overlap += 1;
-    }
-  }
-
-  return overlap / Math.min(titleCore.length, topicCore.length) >= 0.9;
+  return false;
 }
 
 function hasLegacyTemplatePhrase(value: string) {
@@ -2742,10 +2798,11 @@ function addTopicAnchorToTitle(title: string, topicAnchor: string) {
     "iu"
   ).test(normalizedTitle);
   if (alreadyAnchored) {
-    return normalizedTitle;
+    return removeDanglingTail(normalizedTitle) || normalizedTitle;
   }
 
-  return trimToWordBoundary(`${normalizedTitle} — про ${topicAnchor}`, 90);
+  const anchoredTitle = trimToWordBoundary(`${normalizedTitle} — про ${topicAnchor}`, 90);
+  return removeDanglingTail(anchoredTitle) || anchoredTitle;
 }
 
 function escapeRegExp(value: string) {

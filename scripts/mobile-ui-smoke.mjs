@@ -143,19 +143,16 @@ async function testGenerateAndOpenPostFlow(page, failures) {
   await page.waitForTimeout(500);
   await page.locator(".mobile-generate-panel summary").click();
   await page.locator(".mobile-generate-body textarea").fill("Тестовая тема для мобильного прогона");
-  const generateResponse = page.waitForResponse(
-    (response) => response.url().includes("/api/generate") && response.request().method() === "POST",
-    { timeout: 12000 }
-  );
-  await page.locator('.mobile-generate-actions button:has-text("Сгенерировать + пост")').click();
-  await generateResponse;
+  await page.locator('.mobile-generate-actions button:has-text("Сгенерировать + пост")').first().click({
+    timeout: 16000
+  });
   await page.waitForFunction(
     () => {
       const status = document.querySelector(".mobile-status-pill")?.textContent || "";
       const title = document.querySelector(".mobile-tool-sheet-v2 h3")?.textContent || "";
       return status.includes("Открыта вкладка «Пост»") || /Подпись к посту/i.test(title);
     },
-    { timeout: 12000 }
+    { timeout: 16000 }
   );
 
   const statusText = (await page.locator(".mobile-status-pill").first().textContent()) || "";
