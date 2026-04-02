@@ -3548,24 +3548,47 @@ button:disabled {
   }
 
   .mobile-slide-tools {
-    display: none !important;
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    gap: 6px !important;
+    margin: 8px 0 2px !important;
+    padding: 0 4px !important;
+    overflow: hidden !important;
   }
 
   .mobile-slide-tool {
-    flex: 0 0 auto !important;
-    width: 54px !important;
-    height: 58px !important;
-    gap: 2px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 56px !important;
+    gap: 1px !important;
+    border-radius: 14px !important;
+    border: 1px solid rgba(208, 212, 220, 0.95) !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+    box-shadow: 0 4px 10px rgba(24, 28, 36, 0.09) !important;
     align-content: center !important;
     justify-items: center !important;
   }
 
   .mobile-slide-tool-label {
     display: block !important;
-    font-size: 10px;
-    line-height: 1.05;
+    max-width: 100%;
+    font-size: 9px !important;
+    line-height: 1.05 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
     font-weight: 700;
     letter-spacing: 0.01em;
+  }
+
+  .mobile-slide-tool.is-destructive {
+    border-color: rgba(218, 116, 134, 0.76) !important;
+    background: rgba(236, 121, 136, 0.1) !important;
+    color: #9b3b4b !important;
   }
 
   .mobile-editor-shell .mobile-bottom-toolbar-v2 {
@@ -3758,6 +3781,14 @@ button:disabled {
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .mobile-slide-tool {
+    height: 52px !important;
+  }
+
+  .mobile-slide-tool-label {
+    font-size: 8px !important;
   }
 
   .mobile-slide-tools-hint {

@@ -341,7 +341,7 @@ export function CanvasEditor({
               <MobileIconButton
                 icon="plus"
                 title="Добавить слайд"
-                label="Добавить"
+                label="Добав."
                 onClick={() => onInsertSlideAt(activeSlideIndex + 1, "text")}
                 disabled={disabled}
               />

@@ -2312,7 +2312,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               previewMode={isPreviewMode}
               showSlideBadge={false}
               fontsReady={fontsReady}
-              hideMobileSlideTools
+              hideMobileSlideTools={Boolean(mobileToolTab)}
             />
           </section>
 
