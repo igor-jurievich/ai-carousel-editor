@@ -203,7 +203,7 @@ export default function GeneratePage() {
   };
 
   return (
-    <main className="page-shell">
+    <main className="page-shell generate-page-shell">
       <div className="editor-shell editor-shell-redesigned">
         <header className="prompt-shell">
           <div className="prompt-brand">

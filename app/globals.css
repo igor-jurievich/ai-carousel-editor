@@ -3367,6 +3367,65 @@ button:disabled {
 }
 
 @media (max-width: 768px) {
+  .generate-page-shell {
+    padding: 8px 8px 12px !important;
+  }
+
+  .generate-page-shell .editor-shell {
+    gap: 10px !important;
+  }
+
+  .generate-page-shell .prompt-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+    padding: 8px !important;
+    border-radius: 16px !important;
+  }
+
+  .generate-page-shell .prompt-brand,
+  .generate-page-shell .prompt-composer,
+  .generate-page-shell .prompt-status {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .generate-page-shell .prompt-brand {
+    padding: 12px 12px 10px !important;
+    border-radius: 14px !important;
+  }
+
+  .generate-page-shell .prompt-brand h1 {
+    font-size: clamp(1.2rem, 6vw, 1.75rem) !important;
+    line-height: 1.1 !important;
+  }
+
+  .generate-page-shell .prompt-composer {
+    padding: 8px !important;
+    gap: 8px !important;
+    border-radius: 14px !important;
+  }
+
+  .generate-page-shell .prompt-composer textarea {
+    min-height: 84px !important;
+    font-size: 16px !important;
+  }
+
+  .generate-page-shell .prompt-status {
+    padding: 10px 12px !important;
+    border-radius: 14px !important;
+    font-size: 13px !important;
+    line-height: 1.35 !important;
+  }
+
+  .generate-page-shell .prompt-actions {
+    margin-top: 10px !important;
+  }
+
+  .generate-page-shell .prompt-generate-btn {
+    min-height: 44px !important;
+  }
+
   .mobile-editor-shell {
     padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important;
   }
