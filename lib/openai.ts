@@ -653,9 +653,11 @@ function buildUserPrompt(
     "For fields that are not used by the current type, return empty string \"\" or empty array [].",
     "Tone: vivid, social-native, high signal, no bureaucratic wording.",
     "Each slide should carry a strong standalone idea with natural spoken Russian.",
-    "Bullets must be concise but meaningful: 3-4 bullets when natural, each ~9-18 words with concrete detail instead of generic slogans.",
+    "Bullets must be concise but meaningful: 3-4 bullets when natural, each ~10-24 words with concrete detail instead of generic slogans.",
     "For problem/amplify/consequence/solution include at least one concrete symptom, cost, or action in bullets.",
     "Avoid abstract bullets like «важно понимать», «нужно просто», «улучшить процесс» without a concrete situation.",
+    "No ellipsis («...» or «…») and no unfinished tails. Every line must end as a complete thought.",
+    "Avoid ultra-short list items (<5 words) unless it is a metric or a strict action command.",
     "Keep wording topic-specific. Avoid universal sales jargon if topic is not sales-related.",
     "Do not use broken hook syntax like «эксперту повысить: ...» or «психологу объяснять: ...».",
     ...buildDomainPromptAddendum(topicDomain),
@@ -694,10 +696,10 @@ function buildResponseSchema(slidesCount: number) {
               type: ["array", "null"],
               minItems: 0,
               maxItems: 4,
-              items: { type: "string", maxLength: 120 }
+              items: { type: "string", maxLength: 150 }
             },
-            before: { type: ["string", "null"], maxLength: 160 },
-            after: { type: ["string", "null"], maxLength: 160 }
+            before: { type: ["string", "null"], maxLength: 190 },
+            after: { type: ["string", "null"], maxLength: 190 }
           },
           required: ["type", "title", "subtitle", "bullets", "before", "after"]
         }

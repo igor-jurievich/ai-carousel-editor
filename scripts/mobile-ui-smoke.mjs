@@ -223,35 +223,32 @@ async function testMobileToolSheetLayout(page, failures) {
   await page.goto(`${BASE_URL}/editor`, { waitUntil: "networkidle" });
   await page.waitForTimeout(700);
 
-  const tabsToCheck = [
-    { label: "Текст", index: 5 },
-    { label: "Шрифт", index: 6 },
-    { label: "Размер", index: 7 },
-    { label: "Фон", index: 3 },
-    { label: "Стиль", index: 4 }
-  ];
-  const toolButtons = page.locator(".mobile-bottom-tool");
+  const tabsToCheck = ["Шаблоны", "Пост", "Цвет", "Фон", "Стиль", "Текст", "Шрифт", "Размер"];
+  const toolButtons = page.locator(".mobile-editor-shell .mobile-bottom-toolbar-v2 .mobile-bottom-tool:visible");
   const totalButtons = await toolButtons.count();
   assert(totalButtons >= 8, `tool sheet: expected 8 mobile bottom tools, got ${totalButtons}`, failures);
 
-  for (const tab of tabsToCheck) {
-    if (tab.index >= totalButtons) {
-      failures.push(`tool sheet: tab button "${tab.label}" is missing`);
+  for (const label of tabsToCheck) {
+    const tabButton = toolButtons.filter({ hasText: label }).first();
+    const tabExists = (await tabButton.count()) > 0;
+    if (!tabExists) {
+      failures.push(`tool sheet: tab button "${label}" is missing`);
       continue;
     }
-
-    const tabButton = toolButtons.nth(tab.index);
 
     await tabButton.evaluate((node) => {
       node.scrollIntoView({ inline: "center", block: "nearest", behavior: "instant" });
     });
-    await tabButton.click({ timeout: 10000, force: true });
-    await page.waitForTimeout(200);
+    await tabButton.dispatchEvent("click");
+    await page.waitForTimeout(280);
 
     const probe = await page.evaluate(() => {
       const sheet = document.querySelector(".mobile-tool-sheet.mobile-tool-sheet-v2");
       const toolbar = document.querySelector(".mobile-bottom-toolbar-v2");
       const slideTools = document.querySelector(".mobile-slide-tools");
+      const sideInsert = document.querySelector(".mobile-side-insert");
+      const sideNav = document.querySelector(".mobile-side-nav");
+      const templateTrigger = document.querySelector(".template-library-trigger-mobile");
 
       const sheetRect = sheet?.getBoundingClientRect();
       const toolbarRect = toolbar?.getBoundingClientRect();
@@ -269,29 +266,58 @@ async function testMobileToolSheetLayout(page, failures) {
         sheetBottom: sheetRect?.bottom ?? -1,
         toolbarTop: toolbarRect?.top ?? -1,
         viewportHeight: window.innerHeight,
-        isSlideToolsVisible
+        isSlideToolsVisible,
+        templateTriggerVisible: Boolean(
+          templateTrigger &&
+            getComputedStyle(templateTrigger).display !== "none" &&
+            getComputedStyle(templateTrigger).visibility !== "hidden" &&
+            templateTrigger.getBoundingClientRect().height > 2
+        ),
+        sideInsertVisible: Boolean(
+          sideInsert &&
+            getComputedStyle(sideInsert).display !== "none" &&
+            getComputedStyle(sideInsert).visibility !== "hidden" &&
+            sideInsert.getBoundingClientRect().height > 2
+        ),
+        sideNavVisible: Boolean(
+          sideNav &&
+            getComputedStyle(sideNav).display !== "none" &&
+            getComputedStyle(sideNav).visibility !== "hidden" &&
+            sideNav.getBoundingClientRect().height > 2
+        )
       };
     });
 
-    assert(probe.sheetVisible, `tool sheet: tab "${tab.label}" did not open`, failures);
-    assert(probe.sheetTop >= 0, `tool sheet: tab "${tab.label}" starts above viewport`, failures);
-    assert(
-      probe.sheetBottom <= probe.viewportHeight + 1,
-      `tool sheet: tab "${tab.label}" goes below viewport`,
-      failures
-    );
-    if (probe.toolbarTop > 0) {
+    const tabRequiresSheet = label !== "Шаблоны";
+    if (tabRequiresSheet) {
+      assert(probe.sheetVisible, `tool sheet: tab "${label}" did not open`, failures);
+      assert(probe.sheetTop >= 0, `tool sheet: tab "${label}" starts above viewport`, failures);
       assert(
-        probe.sheetBottom <= probe.toolbarTop + 2,
-        `tool sheet: tab "${tab.label}" overlaps bottom toolbar`,
+        probe.sheetBottom <= probe.viewportHeight + 1,
+        `tool sheet: tab "${label}" goes below viewport`,
+        failures
+      );
+      if (probe.toolbarTop > 0) {
+        assert(
+          probe.sheetBottom <= probe.toolbarTop + 2,
+          `tool sheet: tab "${label}" overlaps bottom toolbar`,
+          failures
+        );
+      }
+      assert(
+        !probe.isSlideToolsVisible,
+        `tool sheet: tab "${label}" keeps slide action row visible and stacked`,
+        failures
+      );
+    } else {
+      assert(
+        probe.sheetVisible || probe.templateTriggerVisible,
+        `tool sheet: tab "${label}" did not expose template controls`,
         failures
       );
     }
-    assert(
-      !probe.isSlideToolsVisible,
-      `tool sheet: tab "${tab.label}" keeps slide action row visible and stacked`,
-      failures
-    );
+    assert(!probe.sideInsertVisible, `tool sheet: tab "${label}" shows side insert controls`, failures);
+    assert(!probe.sideNavVisible, `tool sheet: tab "${label}" shows side nav controls`, failures);
   }
 }
 

@@ -212,7 +212,7 @@ export type CarouselTemplate = {
   chipStyle?: "solid" | "outline";
   decoration?: "grid" | "none";
   accentMode?: "none" | "text" | "chip";
-  gridMode?: "full" | "vertical";
+  gridMode?: "full" | "vertical" | "dots";
   gridStep?: number;
   gridOpacity?: number;
   preview?: string;

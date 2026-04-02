@@ -38,62 +38,62 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   {
     id: "dark",
     name: "Тёмный",
-    description: "Тёмная тема с вертикальной сеткой и красным акцентом.",
-    accent: "#ff1111",
-    accentAlt: "#ff4a4a",
-    background: "#101216",
-    surface: "#171920",
-    titleColor: "#f4f5fb",
-    bodyColor: "#eceff6",
-    titleFont: "Roboto Condensed",
-    bodyFont: "Inter",
+    description: "Контрастная тёмная тема в стиле editorial: глубокий фон и резкий акцент.",
+    accent: "#ff2a2a",
+    accentAlt: "#ff5e5e",
+    background: "#090d16",
+    surface: "#101523",
+    titleColor: "#f6f8ff",
+    bodyColor: "#d7deee",
+    titleFont: "Oswald",
+    bodyFont: "Manrope",
     chipStyle: "outline",
     decoration: "grid",
     accentMode: "text",
     gridMode: "vertical",
-    gridStep: 118,
-    gridOpacity: 0.12,
+    gridStep: 108,
+    gridOpacity: 0.14,
     preview: "Контрастная тёмная подача"
   },
   {
     id: "light",
     name: "Светлый",
-    description: "Светлая сетка с синим акцентом и контрастными вставками.",
-    accent: "#1b3eff",
-    accentAlt: "#4f67ff",
-    background: "#ececef",
+    description: "Чистая светлая тема с сеткой и холодным синим акцентом.",
+    accent: "#1f49ff",
+    accentAlt: "#5a77ff",
+    background: "#f1f3f7",
     surface: "#ffffff",
-    titleColor: "#1f2228",
-    bodyColor: "#282d36",
+    titleColor: "#181d29",
+    bodyColor: "#2a3342",
     titleFont: "Russo One",
     bodyFont: "Manrope",
     chipStyle: "solid",
     decoration: "grid",
     accentMode: "chip",
     gridMode: "full",
-    gridStep: 74,
-    gridOpacity: 0.08,
+    gridStep: 72,
+    gridOpacity: 0.1,
     preview: "Чистая светлая подача"
   },
   {
     id: "color",
     name: "Цветной",
-    description: "Светлая тема с оранжевыми акцентами.",
-    accent: "#ff4a1a",
-    accentAlt: "#ff7a52",
-    background: "#ececef",
-    surface: "#ffffff",
-    titleColor: "#202228",
-    bodyColor: "#2b3038",
-    titleFont: "Russo One",
+    description: "Яркая журнальная тема: жёлтый фон, красные плашки и плотная типографика.",
+    accent: "#ff2d00",
+    accentAlt: "#ff6b3d",
+    background: "#ffeb0a",
+    surface: "#fff06a",
+    titleColor: "#171b24",
+    bodyColor: "#1e2431",
+    titleFont: "Oswald",
     bodyFont: "Manrope",
     chipStyle: "solid",
     decoration: "grid",
-    accentMode: "text",
-    gridMode: "full",
-    gridStep: 74,
-    gridOpacity: 0.08,
-    preview: "Светлая тема с тёплым акцентом"
+    accentMode: "chip",
+    gridMode: "dots",
+    gridStep: 72,
+    gridOpacity: 0.12,
+    preview: "Яркая журнальная подача"
   }
 ];
 
@@ -121,7 +121,7 @@ type SlidePalette = {
   bodyColor: string;
   accent: string;
   accentMode: "none" | "text" | "chip";
-  gridMode: "full" | "vertical";
+  gridMode: "full" | "vertical" | "dots";
   gridStep: number;
   gridColor: string;
 };
@@ -141,6 +141,7 @@ const MANAGED_META_KEYS = new Set([
   "footer-arrow",
   "managed-title",
   "managed-title-accent-chip",
+  "managed-title-accent-text",
   "managed-body",
   "image-placeholder",
   "image-placeholder-text",
@@ -542,15 +543,10 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       titleColor: template.titleColor,
       bodyColor: template.bodyColor,
       accent: template.accent,
-      accentMode:
-        blueprint.slideType === "big_text"
-          ? "none"
-          : blueprint.slideType === "image_text"
-            ? "chip"
-            : "text",
-      gridMode: "full",
+      accentMode: blueprint.slideType === "cta" ? "text" : "chip",
+      gridMode: "dots",
       gridStep: baseGridStep,
-      gridColor: baseGridColor
+      gridColor: "rgba(20, 24, 32, 0.12)"
     };
   }
 
@@ -614,6 +610,27 @@ function resolveTitleAccent(title: string) {
     start,
     end
   };
+}
+
+function resolveReadableAccentTextColor(fill: string) {
+  const hex = fill.trim().replace(/^#/, "");
+  const normalized =
+    hex.length === 3
+      ? `${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`
+      : hex.length === 6
+        ? hex
+        : "";
+
+  if (!normalized) {
+    return "#ffffff";
+  }
+
+  const r = Number.parseInt(normalized.slice(0, 2), 16) / 255;
+  const g = Number.parseInt(normalized.slice(2, 4), 16) / 255;
+  const b = Number.parseInt(normalized.slice(4, 6), 16) / 255;
+  const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+  return luma > 0.6 ? "#101621" : "#ffffff";
 }
 
 function buildTitleAccentElements(params: {
@@ -681,6 +698,23 @@ function buildTitleAccentElements(params: {
         fill: palette.accent,
         opacity: 0.94,
         cornerRadius: Math.round(titleElement.fontSize * 0.08)
+      }),
+      createTextElement({
+        role: "title",
+        metaKey: "managed-title-accent-text",
+        text: accent.text,
+        x: accentX,
+        y: accentY,
+        width: Math.min(titleElement.width, textWidth + 2),
+        height: textHeight,
+        fontSize: titleElement.fontSize,
+        lineHeight: titleElement.lineHeight ?? 1.05,
+        fontFamily: titleElement.fontFamily,
+        fontStyle: titleElement.fontStyle ?? "bold",
+        fill: resolveReadableAccentTextColor(palette.accent),
+        align: "left",
+        rotation: titleElement.rotation,
+        opacity: titleElement.opacity
       })
     ];
   }
@@ -730,11 +764,14 @@ function composeTitleAndAccentElements(params: {
     return [titleElement];
   }
 
+  const accentShapes = accents.filter((element) => element.type === "shape");
+  const accentText = accents.filter((element) => element.type === "text");
+
   if (palette.accentMode === "chip") {
-    return [...accents, titleElement];
+    return [...accentShapes, titleElement, ...accentText];
   }
 
-  return [...accents, titleElement];
+  return [...accentShapes, ...accentText, titleElement];
 }
 
 export function createTextElement(
@@ -898,7 +935,7 @@ function fallbackTitleByRole(role: CarouselSlideRole) {
   }
 
   if (role === "consequence") {
-    return "Что изменится, если оставить как есть";
+    return "Где начинаются потери после этого шага";
   }
 
   if (role === "shift") {
@@ -926,7 +963,7 @@ function deriveTitleFromOutline(role: CarouselSlideRole, outline: OutlineLike) {
     : "";
 
   if (firstBullet) {
-    if (role === "solution" || role === "consequence") {
+    if (role === "solution") {
       return "";
     }
 
@@ -1062,6 +1099,29 @@ function buildGridDecoration(format: SlideFormat, palette: SlidePalette) {
   const { width, height } = SLIDE_FORMAT_DIMENSIONS[format];
   const step = Math.max(58, Math.round(palette.gridStep));
   const lines: ShapeElement[] = [];
+
+  if (palette.gridMode === "dots") {
+    const dotSize = format === "9:16" ? 6 : 5;
+    const offset = Math.round(step * 0.45);
+    for (let y = offset; y <= height; y += step) {
+      for (let x = offset; x <= width; x += step) {
+        lines.push(
+          createShapeElement({
+            metaKey: "decor-grid-line",
+            shape: "circle",
+            x: x - dotSize / 2,
+            y: y - dotSize / 2,
+            width: dotSize,
+            height: dotSize,
+            fill: palette.gridColor,
+            opacity: 1,
+            cornerRadius: dotSize
+          })
+        );
+      }
+    }
+    return lines;
+  }
 
   for (let x = 0; x <= width; x += step) {
     lines.push(
@@ -1206,7 +1266,7 @@ function buildMainContent(
       ? "text"
       : blueprint.slideType;
   const metrics = resolveTextMetrics(format);
-  const bodyTextLimit = format === "9:16" ? 760 : format === "4:5" ? 700 : 620;
+  const bodyTextLimit = format === "9:16" ? 840 : format === "4:5" ? 740 : 660;
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
@@ -1313,7 +1373,7 @@ function buildMainContent(
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
-        text: compactTextLength(blueprint.body, format === "9:16" ? 560 : 500),
+        text: compactTextLength(blueprint.body, format === "9:16" ? 620 : 540),
         x: metrics.contentX,
         y: imageArea.y + imageArea.height + Math.round(metrics.height * 0.22),
         width: metrics.contentWidth,
@@ -1347,7 +1407,7 @@ function buildMainContent(
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
-        text: compactTextLength(blueprint.body, format === "9:16" ? 520 : 470),
+        text: compactTextLength(blueprint.body, format === "9:16" ? 590 : 520),
         x: metrics.contentX,
         y: Math.round(metrics.height * 0.58),
         width: metrics.contentWidth,
