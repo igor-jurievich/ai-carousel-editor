@@ -3367,6 +3367,10 @@ button:disabled {
 }
 
 @media (max-width: 768px) {
+  .mobile-editor-shell {
+    padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important;
+  }
+
   .prompt-shell {
     grid-template-columns: minmax(0, 1fr) !important;
     width: 100%;
@@ -3402,7 +3406,9 @@ button:disabled {
     display: grid !important;
     grid-template-columns: auto minmax(0, 1fr) auto !important;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    padding: 6px 8px !important;
+    border-radius: 12px !important;
     width: 100%;
     max-width: 100%;
     overflow: hidden;
@@ -3423,12 +3429,19 @@ button:disabled {
   }
 
   .mobile-compact-select {
-    width: clamp(84px, 24vw, 110px) !important;
+    width: clamp(80px, 23vw, 98px) !important;
+    height: 38px !important;
+    padding-inline: 9px !important;
+    font-size: 14px !important;
+    border-radius: 12px !important;
     max-width: 100%;
   }
 
   .mobile-export-button {
-    min-width: 112px !important;
+    min-width: 100px !important;
+    height: 38px !important;
+    font-size: 13px !important;
+    border-radius: 12px !important;
     max-width: 100%;
     padding: 0 10px !important;
   }
@@ -3450,6 +3463,9 @@ button:disabled {
 
   .mobile-status-action {
     flex: 0 0 auto !important;
+    min-height: 32px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
     white-space: nowrap !important;
   }
 
@@ -3487,8 +3503,8 @@ button:disabled {
 
   .mobile-slide-tool {
     flex: 0 0 auto !important;
-    width: 58px !important;
-    height: 62px !important;
+    width: 54px !important;
+    height: 58px !important;
     gap: 2px !important;
     align-content: center !important;
     justify-items: center !important;
@@ -3516,7 +3532,8 @@ button:disabled {
     overflow-y: hidden;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom)) !important;
+    border-radius: 18px 18px 0 0 !important;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom)) !important;
   }
 
   .mobile-editor-shell .mobile-bottom-toolbar-v2::-webkit-scrollbar {
@@ -3525,12 +3542,19 @@ button:disabled {
 
   .mobile-editor-shell .mobile-bottom-tool {
     flex: 0 0 auto !important;
-    min-width: 62px;
-    max-width: 74px;
+    min-width: 56px;
+    max-width: 66px;
+    min-height: 54px;
+    padding: 4px 2px !important;
+  }
+
+  .mobile-editor-shell .mobile-bottom-tool-icon svg {
+    width: 18px !important;
+    height: 18px !important;
   }
 
   .mobile-editor-shell .mobile-bottom-tool small {
-    font-size: 11px;
+    font-size: 9px;
     line-height: 1.15;
   }
 
@@ -3538,12 +3562,27 @@ button:disabled {
     position: fixed !important;
     left: 8px !important;
     right: 8px !important;
-    top: 84px !important;
-    bottom: calc(86px + env(safe-area-inset-bottom)) !important;
+    top: 80px !important;
+    bottom: calc(82px + env(safe-area-inset-bottom)) !important;
     height: auto !important;
     max-height: none !important;
     z-index: 86 !important;
-    border-radius: 18px !important;
+    border-radius: 16px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-tool-sheet-header {
+    padding: 12px 14px 10px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-tool-sheet-header h3 {
+    font-size: 17px !important;
+    line-height: 1.15 !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-sheet-badge {
+    min-height: 24px !important;
+    padding: 0 8px !important;
+    font-size: 10px !important;
   }
 
   .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-tool-sheet-body {
@@ -3553,7 +3592,80 @@ button:disabled {
     overflow-y: auto !important;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch !important;
-    padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
+    gap: 10px !important;
+    padding: 0 14px max(14px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .settings-selected-pill {
+    display: none !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .segment-control {
+    padding: 3px !important;
+    gap: 4px !important;
+    border-radius: 12px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .settings-block {
+    border-radius: 14px !important;
+    padding: 10px !important;
+    gap: 10px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .settings-label {
+    font-size: 14px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .field,
+  .mobile-editor-shell .mobile-tool-sheet-v2 .textarea,
+  .mobile-editor-shell .mobile-tool-sheet-v2 .select {
+    min-height: 42px !important;
+    padding: 8px 10px !important;
+    font-size: 15px !important;
+    border-radius: 12px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .textarea {
+    min-height: 88px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .field-label {
+    font-size: 13px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .segment-item {
+    min-height: 38px !important;
+    font-size: 12px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .ghost-chip {
+    min-height: 40px !important;
+    font-size: 12px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .color-input {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-case-btn {
+    min-height: 36px !important;
+    font-size: 12px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-style-chip,
+  .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-font-item {
+    min-height: 38px !important;
+    font-size: 12px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-size-value {
+    font-size: 12px !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-font-note,
+  .mobile-editor-shell .mobile-tool-sheet-v2 .settings-hint {
+    font-size: 11px !important;
   }
 }
 
