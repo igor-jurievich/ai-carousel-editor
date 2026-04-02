@@ -249,6 +249,7 @@ async function testMobileToolSheetLayout(page, failures) {
       const sideInsert = document.querySelector(".mobile-side-insert");
       const sideNav = document.querySelector(".mobile-side-nav");
       const templateTrigger = document.querySelector(".template-library-trigger-mobile");
+      const selectedPill = document.querySelector(".mobile-tool-sheet-v2 .settings-selected-pill");
 
       const sheetRect = sheet?.getBoundingClientRect();
       const toolbarRect = toolbar?.getBoundingClientRect();
@@ -284,6 +285,12 @@ async function testMobileToolSheetLayout(page, failures) {
             getComputedStyle(sideNav).display !== "none" &&
             getComputedStyle(sideNav).visibility !== "hidden" &&
             sideNav.getBoundingClientRect().height > 2
+        ),
+        selectedPillVisible: Boolean(
+          selectedPill &&
+            getComputedStyle(selectedPill).display !== "none" &&
+            getComputedStyle(selectedPill).visibility !== "hidden" &&
+            selectedPill.getBoundingClientRect().height > 2
         )
       };
     });
@@ -318,6 +325,11 @@ async function testMobileToolSheetLayout(page, failures) {
     }
     assert(!probe.sideInsertVisible, `tool sheet: tab "${label}" shows side insert controls`, failures);
     assert(!probe.sideNavVisible, `tool sheet: tab "${label}" shows side nav controls`, failures);
+    assert(
+      !probe.selectedPillVisible,
+      `tool sheet: tab "${label}" shows fallback selected-element pill without selection`,
+      failures
+    );
   }
 }
 

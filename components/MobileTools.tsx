@@ -145,7 +145,7 @@ export function MobileTools({
       : selectedElement.type === "image"
         ? "Выбрано изображение"
         : "Выбрана фигура"
-    : "Элемент не выбран";
+    : "";
 
   const handleSheetTouchStart = (event: TouchEvent<HTMLElement>) => {
     const touch = event.touches[0];
@@ -257,7 +257,7 @@ export function MobileTools({
           </div>
 
           <div className={`mobile-tool-sheet-body mobile-tool-sheet-body-${activeTab}`}>
-            <div className="settings-selected-pill">{selectedElementLabel}</div>
+            {selectedElementLabel ? <div className="settings-selected-pill">{selectedElementLabel}</div> : null}
 
             {activeTab === "templates" ? (
               <div className="settings-block">

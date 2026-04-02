@@ -279,6 +279,10 @@ function sanitizeBlueprintText(value: string, maxLength: number, dedupeGlobal = 
   return compactTextLength(compacted, maxLength);
 }
 
+function sanitizeBulletLine(value: string) {
+  return sanitizeBlueprintText(value, 132).replace(/^[•·\-–—→\s]+/u, "").trim();
+}
+
 function collapseTitleRepetition(value: string) {
   if (!value) {
     return "";
@@ -943,11 +947,11 @@ function fallbackTitleByRole(role: CarouselSlideRole) {
   }
 
   if (role === "solution") {
-    return "План, который можно внедрить сегодня";
+    return "Следующий шаг, который можно применить сразу";
   }
 
   if (role === "example") {
-    return "Мини-кейс: как звучит до и после";
+    return "До/после на реальной ситуации";
   }
 
   if (role === "cta") {
@@ -963,18 +967,23 @@ function deriveTitleFromOutline(role: CarouselSlideRole, outline: OutlineLike) {
     : "";
 
   if (firstBullet) {
-    if (role === "solution") {
-      return "";
-    }
-
     return sanitizeBlueprintText(firstBullet, titleMaxLengthByRole(role), true);
   }
 
   if (role === "example") {
     const before = typeof outline.before === "string" ? sanitizeBlueprintText(outline.before, 84) : "";
     const after = typeof outline.after === "string" ? sanitizeBlueprintText(outline.after, 84) : "";
-    if (before || after) {
-      return sanitizeBlueprintText("Разбор: до и после", titleMaxLengthByRole(role), true);
+    const anchor = before || after;
+    if (anchor) {
+      const cleanedAnchor = sanitizeBlueprintText(
+        anchor
+          .replace(/^до:\s*/iu, "")
+          .replace(/^после:\s*/iu, ""),
+        62
+      );
+      if (cleanedAnchor) {
+        return sanitizeBlueprintText(`До/после: ${cleanedAnchor}`, titleMaxLengthByRole(role), true);
+      }
     }
   }
 
@@ -993,13 +1002,15 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
   if (role === "problem" || role === "amplify" || role === "consequence" || role === "solution") {
     const bullets = Array.isArray(outline.bullets)
       ? outline.bullets
-          .map((item) => sanitizeBlueprintText(String(item), 150))
+          .map((item) => sanitizeBulletLine(String(item)))
           .filter(Boolean)
           .slice(0, 4)
       : [];
 
     if (bullets.length > 0) {
-      return bullets.map((item) => `→ ${item}`).join("\n");
+      const denseBullets = bullets.filter((item) => item.length >= 88).length >= 2;
+      const visibleBullets = denseBullets ? bullets.slice(0, 3) : bullets;
+      return visibleBullets.map((item) => `→ ${item}`).join("\n");
     }
 
     if (typeof outline.text === "string" && outline.text.trim()) {
@@ -1527,7 +1538,7 @@ function rebuildSlide(
     generationRole: blueprint.role,
     slideType: blueprint.slideType,
     photoSlotEnabled:
-      slide.photoSlotEnabled ?? (blueprint.slideType === "image_text" ? true : false),
+      slide.photoSlotEnabled ?? (blueprint.slideType === "image_text" ? Boolean(slide.backgroundImage) : false),
     elements: []
   };
 
@@ -1564,7 +1575,7 @@ export function createSlideFromOutline(
     generationRole: blueprint.role,
     generationCoreIdea: blueprint.body,
     slideType: blueprint.slideType,
-    photoSlotEnabled: blueprint.slideType === "image_text",
+    photoSlotEnabled: false,
     elements: []
   };
 
