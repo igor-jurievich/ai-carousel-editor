@@ -136,6 +136,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const lastHistoryAtRef = useRef(0);
   const skipAutosaveRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
+  const autosaveSaveErrorNotifiedRef = useRef(false);
   const editorOpenedTrackedRef = useRef(false);
   const initialMobileToolAppliedRef = useRef(false);
 
@@ -447,29 +448,42 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     }
 
     autosaveTimerRef.current = window.setTimeout(() => {
-      const saved = saveLocalProject({
-        id: projectId ?? undefined,
-        title: projectTitleFromTopic(topic),
-        topic,
-        slides: cloneSlides(slides),
-        format: slideFormat,
-        theme: activeTemplateId,
-        promptVariant,
-        niche: niche.trim() || undefined,
-        audience: audience.trim() || undefined,
-        tone,
-        goal,
-        language: "ru",
-        schemaVersion: 1,
-        caption: captionResult
-      });
+      try {
+        const saved = saveLocalProject({
+          id: projectId ?? undefined,
+          title: projectTitleFromTopic(topic),
+          topic,
+          slides: cloneSlides(slides),
+          format: slideFormat,
+          theme: activeTemplateId,
+          promptVariant,
+          niche: niche.trim() || undefined,
+          audience: audience.trim() || undefined,
+          tone,
+          goal,
+          language: "ru",
+          schemaVersion: 1,
+          caption: captionResult
+        });
 
-      if (!projectId || projectId !== saved.id) {
-        setProjectId(saved.id ?? null);
-      }
+        autosaveSaveErrorNotifiedRef.current = false;
 
-      if (saved.id && pathname !== `/editor/${saved.id}`) {
-        router.replace(`/editor/${saved.id}`);
+        if (!projectId || projectId !== saved.id) {
+          setProjectId(saved.id ?? null);
+        }
+
+        if (saved.id && pathname !== `/editor/${saved.id}`) {
+          router.replace(`/editor/${saved.id}`);
+        }
+      } catch (autosaveError) {
+        if (!autosaveSaveErrorNotifiedRef.current) {
+          autosaveSaveErrorNotifiedRef.current = true;
+          setStatus(
+            autosaveError instanceof Error
+              ? autosaveError.message
+              : "Не удалось сохранить проект. Освободите место в браузере и повторите."
+          );
+        }
       }
     }, 420);
 

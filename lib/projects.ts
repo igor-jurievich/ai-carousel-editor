@@ -61,8 +61,22 @@ function writeAllProjects(projects: StoredProject[]) {
   if (!canUseStorage()) {
     return;
   }
+  let next = [...projects];
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  while (next.length > 0) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      return;
+    } catch {
+      if (next.length === 1) {
+        throw new Error(
+          "Не удалось сохранить проект в браузере. Освободите место в хранилище и повторите."
+        );
+      }
+      // Drop the oldest project and retry if storage quota is exceeded.
+      next = next.slice(0, -1);
+    }
+  }
 }
 
 export function listLocalProjects() {

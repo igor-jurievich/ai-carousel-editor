@@ -160,46 +160,62 @@ export default function GeneratePage() {
       return;
     }
 
-    const resolvedFormat = generatedProjectMeta?.format ?? format;
-    const resolvedTheme = generatedProjectMeta?.theme ?? theme;
-    const slides = createSlidesFromOutline(
-      previewSlides,
-      resolvedTheme,
-      resolvedFormat,
-      clampSlidesCount(slidesCount)
-    );
+    try {
+      const resolvedFormat = generatedProjectMeta?.format ?? format;
+      const resolvedTheme = generatedProjectMeta?.theme ?? theme;
+      const slides = createSlidesFromOutline(
+        previewSlides,
+        resolvedTheme,
+        resolvedFormat,
+        clampSlidesCount(slidesCount)
+      );
 
-    const saved = saveLocalProject({
-      title: generatedProjectMeta?.title || projectTitleFromTopic(normalizedTopic),
-      topic: generatedProjectMeta?.topic || normalizedTopic,
-      slides,
-      format: resolvedFormat,
-      theme: resolvedTheme,
-      promptVariant: generatedProjectMeta?.promptVariant ?? "B",
-      niche: niche.trim() || undefined,
-      audience: audience.trim() || undefined,
-      tone,
-      goal,
-      language: "ru",
-      schemaVersion: 1
-    });
-
-    trackEvent({
-      name: "editor_opened",
-      payload: {
-        source: "generate_page",
-        projectId: saved.id,
+      const saved = saveLocalProject({
+        title: generatedProjectMeta?.title || projectTitleFromTopic(normalizedTopic),
+        topic: generatedProjectMeta?.topic || normalizedTopic,
+        slides,
         format: resolvedFormat,
-        requestedTool: tool ?? "none"
+        theme: resolvedTheme,
+        promptVariant: generatedProjectMeta?.promptVariant ?? "B",
+        niche: niche.trim() || undefined,
+        audience: audience.trim() || undefined,
+        tone,
+        goal,
+        language: "ru",
+        schemaVersion: 1
+      });
+
+      trackEvent({
+        name: "editor_opened",
+        payload: {
+          source: "generate_page",
+          projectId: saved.id,
+          format: resolvedFormat,
+          requestedTool: tool ?? "none"
+        }
+      });
+
+      if (tool === "post") {
+        router.push(`/editor/${saved.id}?tool=post&from=generate`);
+        return;
       }
-    });
 
-    if (tool === "post") {
-      router.push(`/editor/${saved.id}?tool=post&from=generate`);
-      return;
+      router.push(`/editor/${saved.id}`);
+    } catch (openEditorError) {
+      const message =
+        openEditorError instanceof Error
+          ? openEditorError.message
+          : "Не удалось открыть редактор. Проверьте хранилище браузера и попробуйте снова.";
+      setError(message);
+      trackEvent({
+        name: "editor_open_failed",
+        payload: {
+          source: "generate_page",
+          requestedTool: tool ?? "none",
+          reason: message.slice(0, 120)
+        }
+      });
     }
-
-    router.push(`/editor/${saved.id}`);
   };
 
   return (

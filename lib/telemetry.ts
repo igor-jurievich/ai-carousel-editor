@@ -3,6 +3,7 @@ export type TelemetryEventName =
   | "generate_succeeded"
   | "generate_failed"
   | "editor_opened"
+  | "editor_open_failed"
   | "slide_selected"
   | "photo_slot_toggled"
   | "asset_uploaded"
