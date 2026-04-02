@@ -337,9 +337,9 @@ export function CanvasEditor({
           {previewMode ? null : (
             <div className="mobile-slide-tools" aria-label="Управление слайдами">
               <MobileIconButton
-                icon="layers"
+                icon="plus"
                 title="Добавить слайд"
-                label="Слайд"
+                label="Добавить"
                 onClick={() => onInsertSlideAt(activeSlideIndex + 1, "text")}
                 disabled={disabled}
               />

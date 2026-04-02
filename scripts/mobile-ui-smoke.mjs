@@ -109,17 +109,21 @@ async function testEditorControls(page, failures) {
   await page.goto(`${BASE_URL}/editor`, { waitUntil: "networkidle" });
   await page.waitForTimeout(700);
 
-  const quickActionsCount = await page.locator(".mobile-status-actions .mobile-status-action").count();
-  assert(quickActionsCount >= 2, "editor: expected at least 2 quick action buttons", failures);
+  const quickActionsCount = await page
+    .getByRole("button", { name: /Подпись \(AI\)|Текст слайда|Шаблон|Новая \+ пост/i })
+    .count();
+  assert(quickActionsCount >= 3, "editor: expected at least 3 quick action buttons", failures);
 
-  const generatePanelSummary = page.locator(".mobile-generate-panel summary").first();
-  if ((await generatePanelSummary.count()) > 0) {
-    await generatePanelSummary.click();
+  const generatePanel = page.locator("details").filter({ hasText: "Создать новую карусель" }).first();
+  if ((await generatePanel.count()) > 0) {
+    await generatePanel.evaluate((node) => {
+      node.open = true;
+    });
     await page.waitForTimeout(250);
   }
 
   const generatePostCount = await page
-    .locator('.mobile-generate-actions button:has-text("Сгенерировать + пост")')
+    .getByRole("button", { name: /Сгенерировать \+ пост|Подождите\.\.\./i })
     .count();
   assert(generatePostCount >= 1, "editor: missing mobile button 'Сгенерировать + пост'", failures);
 
@@ -147,11 +151,30 @@ async function testGenerateAndOpenPostFlow(page, failures) {
 
   await page.goto(`${BASE_URL}/editor`, { waitUntil: "networkidle" });
   await page.waitForTimeout(500);
-  await page.locator(".mobile-generate-panel summary").click();
-  await page.locator(".mobile-generate-body textarea").fill("Тестовая тема для мобильного прогона");
-  await page.locator('.mobile-generate-actions button:has-text("Сгенерировать + пост")').first().click({
-    timeout: 16000
+  await page
+    .locator("details")
+    .filter({ hasText: "Создать новую карусель" })
+    .first()
+    .evaluate((node) => {
+      node.open = true;
+    });
+  await page
+    .locator("details")
+    .filter({ hasText: "Создать новую карусель" })
+    .first()
+    .locator("textarea")
+    .first()
+    .fill("Тестовая тема для мобильного прогона");
+  const generateRequest = page.waitForRequest(
+    (request) => request.url().includes("/api/generate") && request.method() === "POST",
+    { timeout: 12000 }
+  );
+  const generatePlusPostButton = page.locator(".mobile-generate-actions button").nth(1);
+  await generatePlusPostButton.click({
+    timeout: 12000,
+    force: true
   });
+  await generateRequest;
   await page.waitForFunction(
     () => {
       const status = document.querySelector(".mobile-status-pill")?.textContent || "";

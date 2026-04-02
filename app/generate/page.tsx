@@ -71,8 +71,7 @@ export default function GeneratePage() {
   }, [previewSlides]);
 
   const advancedFieldStyle = {
-    minWidth: 0,
-    width: "100%"
+    minWidth: 0
   } as const;
 
   const advancedInputStyle = {

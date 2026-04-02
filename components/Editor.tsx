@@ -124,6 +124,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([]);
   const desktopCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const mobileCanvasHostRef = useRef<HTMLDivElement | null>(null);
+  const mobileGeneratePanelRef = useRef<HTMLDetailsElement | null>(null);
+  const mobileGenerateTopicRef = useRef<HTMLTextAreaElement | null>(null);
   const mobileToolbarRef = useRef<HTMLElement | null>(null);
   const mobileToolSheetRef = useRef<HTMLElement | null>(null);
   const exportStageRefs = useRef<Record<string, Konva.Stage | null>>({});
@@ -747,6 +749,25 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     }
 
     updateElementBySlide(activeSlide.id, elementId, updater, options);
+  };
+
+  const openMobileGeneratePanel = (focusTopic = false) => {
+    const panel = mobileGeneratePanelRef.current;
+    if (!panel) {
+      return;
+    }
+
+    if (!panel.open) {
+      panel.open = true;
+    }
+
+    if (!focusTopic) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      mobileGenerateTopicRef.current?.focus();
+    }, 20);
   };
 
   const handleGenerate = async (options?: { openPostTool?: boolean; source?: "editor" | "mobile" }) => {
@@ -2190,10 +2211,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             </button>
           </header>
 
-          <details className="mobile-generate-panel">
+          <details className="mobile-generate-panel" ref={mobileGeneratePanelRef}>
             <summary>Создать новую карусель</summary>
             <div className="mobile-generate-body">
               <textarea
+                ref={mobileGenerateTopicRef}
                 value={topic}
                 onChange={(event) => setTopic(event.target.value)}
                 placeholder="Например: «Как эксперту получать заявки через Instagram-карусели»"
@@ -2247,7 +2269,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onClick={() => setMobileToolTab("post")}
               disabled={generationLocked}
             >
-              Пост (AI)
+              Подпись (AI)
             </button>
             <button
               type="button"
@@ -2264,6 +2286,17 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               disabled={generationLocked}
             >
               Шаблон
+            </button>
+            <button
+              type="button"
+              className="mobile-status-action"
+              onClick={() => {
+                openMobileGeneratePanel(true);
+                setStatus("Введите тему и нажмите «Сгенерировать + пост».");
+              }}
+              disabled={generationLocked}
+            >
+              Новая + пост
             </button>
           </div>
 

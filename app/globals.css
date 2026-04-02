@@ -4180,3 +4180,103 @@ button:disabled {
     letter-spacing: 0.01em;
   }
 }
+
+/* Wave 1 mobile parity hard lock */
+@media (max-width: 768px) {
+  .field-label.generate-advanced-field {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .field-label.generate-advanced-field > .field,
+  .field-label.generate-advanced-field > .select,
+  .field-label.generate-advanced-field > .textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .prompt-composer textarea,
+  .generate-advanced .field,
+  .generate-advanced .select {
+    font-size: 16px !important;
+  }
+
+  .mobile-topbar {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+    overflow: hidden !important;
+  }
+
+  .mobile-top-left {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    flex: 0 0 auto !important;
+  }
+
+  .mobile-top-center {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+  }
+
+  .mobile-export-button {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .mobile-status-actions {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none;
+  }
+
+  .mobile-status-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-status-action {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+  }
+
+  .mobile-side-insert,
+  .mobile-side-nav {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .mobile-tool-sheet-v2 {
+    max-height: min(50dvh, 460px) !important;
+  }
+
+  .mobile-tool-sheet-v2 .mobile-tool-sheet-body {
+    max-height: calc(min(50dvh, 460px) - 76px) !important;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 420px) {
+  .mobile-status-actions {
+    margin-inline: 10px !important;
+  }
+
+  .mobile-status-action {
+    padding: 0 11px !important;
+    font-size: 12px !important;
+  }
+
+  .mobile-export-button span {
+    font-size: 12px !important;
+  }
+}
