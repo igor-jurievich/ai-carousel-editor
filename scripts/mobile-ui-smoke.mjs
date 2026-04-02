@@ -219,6 +219,82 @@ async function testGenerateAndOpenPostFlow(page, failures) {
   );
 }
 
+async function testMobileToolSheetLayout(page, failures) {
+  await page.goto(`${BASE_URL}/editor`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(700);
+
+  const tabsToCheck = [
+    { label: "Текст", index: 5 },
+    { label: "Шрифт", index: 6 },
+    { label: "Размер", index: 7 },
+    { label: "Фон", index: 3 },
+    { label: "Стиль", index: 4 }
+  ];
+  const toolButtons = page.locator(".mobile-bottom-tool");
+  const totalButtons = await toolButtons.count();
+  assert(totalButtons >= 8, `tool sheet: expected 8 mobile bottom tools, got ${totalButtons}`, failures);
+
+  for (const tab of tabsToCheck) {
+    if (tab.index >= totalButtons) {
+      failures.push(`tool sheet: tab button "${tab.label}" is missing`);
+      continue;
+    }
+
+    const tabButton = toolButtons.nth(tab.index);
+
+    await tabButton.evaluate((node) => {
+      node.scrollIntoView({ inline: "center", block: "nearest", behavior: "instant" });
+    });
+    await tabButton.click({ timeout: 10000, force: true });
+    await page.waitForTimeout(200);
+
+    const probe = await page.evaluate(() => {
+      const sheet = document.querySelector(".mobile-tool-sheet.mobile-tool-sheet-v2");
+      const toolbar = document.querySelector(".mobile-bottom-toolbar-v2");
+      const slideTools = document.querySelector(".mobile-slide-tools");
+
+      const sheetRect = sheet?.getBoundingClientRect();
+      const toolbarRect = toolbar?.getBoundingClientRect();
+
+      const isSlideToolsVisible = Boolean(
+        slideTools &&
+          getComputedStyle(slideTools).display !== "none" &&
+          getComputedStyle(slideTools).visibility !== "hidden" &&
+          slideTools.getBoundingClientRect().height > 2
+      );
+
+      return {
+        sheetVisible: Boolean(sheetRect && sheetRect.width > 0 && sheetRect.height > 0),
+        sheetTop: sheetRect?.top ?? -1,
+        sheetBottom: sheetRect?.bottom ?? -1,
+        toolbarTop: toolbarRect?.top ?? -1,
+        viewportHeight: window.innerHeight,
+        isSlideToolsVisible
+      };
+    });
+
+    assert(probe.sheetVisible, `tool sheet: tab "${tab.label}" did not open`, failures);
+    assert(probe.sheetTop >= 0, `tool sheet: tab "${tab.label}" starts above viewport`, failures);
+    assert(
+      probe.sheetBottom <= probe.viewportHeight + 1,
+      `tool sheet: tab "${tab.label}" goes below viewport`,
+      failures
+    );
+    if (probe.toolbarTop > 0) {
+      assert(
+        probe.sheetBottom <= probe.toolbarTop + 2,
+        `tool sheet: tab "${tab.label}" overlaps bottom toolbar`,
+        failures
+      );
+    }
+    assert(
+      !probe.isSlideToolsVisible,
+      `tool sheet: tab "${tab.label}" keeps slide action row visible and stacked`,
+      failures
+    );
+  }
+}
+
 function normalize(value) {
   if (typeof value !== "string") {
     return "";
@@ -250,6 +326,10 @@ async function main() {
     const flowPage = await context.newPage();
     await testGenerateAndOpenPostFlow(flowPage, failures);
     await flowPage.close();
+
+    const layoutPage = await context.newPage();
+    await testMobileToolSheetLayout(layoutPage, failures);
+    await layoutPage.close();
   } finally {
     await context.close();
     await browser.close();

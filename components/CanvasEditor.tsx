@@ -44,6 +44,7 @@ type CanvasEditorProps = {
   previewMode?: boolean;
   showSlideBadge?: boolean;
   fontsReady?: boolean;
+  hideMobileSlideTools?: boolean;
 };
 
 export function CanvasEditor({
@@ -79,7 +80,8 @@ export function CanvasEditor({
   disabled = false,
   previewMode = false,
   showSlideBadge = true,
-  fontsReady = true
+  fontsReady = true,
+  hideMobileSlideTools = false
 }: CanvasEditorProps) {
   const scale = displayWidth / canvasWidth;
   const formatLabel = SLIDE_FORMAT_DIMENSIONS[activeFormat].label;
@@ -334,7 +336,7 @@ export function CanvasEditor({
 
           </div>
 
-          {previewMode ? null : (
+          {previewMode || hideMobileSlideTools ? null : (
             <div className="mobile-slide-tools" aria-label="Управление слайдами">
               <MobileIconButton
                 icon="plus"
@@ -389,7 +391,7 @@ export function CanvasEditor({
               />
             </div>
           )}
-          {previewMode ? null : (
+          {previewMode || hideMobileSlideTools ? null : (
             <p className="mobile-slide-tools-hint">
               Листайте свайпом или кнопками ←/→. Кнопка <strong>«Добавить»</strong> создаёт новый слайд.
             </p>

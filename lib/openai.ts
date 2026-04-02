@@ -2467,7 +2467,16 @@ function sanitizeCopyText(value: string, maxLength: number) {
     return "";
   }
 
-  const words = noDoubleSpaces.split(" ");
+  const withoutEllipsis = noDoubleSpaces
+    .replace(/(?:\.{3,}|…+)/gu, ".")
+    .replace(/\s+/gu, " ")
+    .trim();
+
+  if (!withoutEllipsis) {
+    return "";
+  }
+
+  const words = withoutEllipsis.split(" ");
   const compactWords: string[] = [];
   let previousNormalized = "";
 
@@ -2491,11 +2500,28 @@ function sanitizeCopyText(value: string, maxLength: number) {
     return "";
   }
 
-  if (/[.?!…]$/u.test(trimmed)) {
-    return trimmed;
+  const endsWithQuestion = /[?]\s*$/u.test(trimmed);
+  const endsWithExclamation = /!\s*$/u.test(trimmed);
+  const endsWithTerminal = /[.?!]\s*$/u.test(trimmed);
+  const withoutTerminal = trimmed.replace(/[.?!]+\s*$/u, "").trim();
+  const noTail = removeDanglingTail(withoutTerminal);
+  if (!noTail) {
+    return "";
   }
 
-  return removeDanglingTail(trimmed);
+  if (endsWithQuestion && countWords(noTail) >= 3) {
+    return `${noTail}?`;
+  }
+
+  if (endsWithExclamation && countWords(noTail) >= 2) {
+    return `${noTail}!`;
+  }
+
+  if (endsWithTerminal) {
+    return `${noTail}.`;
+  }
+
+  return noTail;
 }
 
 function normalizeWordTokens(value: string) {
@@ -2598,6 +2624,7 @@ function sanitizeTitleValue(value: unknown, maxLength: number) {
   }
   const cleanTitle = rawTitle
     .replace(/[,:;—–-]+\s*$/u, "")
+    .replace(/[.!]+\s*$/u, "")
     .replace(/\b(и|а|но|или|что|чтобы|как|где|когда|по|в|на|для|с)\s*$/iu, "")
     .trim();
   if (!cleanTitle) {
@@ -2627,7 +2654,9 @@ function sanitizeTitleValue(value: unknown, maxLength: number) {
     compactWords.push(word);
   }
 
-  return sanitizeCopyText(compactWords.join(" "), maxLength);
+  return sanitizeCopyText(compactWords.join(" "), maxLength)
+    .replace(/[.!]+\s*$/u, "")
+    .trim();
 }
 
 const TOPIC_STOP_WORDS = new Set([

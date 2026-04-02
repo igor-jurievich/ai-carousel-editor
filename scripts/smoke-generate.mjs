@@ -17,6 +17,7 @@ const BANNED_PHRASES = [
   "где ломается поток",
   "разбор под ваш кейс"
 ];
+const MECHANICAL_TITLE_RE = /^к чему это вед[её]т[:\s-]*/iu;
 
 const ACTION_VERB_RE =
   /(?:^|[^\p{L}])(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите|подпишитесь|выберите)(?=$|[^\p{L}])/iu;
@@ -38,6 +39,17 @@ function slideText(slide) {
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function hasBrokenTail(value) {
+  const text = normalize(value);
+  if (!text) {
+    return false;
+  }
+  if (text.includes("...") || text.includes("…")) {
+    return true;
+  }
+  return /[:—–-]\s*$/u.test(text);
 }
 
 function validateSlides(slides) {
@@ -62,6 +74,17 @@ function validateSlides(slides) {
       }
     }
 
+    const title = normalize(slide.title);
+    if (title && (title.includes("...") || title.includes("…"))) {
+      errors.push(`slide ${i + 1}: title contains ellipsis`);
+    }
+    if (title && hasBrokenTail(title)) {
+      errors.push(`slide ${i + 1}: title looks truncated or unfinished`);
+    }
+    if (title && MECHANICAL_TITLE_RE.test(title)) {
+      errors.push(`slide ${i + 1}: title uses mechanical template "К чему это ведет"`);
+    }
+
     if (expectedType === "hook") {
       const title = normalize(slide.title).toLowerCase();
       const subtitle = normalize(slide.subtitle);
@@ -78,6 +101,16 @@ function validateSlides(slides) {
       const bullets = Array.isArray(slide.bullets) ? slide.bullets.map((item) => normalize(item)).filter(Boolean) : [];
       if (bullets.length < 2) {
         errors.push(`slide ${i + 1} (${expectedType}) has less than 2 bullets`);
+      }
+      for (const bullet of bullets) {
+        if (bullet.includes("...") || bullet.includes("…")) {
+          errors.push(`slide ${i + 1} (${expectedType}) has bullet with ellipsis`);
+          break;
+        }
+        if (hasBrokenTail(bullet)) {
+          errors.push(`slide ${i + 1} (${expectedType}) has unfinished bullet`);
+          break;
+        }
       }
       continue;
     }

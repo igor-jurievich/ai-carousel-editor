@@ -311,14 +311,45 @@ function collapseTitleRepetition(value: string) {
 }
 
 function compactTextLength(text: string, maxChars: number) {
-  if (text.length <= maxChars) {
-    return text;
+  const normalized = normalizeMultilineText(text);
+  if (normalized.length <= maxChars) {
+    return normalized;
   }
 
-  const sliced = text.slice(0, maxChars).trimEnd();
-  const lastSpace = sliced.lastIndexOf(" ");
-  const safe = lastSpace > 36 ? sliced.slice(0, lastSpace) : sliced;
-  return `${safe}…`;
+  const sliced = normalized.slice(0, maxChars + 1).trimEnd();
+  if (!sliced) {
+    return "";
+  }
+
+  const minBoundary = Math.max(20, Math.floor(maxChars * 0.45));
+  const sentenceBoundary = Math.max(
+    sliced.lastIndexOf(". "),
+    sliced.lastIndexOf("! "),
+    sliced.lastIndexOf("? "),
+    sliced.lastIndexOf(".\n"),
+    sliced.lastIndexOf("!\n"),
+    sliced.lastIndexOf("?\n")
+  );
+  if (sentenceBoundary >= minBoundary) {
+    return sliced.slice(0, sentenceBoundary + 1).trim();
+  }
+
+  const lineBoundary = sliced.lastIndexOf("\n");
+  if (lineBoundary >= minBoundary) {
+    return sliced.slice(0, lineBoundary).trim();
+  }
+
+  const pauseBoundary = Math.max(sliced.lastIndexOf(", "), sliced.lastIndexOf(": "), sliced.lastIndexOf(" — "));
+  if (pauseBoundary >= minBoundary) {
+    return sliced.slice(0, pauseBoundary).trim();
+  }
+
+  const wordBoundary = sliced.lastIndexOf(" ");
+  if (wordBoundary >= Math.max(16, Math.floor(maxChars * 0.4))) {
+    return sliced.slice(0, wordBoundary).trim();
+  }
+
+  return sliced.slice(0, maxChars).trim();
 }
 
 function estimateCharWidth(char: string, fontSize: number) {
@@ -396,6 +427,12 @@ function fitTextToBounds(
 
   while (fontSize > minFontSize && measuredHeight(normalized, fontSize) > maxHeight) {
     fontSize -= 2;
+  }
+
+  // Keep full copy whenever possible by allowing a small reserve below min font before truncation.
+  const reserveMinFontSize = Math.max(16, minFontSize - 10);
+  while (fontSize > reserveMinFontSize && measuredHeight(normalized, fontSize) > maxHeight) {
+    fontSize -= 1;
   }
 
   if (measuredHeight(normalized, fontSize) <= maxHeight) {
@@ -861,7 +898,7 @@ function fallbackTitleByRole(role: CarouselSlideRole) {
   }
 
   if (role === "consequence") {
-    return "К чему это приводит в поведении аудитории";
+    return "Что изменится, если оставить как есть";
   }
 
   if (role === "shift") {
@@ -889,22 +926,18 @@ function deriveTitleFromOutline(role: CarouselSlideRole, outline: OutlineLike) {
     : "";
 
   if (firstBullet) {
-    if (role === "solution") {
-      return compactTextLength(`Шаг 1: ${firstBullet}`, titleMaxLengthByRole(role));
+    if (role === "solution" || role === "consequence") {
+      return "";
     }
 
-    if (role === "consequence") {
-      return compactTextLength(`К чему это ведет: ${firstBullet}`, titleMaxLengthByRole(role));
-    }
-
-    return compactTextLength(firstBullet, titleMaxLengthByRole(role));
+    return sanitizeBlueprintText(firstBullet, titleMaxLengthByRole(role), true);
   }
 
   if (role === "example") {
     const before = typeof outline.before === "string" ? sanitizeBlueprintText(outline.before, 84) : "";
     const after = typeof outline.after === "string" ? sanitizeBlueprintText(outline.after, 84) : "";
     if (before || after) {
-      return compactTextLength("Разбор: до и после", titleMaxLengthByRole(role));
+      return sanitizeBlueprintText("Разбор: до и после", titleMaxLengthByRole(role), true);
     }
   }
 
@@ -1173,7 +1206,7 @@ function buildMainContent(
       ? "text"
       : blueprint.slideType;
   const metrics = resolveTextMetrics(format);
-  const bodyTextLimit = format === "9:16" ? 680 : format === "4:5" ? 610 : 540;
+  const bodyTextLimit = format === "9:16" ? 760 : format === "4:5" ? 700 : 620;
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
@@ -1191,7 +1224,7 @@ function buildMainContent(
     createFittedTextElement({
       role: "title",
       metaKey: "managed-title",
-      text: compactTextLength(overrides.text ?? blueprint.title, 160),
+      text: compactTextLength(overrides.text ?? blueprint.title, 220),
       x: overrides.x,
       y: overrides.y,
       width: overrides.width,
@@ -1271,7 +1304,7 @@ function buildMainContent(
       width: metrics.contentWidth,
       height: Math.round(metrics.height * 0.18),
       preferredFontSize: format === "9:16" ? 80 : format === "4:5" ? 72 : 68,
-      minFontSize: format === "9:16" ? 42 : 38,
+      minFontSize: format === "9:16" ? 34 : 32,
       lineHeight: 1.03
     });
 
@@ -1280,13 +1313,13 @@ function buildMainContent(
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
-        text: compactTextLength(blueprint.body, format === "9:16" ? 440 : 370),
+        text: compactTextLength(blueprint.body, format === "9:16" ? 560 : 500),
         x: metrics.contentX,
         y: imageArea.y + imageArea.height + Math.round(metrics.height * 0.22),
         width: metrics.contentWidth,
         height: Math.max(96, footerTop - (imageArea.y + imageArea.height + Math.round(metrics.height * 0.22)) - 14),
         preferredFontSize: format === "9:16" ? 43 : 39,
-        minFontSize: 26,
+        minFontSize: 22,
         fontFamily: template.bodyFont,
         fontStyle: "normal",
         fill: bodyFill,
@@ -1305,7 +1338,7 @@ function buildMainContent(
       width: metrics.contentWidth,
       height: Math.round(metrics.height * 0.18),
       preferredFontSize: format === "9:16" ? 84 : format === "4:5" ? 74 : 68,
-      minFontSize: format === "9:16" ? 46 : 40,
+      minFontSize: format === "9:16" ? 34 : 32,
       lineHeight: 1.03
     });
 
@@ -1314,13 +1347,13 @@ function buildMainContent(
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
-        text: compactTextLength(blueprint.body, format === "9:16" ? 400 : 330),
+        text: compactTextLength(blueprint.body, format === "9:16" ? 520 : 470),
         x: metrics.contentX,
         y: Math.round(metrics.height * 0.58),
         width: metrics.contentWidth,
         height: Math.max(96, footerTop - Math.round(metrics.height * 0.58) - 18),
         preferredFontSize: format === "9:16" ? 42 : 39,
-        minFontSize: 26,
+        minFontSize: 22,
         fontFamily: template.bodyFont,
         fontStyle: "normal",
         fill: bodyFill,
@@ -1336,7 +1369,7 @@ function buildMainContent(
     width: metrics.contentWidth,
     height: Math.round(metrics.height * 0.2),
     preferredFontSize: format === "9:16" ? 82 : format === "4:5" ? 74 : 68,
-    minFontSize: format === "9:16" ? 44 : 38,
+    minFontSize: format === "9:16" ? 34 : 32,
     lineHeight: 1.04
   });
 
@@ -1351,7 +1384,7 @@ function buildMainContent(
       width: metrics.contentWidth,
       height: Math.max(100, footerTop - metrics.bodyY - 16),
       preferredFontSize: format === "9:16" ? 44 : 40,
-      minFontSize: 25,
+      minFontSize: 22,
       fontFamily: template.bodyFont,
       fontStyle: "normal",
       fill: bodyFill,
