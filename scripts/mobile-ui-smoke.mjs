@@ -110,9 +110,7 @@ async function testEditorControls(page, failures) {
   await page.waitForTimeout(700);
   await page
     .waitForFunction(
-      () =>
-        document.querySelectorAll(".mobile-status-action").length >= 3 &&
-        document.querySelectorAll(".mobile-generate-actions button").length >= 2,
+      () => document.querySelectorAll(".mobile-generate-actions button").length >= 2,
       { timeout: 12000 }
     )
     .catch(() => undefined);
@@ -120,8 +118,10 @@ async function testEditorControls(page, failures) {
   const controlsProbe = await page.evaluate(() => {
     const normalize = (value) => (typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "");
     const quickActionButtons = Array.from(document.querySelectorAll(".mobile-status-action"));
-    const quickActionLabels = quickActionButtons.map((button) => normalize(button.textContent || ""));
-    const quickActionsCount = quickActionLabels.filter(Boolean).length;
+    const quickActionsCount = quickActionButtons.filter((button) => {
+      const style = getComputedStyle(button);
+      return style.display !== "none" && style.visibility !== "hidden";
+    }).length;
 
     const generateButtons = Array.from(document.querySelectorAll(".mobile-generate-actions button"));
     const hasGeneratePlusPost = generateButtons.some((button) =>
@@ -130,11 +130,10 @@ async function testEditorControls(page, failures) {
 
     return {
       quickActionsCount,
-      quickActionLabels,
       hasGeneratePlusPost
     };
   });
-  assert(controlsProbe.quickActionsCount >= 3, "editor: expected at least 3 quick action buttons", failures);
+  assert(controlsProbe.quickActionsCount === 0, "editor: quick action strip should be hidden", failures);
 
   const generatePanel = page.locator("details").filter({ hasText: "Создать новую карусель" }).first();
   if ((await generatePanel.count()) > 0) {
@@ -249,6 +248,7 @@ async function testMobileToolSheetLayout(page, failures) {
       const sideInsert = document.querySelector(".mobile-side-insert");
       const sideNav = document.querySelector(".mobile-side-nav");
       const templateTrigger = document.querySelector(".template-library-trigger-mobile");
+      const templateModal = document.querySelector(".template-library-modal");
       const selectedPill = document.querySelector(".mobile-tool-sheet-v2 .settings-selected-pill");
 
       const sheetRect = sheet?.getBoundingClientRect();
@@ -273,6 +273,12 @@ async function testMobileToolSheetLayout(page, failures) {
             getComputedStyle(templateTrigger).display !== "none" &&
             getComputedStyle(templateTrigger).visibility !== "hidden" &&
             templateTrigger.getBoundingClientRect().height > 2
+        ),
+        templateModalVisible: Boolean(
+          templateModal &&
+            getComputedStyle(templateModal).display !== "none" &&
+            getComputedStyle(templateModal).visibility !== "hidden" &&
+            templateModal.getBoundingClientRect().height > 2
         ),
         sideInsertVisible: Boolean(
           sideInsert &&
@@ -318,10 +324,17 @@ async function testMobileToolSheetLayout(page, failures) {
       );
     } else {
       assert(
-        probe.sheetVisible || probe.templateTriggerVisible,
-        `tool sheet: tab "${label}" did not expose template controls`,
+        probe.templateModalVisible || probe.sheetVisible || probe.templateTriggerVisible,
+        `tool sheet: tab "${label}" did not open template controls`,
         failures
       );
+      if (probe.templateModalVisible) {
+        const closeBtn = page.locator(".template-library-modal .editor-modal-close").first();
+        if ((await closeBtn.count()) > 0) {
+          await closeBtn.click();
+          await page.waitForTimeout(200);
+        }
+      }
     }
     assert(!probe.sideInsertVisible, `tool sheet: tab "${label}" shows side insert controls`, failures);
     assert(!probe.sideNavVisible, `tool sheet: tab "${label}" shows side nav controls`, failures);

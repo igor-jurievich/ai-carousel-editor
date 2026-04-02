@@ -2262,43 +2262,6 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           </details>
 
           <div className="mobile-status-pill">{status}</div>
-          <div className="mobile-status-actions" aria-label="Быстрые действия мобильного редактора">
-            <button
-              type="button"
-              className="mobile-status-action"
-              onClick={() => {
-                openMobileGeneratePanel(true);
-                setStatus("Введите тему и нажмите «Сгенерировать + пост».");
-              }}
-              disabled={generationLocked}
-            >
-              Новая + пост
-            </button>
-            <button
-              type="button"
-              className={`mobile-status-action ${mobileToolTab === "post" ? "active" : ""}`}
-              onClick={() => setMobileToolTab("post")}
-              disabled={generationLocked}
-            >
-              Подпись (AI)
-            </button>
-            <button
-              type="button"
-              className={`mobile-status-action ${mobileToolTab === "text" ? "active" : ""}`}
-              onClick={() => setMobileToolTab("text")}
-              disabled={generationLocked}
-            >
-              Текст слайда
-            </button>
-            <button
-              type="button"
-              className={`mobile-status-action ${mobileToolTab === "templates" ? "active" : ""}`}
-              onClick={() => setMobileToolTab("templates")}
-              disabled={generationLocked}
-            >
-              Шаблон
-            </button>
-          </div>
 
           <section className="mobile-canvas-zone" ref={mobileCanvasHostRef}>
             <CanvasEditor
@@ -2335,7 +2298,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               previewMode={isPreviewMode}
               showSlideBadge={false}
               fontsReady={fontsReady}
-              hideMobileSlideTools={Boolean(mobileToolTab)}
+              hideMobileSlideTools
             />
           </section>
 

@@ -212,7 +212,14 @@ export function MobileTools({
               type="button"
               className={`mobile-bottom-tool ${isActive ? "active" : ""}`}
               disabled={disabled}
-              onClick={() => onTabChange(isActive ? null : item.id)}
+              onClick={() => {
+                if (item.id === "templates") {
+                  onOpenTemplateModal();
+                  onTabChange(null);
+                  return;
+                }
+                onTabChange(isActive ? null : item.id);
+              }}
             >
               <span className="mobile-bottom-tool-icon">
                 <AppIcon name={item.icon} size={18} />

@@ -219,7 +219,7 @@ export default function GeneratePage() {
               rows={4}
               maxLength={MAX_TOPIC_CHARS}
             />
-            <div className="field-row" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div className="field-row generate-presets-row" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {PRESET_TOPICS.map((preset) => (
                 <button
                   key={preset}

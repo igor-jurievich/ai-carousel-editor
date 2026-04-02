@@ -76,12 +76,6 @@ export function TemplateLibraryModal({
         </header>
 
         <div className="editor-modal-content template-library-content template-library-content-v2">
-          <div className="template-library-topline">
-            <button type="button" className="template-create-button" disabled>
-              Создать шаблон
-            </button>
-          </div>
-
           <div className="segment-control" style={{ marginBottom: 12 }}>
             <button
               type="button"
