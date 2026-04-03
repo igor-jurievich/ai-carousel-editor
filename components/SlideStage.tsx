@@ -64,6 +64,7 @@ const TEMPLATE_ACCENTS: Record<string, string> = {
   dark: "#ff2a2a",
   color: "#ff2d00"
 };
+const LEGACY_ACCENT_COLORS = new Set(["#1f49ff", "#ff2a2a", "#ff2d00", "#ff2d20", "#315cff"]);
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
@@ -214,6 +215,31 @@ function resolveTitleHighlightRect(slide: Slide, title: TextElement) {
     height: textHeight + chipPadY * 2,
     fill: accent
   };
+}
+
+function shouldHideLegacyAccentChip(element: CanvasElement) {
+  if (element.type !== "shape") {
+    return false;
+  }
+  if (element.metaKey === "managed-title-accent-chip") {
+    return true;
+  }
+  if (element.metaKey) {
+    return false;
+  }
+  const fill = element.fill?.toLowerCase?.() ?? "";
+  if (!LEGACY_ACCENT_COLORS.has(fill)) {
+    return false;
+  }
+  const looksLikeChip =
+    element.width >= 40 &&
+    element.width <= 560 &&
+    element.height >= 20 &&
+    element.height <= 120 &&
+    element.opacity >= 0.75 &&
+    !element.stroke &&
+    (element.cornerRadius ?? 0) >= 6;
+  return looksLikeChip;
 }
 
 function areGuidesEqual(left: SnapGuides, right: SnapGuides) {
@@ -836,6 +862,9 @@ export function SlideStage({
         {slide.elements
           .filter((element) => {
             if (hiddenElementId && element.id === hiddenElementId) {
+              return false;
+            }
+            if (shouldHideLegacyAccentChip(element)) {
               return false;
             }
             if (showSlideBadge) {

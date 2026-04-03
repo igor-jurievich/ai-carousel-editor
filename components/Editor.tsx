@@ -128,6 +128,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const mobileGenerateTopicRef = useRef<HTMLTextAreaElement | null>(null);
   const mobileToolbarRef = useRef<HTMLElement | null>(null);
   const mobileToolSheetRef = useRef<HTMLElement | null>(null);
+  const editingTextElementIdRef = useRef<string | null>(null);
   const exportStageRefs = useRef<Record<string, Konva.Stage | null>>({});
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const backgroundImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -166,6 +167,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     const nextPath = nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
     router.replace(nextPath, { scroll: false });
   }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    editingTextElementIdRef.current = editingTextElementId;
+  }, [editingTextElementId]);
 
   useEffect(() => {
     if (!slides.length) {
@@ -1576,6 +1581,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setActiveSlideId(slideId);
     setSelectedElementId(elementId);
     setEditingTextElementId(elementId);
+    editingTextElementIdRef.current = elementId;
     setEditingValue(textElement.text);
   };
 
@@ -1584,11 +1590,13 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return;
     }
 
-    if (!editingTextElementId) {
+    const targetElementId = editingTextElementIdRef.current;
+    if (!targetElementId) {
       return;
     }
+    editingTextElementIdRef.current = null;
 
-    updateElement(editingTextElementId, (element) =>
+    updateElement(targetElementId, (element) =>
       element.type === "text"
         ? {
             ...element,
@@ -1603,6 +1611,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   };
 
   const handleCancelTextEditing = () => {
+    editingTextElementIdRef.current = null;
     setEditingTextElementId(null);
     setEditingValue("");
   };
@@ -1643,7 +1652,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return;
     }
 
-    if (editingTextElementId && slideId !== activeSlideId) {
+    if (editingTextElementIdRef.current && slideId !== activeSlideId) {
       handleCommitTextEditing(editingValue);
     }
 
@@ -1676,7 +1685,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return;
     }
 
-    if (editingTextElementId && elementId !== editingTextElementId) {
+    if (editingTextElementIdRef.current && elementId !== editingTextElementIdRef.current) {
       handleCommitTextEditing(editingValue);
     }
 
@@ -1700,7 +1709,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
     setActiveSlideId(slideId);
     setSelectedElementId(null);
-    if (editingTextElementId) {
+    if (editingTextElementIdRef.current) {
       handleCommitTextEditing(editingValue);
     }
   };
@@ -2171,6 +2180,12 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   onProfileSubtitleChange={(value) =>
                     handleUpdateFooter({ profileSubtitle: normalizeProfileSubtitleForUi(value) })
                   }
+                  selectedTextElement={selectedTextElement}
+                  onSelectedTextChange={handleSelectedTextChange}
+                  onSelectedTextColorChange={handleSelectedTextColorChange}
+                  onSelectedTextFontChange={handleSelectedTextFontChange}
+                  onSelectedTextSizeChange={handleSelectedTextSizeChange}
+                  onSelectedTextCaseChange={handleSelectedTextCaseChange}
                   disabled={generationLocked}
                   previewMode={isPreviewMode}
                 />
@@ -2533,7 +2548,21 @@ function cloneSlides(slides: Slide[]) {
       .filter(
         (element) =>
           element.metaKey !== "managed-title-accent-chip" &&
-          element.metaKey !== "managed-title-accent-text"
+          element.metaKey !== "managed-title-accent-text" &&
+          !(
+            element.type === "shape" &&
+            !element.metaKey &&
+            ["#1f49ff", "#ff2a2a", "#ff2d00", "#ff2d20", "#315cff"].includes(
+              (element.fill ?? "").toLowerCase()
+            ) &&
+            element.width >= 40 &&
+            element.width <= 560 &&
+            element.height >= 20 &&
+            element.height <= 120 &&
+            element.opacity >= 0.75 &&
+            !element.stroke &&
+            (element.cornerRadius ?? 0) >= 6
+          )
       )
       .map((element) => ({ ...element }))
   }));

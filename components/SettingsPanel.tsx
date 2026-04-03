@@ -1,7 +1,7 @@
 "use client";
 
 import { AppIcon } from "@/components/icons";
-import type { CarouselPostCaption, Slide, SlideFormat } from "@/types/editor";
+import type { CarouselPostCaption, Slide, SlideFormat, TextElement } from "@/types/editor";
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
 
@@ -37,9 +37,17 @@ type SettingsPanelProps = {
   onDeleteSlide: (slideId: string) => void;
   onProfileHandleChange: (value: string) => void;
   onProfileSubtitleChange: (value: string) => void;
+  selectedTextElement: TextElement | null;
+  onSelectedTextChange: (value: string) => void;
+  onSelectedTextColorChange: (value: string) => void;
+  onSelectedTextFontChange: (value: string) => void;
+  onSelectedTextSizeChange: (value: number) => void;
+  onSelectedTextCaseChange: (mode: "normal" | "uppercase" | "lowercase" | "capitalize") => void;
   disabled?: boolean;
   previewMode?: boolean;
 };
+
+const FONT_OPTIONS = ["Inter", "Manrope", "Advent Pro", "Fira Code", "Russo One", "Oswald"];
 
 export function SettingsPanel({
   slides,
@@ -73,6 +81,12 @@ export function SettingsPanel({
   onDeleteSlide,
   onProfileHandleChange,
   onProfileSubtitleChange,
+  selectedTextElement,
+  onSelectedTextChange,
+  onSelectedTextColorChange,
+  onSelectedTextFontChange,
+  onSelectedTextSizeChange,
+  onSelectedTextCaseChange,
   disabled = false,
   previewMode = false
 }: SettingsPanelProps) {
@@ -262,6 +276,111 @@ export function SettingsPanel({
             disabled={disabled}
           />
         </label>
+      </section>
+
+      <section className="settings-card settings-card-text-controls">
+        <div className="settings-inline-head">
+          <h3>Текст и шрифт</h3>
+          <span className="status-pill">
+            {selectedTextElement ? "Элемент выбран" : "Элемент не выбран"}
+          </span>
+        </div>
+
+        {selectedTextElement ? (
+          <>
+            <label className="field-label">
+              Текст элемента
+              <textarea
+                className="field"
+                value={selectedTextElement.text}
+                rows={4}
+                onChange={(event) => onSelectedTextChange(event.target.value)}
+                disabled={disabled}
+              />
+            </label>
+
+            <div className="field-row field-row-inline">
+              <label className="field-label" style={{ flex: 1 }}>
+                Шрифт
+                <select
+                  className="select"
+                  value={selectedTextElement.fontFamily}
+                  onChange={(event) => onSelectedTextFontChange(event.target.value)}
+                  disabled={disabled}
+                >
+                  {FONT_OPTIONS.map((fontName) => (
+                    <option key={fontName} value={fontName}>
+                      {fontName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field-label" style={{ width: 120 }}>
+                Размер
+                <input
+                  className="field"
+                  type="number"
+                  min={14}
+                  max={96}
+                  value={Math.round(selectedTextElement.fontSize)}
+                  onChange={(event) => onSelectedTextSizeChange(Number(event.target.value))}
+                  disabled={disabled}
+                />
+              </label>
+            </div>
+
+            <div className="field-row field-row-actions">
+              <button
+                type="button"
+                className="ghost-chip"
+                onClick={() => onSelectedTextCaseChange("normal")}
+                disabled={disabled}
+              >
+                Норм
+              </button>
+              <button
+                type="button"
+                className="ghost-chip"
+                onClick={() => onSelectedTextCaseChange("uppercase")}
+                disabled={disabled}
+              >
+                ВЕРХНИЙ
+              </button>
+              <button
+                type="button"
+                className="ghost-chip"
+                onClick={() => onSelectedTextCaseChange("lowercase")}
+                disabled={disabled}
+              >
+                нижний
+              </button>
+              <button
+                type="button"
+                className="ghost-chip"
+                onClick={() => onSelectedTextCaseChange("capitalize")}
+                disabled={disabled}
+              >
+                Каждое Слово
+              </button>
+            </div>
+
+            <label className="field-label">
+              Цвет текста
+              <input
+                className="field"
+                type="color"
+                value={selectedTextElement.fill}
+                onChange={(event) => onSelectedTextColorChange(event.target.value)}
+                disabled={disabled}
+              />
+            </label>
+          </>
+        ) : (
+          <div className="settings-hint">
+            Выберите заголовок или описание на слайде, чтобы изменить текст, шрифт, размер и цвет.
+          </div>
+        )}
       </section>
 
       <section className="settings-card settings-card-export">
