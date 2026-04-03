@@ -301,6 +301,10 @@ export function CanvasEditor({
                     autoFocus
                     value={editingValue}
                     onChange={(event) => onEditingValueChange(event.target.value)}
+                    onFocus={(event) => {
+                      const cursor = event.currentTarget.value.length;
+                      event.currentTarget.setSelectionRange(cursor, cursor);
+                    }}
                     onBlur={(event) => onCommitTextEditing(event.currentTarget.value)}
                     onKeyDown={(event) => {
                       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -494,6 +498,10 @@ export function CanvasEditor({
                           autoFocus
                           value={editingValue}
                           onChange={(event) => onEditingValueChange(event.target.value)}
+                          onFocus={(event) => {
+                            const cursor = event.currentTarget.value.length;
+                            event.currentTarget.setSelectionRange(cursor, cursor);
+                          }}
                           onBlur={(event) => onCommitTextEditing(event.currentTarget.value)}
                           onKeyDown={(event) => {
                             if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
