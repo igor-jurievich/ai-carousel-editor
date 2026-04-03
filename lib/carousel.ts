@@ -967,7 +967,7 @@ function buildTitleAccentElements(params: {
     return [];
   }
 
-  let accent = resolveTitleAccent(titleElement.text);
+  let accent = resolveLeadingTitleAccent(titleElement.text) ?? resolveTitleAccent(titleElement.text);
   if (!accent?.text) {
     return [];
   }
@@ -994,9 +994,8 @@ function buildTitleAccentElements(params: {
     return [];
   }
 
-  // Keep chip-accent geometry deterministic.
-  // If selected token lands on lower lines, too late in line, or very close to wrap edge,
-  // fallback to leading stable token to avoid visual duplication/drift.
+  // Keep chip-accent geometry deterministic and avoid drift/duplicates:
+  // only allow accents on the first visual line.
   const unstableAccentPosition =
     accentPosition.lineIndex > 0 ||
     accentPosition.startInLine > 16 ||
@@ -1008,7 +1007,7 @@ function buildTitleAccentElements(params: {
     if (leadingAccent?.text && leadingPosition && leadingPosition.lineIndex === 0) {
       accent = leadingAccent;
       accentPosition = leadingPosition;
-    } else if (accentPosition.lineIndex > 0) {
+    } else {
       return [];
     }
   }
@@ -1030,7 +1029,6 @@ function buildTitleAccentElements(params: {
     const chipPadY = Math.max(5, Math.round(titleElement.fontSize * 0.08));
     const maxChipWidth = Math.max(34, titleElement.width - Math.max(0, accentX - titleElement.x));
     const chipWidth = clampValue(accentWidth + chipPadX * 2, 34, maxChipWidth);
-    const accentTextWidth = Math.max(18, maxChipWidth - chipPadX);
     return [
       createShapeElement({
         metaKey: "managed-title-accent-chip",
@@ -1039,26 +1037,8 @@ function buildTitleAccentElements(params: {
         width: chipWidth,
         height: textHeight + chipPadY * 2,
         fill: palette.accent,
-        opacity: 0.94,
+        opacity: 0.92,
         cornerRadius: Math.round(titleElement.fontSize * 0.08)
-      }),
-      createTextElement({
-        role: "title",
-        metaKey: "managed-title-accent-text",
-        text: accent.text,
-        x: accentX,
-        y: accentY,
-        // Keep enough width so Konva does not wrap the last symbol to the next visual line.
-        width: accentTextWidth,
-        height: textHeight,
-        fontSize: titleElement.fontSize,
-        lineHeight: titleElement.lineHeight ?? 1.05,
-        fontFamily: titleElement.fontFamily,
-        fontStyle: titleElement.fontStyle ?? "bold",
-        fill: resolveReadableAccentTextColor(palette.accent),
-        align: "left",
-        rotation: titleElement.rotation,
-        opacity: titleElement.opacity
       })
     ];
   }
@@ -1077,14 +1057,7 @@ function composeTitleAndAccentElements(params: {
     return [titleElement];
   }
 
-  const accentShapes = accents.filter((element) => element.type === "shape");
-  const accentText = accents.filter((element) => element.type === "text");
-
-  if (palette.accentMode === "chip") {
-    return [...accentShapes, titleElement, ...accentText];
-  }
-
-  return [...accentShapes, ...accentText, titleElement];
+  return [...accents, titleElement];
 }
 
 export function createTextElement(
@@ -1590,11 +1563,15 @@ function buildMainContent(
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
-  const bodyGap = format === "9:16" ? 34 : format === "4:5" ? 28 : 24;
+  const bodyGap = format === "9:16" ? 40 : format === "4:5" ? 34 : 28;
   const resolveBodyStartY = (title: TextElement, preferredY: number) => {
     const lineHeight = title.lineHeight ?? 1.04;
     const estimatedTitleHeight = estimateTextHeight(title.text, title.width, title.fontSize, lineHeight);
-    return Math.max(preferredY, Math.round(title.y + estimatedTitleHeight + bodyGap));
+    const safeTitleHeight = Math.max(
+      title.height,
+      estimatedTitleHeight + Math.round(title.fontSize * 0.28)
+    );
+    return Math.max(preferredY, Math.round(title.y + safeTitleHeight + bodyGap));
   };
 
   const titleElementFor = (overrides: {

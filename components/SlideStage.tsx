@@ -568,6 +568,9 @@ export function SlideStage({
   const selectedElement = selectedElementId
     ? slide.elements.find((element) => element.id === selectedElementId) ?? null
     : null;
+  const hasLegacyAccentText = slide.elements.some(
+    (element) => element.type === "text" && element.metaKey === "managed-title-accent-text"
+  );
 
   const handleTransformEnd = (element: CanvasElement, node: Konva.Node) => {
     const scaleX = node.scaleX();
@@ -727,9 +730,20 @@ export function SlideStage({
         {slide.elements
           .filter((element) => {
             if (showSlideBadge) {
+              if (element.metaKey === "managed-title-accent-text") {
+                return false;
+              }
+              if (hasLegacyAccentText && element.metaKey === "managed-title-accent-chip") {
+                return false;
+              }
               return true;
             }
-            return element.metaKey !== "slide-chip" && element.metaKey !== "slide-chip-text";
+            return (
+              element.metaKey !== "slide-chip" &&
+              element.metaKey !== "slide-chip-text" &&
+              element.metaKey !== "managed-title-accent-text" &&
+              !(hasLegacyAccentText && element.metaKey === "managed-title-accent-chip")
+            );
           })
           .map((element) => {
             const selected = selectedElementId === element.id;
