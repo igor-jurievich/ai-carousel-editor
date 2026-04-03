@@ -59,6 +59,11 @@ const UI_ACCENT = "#2caea1";
 const UI_ACCENT_SOFT = "rgba(86, 207, 194, 0.24)";
 const UI_ACCENT_FAINT = "rgba(86, 207, 194, 0.12)";
 const UI_ACCENT_GUIDE = "rgba(86, 207, 194, 0.72)";
+const TEMPLATE_ACCENTS: Record<string, string> = {
+  light: "#1f49ff",
+  dark: "#ff2a2a",
+  color: "#ff2d00"
+};
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
@@ -140,6 +145,75 @@ function estimateTextHeight(element: TextElement, width: number) {
   }
 
   return Math.ceil(lines * element.fontSize * lineHeight + element.fontSize * 0.4);
+}
+
+function resolveFontWeight(fontStyle?: string) {
+  if (!fontStyle) {
+    return "700";
+  }
+  const normalized = fontStyle.toLowerCase();
+  if (normalized.includes("bold")) {
+    return "700";
+  }
+  if (normalized.includes("500")) {
+    return "500";
+  }
+  return "400";
+}
+
+let textMeasureCanvas: HTMLCanvasElement | null = null;
+
+function measureTextWidth(value: string, element: TextElement) {
+  if (!value) {
+    return 0;
+  }
+  if (typeof document !== "undefined") {
+    try {
+      if (!textMeasureCanvas) {
+        textMeasureCanvas = document.createElement("canvas");
+      }
+      const context = textMeasureCanvas.getContext("2d");
+      if (context) {
+        context.font = `${resolveFontWeight(element.fontStyle)} ${element.fontSize}px "${element.fontFamily}", sans-serif`;
+        const width = context.measureText(value).width;
+        if (Number.isFinite(width) && width > 0) {
+          return width;
+        }
+      }
+    } catch {
+      // noop fallback below
+    }
+  }
+  return value.length * element.fontSize * 0.58;
+}
+
+function resolveTitleHighlightRect(slide: Slide, title: TextElement) {
+  if (slide.slideType === "big_text" && slide.templateId === "dark") {
+    return null;
+  }
+
+  const firstToken = title.text
+    .trim()
+    .match(/[\p{L}\p{N}-]+/u)?.[0];
+  if (!firstToken) {
+    return null;
+  }
+
+  const chipPadX = Math.max(8, Math.round(title.fontSize * 0.14));
+  const chipPadY = Math.max(5, Math.round(title.fontSize * 0.08));
+  const tokenWidth = Math.ceil(measureTextWidth(firstToken, title));
+  const chipWidth = Math.max(34, Math.min(title.width, tokenWidth + chipPadX * 2));
+  const lineHeight = title.lineHeight ?? 1.05;
+  const textHeight = Math.ceil(title.fontSize * lineHeight);
+  const accent = TEMPLATE_ACCENTS[slide.templateId ?? "light"] ?? TEMPLATE_ACCENTS.light;
+
+  return {
+    x: title.x - chipPadX,
+    y: title.y - chipPadY,
+    width: chipWidth,
+    height: textHeight + chipPadY * 2,
+    fill: accent
+  };
 }
 
 function areGuidesEqual(left: SnapGuides, right: SnapGuides) {
@@ -570,9 +644,26 @@ export function SlideStage({
   const selectedElement = selectedElementId
     ? slide.elements.find((element) => element.id === selectedElementId) ?? null
     : null;
-  const hasLegacyAccentText = slide.elements.some(
-    (element) => element.type === "text" && element.metaKey === "managed-title-accent-text"
+  const selectedTitleElement =
+    selectedElement?.type === "text" && selectedElement.role === "title" ? selectedElement : null;
+  const visibleTitleCandidates = slide.elements.filter(
+    (element): element is TextElement =>
+      element.type === "text" &&
+      element.role === "title" &&
+      element.metaKey !== "managed-title-accent-text" &&
+      (!hiddenElementId || element.id !== hiddenElementId)
   );
+  const managedTitle = visibleTitleCandidates.find((element) => element.metaKey === "managed-title") ?? null;
+  const titleForHighlight =
+    selectedTitleElement && (!hiddenElementId || hiddenElementId !== selectedTitleElement.id)
+      ? selectedTitleElement
+      : visibleTitleCandidates.length === 1
+        ? visibleTitleCandidates[0]
+        : managedTitle;
+  const titleHighlight =
+    titleForHighlight && visibleTitleCandidates.length <= 1
+      ? resolveTitleHighlightRect(slide, titleForHighlight)
+      : null;
 
   const handleTransformEnd = (element: CanvasElement, node: Konva.Node) => {
     const scaleX = node.scaleX();
@@ -729,6 +820,19 @@ export function SlideStage({
           />
         ))}
 
+        {titleHighlight ? (
+          <Rect
+            x={titleHighlight.x}
+            y={titleHighlight.y}
+            width={titleHighlight.width}
+            height={titleHighlight.height}
+            fill={titleHighlight.fill}
+            opacity={0.92}
+            cornerRadius={Math.round((titleForHighlight?.fontSize ?? 24) * 0.08)}
+            listening={false}
+          />
+        ) : null}
+
         {slide.elements
           .filter((element) => {
             if (hiddenElementId && element.id === hiddenElementId) {
@@ -738,7 +842,7 @@ export function SlideStage({
               if (element.metaKey === "managed-title-accent-text") {
                 return false;
               }
-              if (hasLegacyAccentText && element.metaKey === "managed-title-accent-chip") {
+              if (element.metaKey === "managed-title-accent-chip") {
                 return false;
               }
               return true;
@@ -747,7 +851,7 @@ export function SlideStage({
               element.metaKey !== "slide-chip" &&
               element.metaKey !== "slide-chip-text" &&
               element.metaKey !== "managed-title-accent-text" &&
-              !(hasLegacyAccentText && element.metaKey === "managed-title-accent-chip")
+              element.metaKey !== "managed-title-accent-chip"
             );
           })
           .map((element) => {

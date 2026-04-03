@@ -976,62 +976,11 @@ function buildTitleAccentElements(params: {
   palette: SlidePalette;
   template: CarouselTemplate;
 }): CanvasElement[] {
+  // Accent is rendered dynamically in Stage to avoid stale or orphan accent blocks
+  // after text edits/reflows. Keep slide data clean and text-only for the title.
   const { titleElement, palette } = params;
-
-  if (palette.accentMode === "none") {
-    return [];
-  }
-
-  // Long/truncated headings are already visually dense; accent overlays there tend to look noisy.
-  if (titleElement.wasAutoTruncated || normalizeMultilineText(titleElement.text).length > 86) {
-    return [];
-  }
-  const lineHeight = titleElement.lineHeight ?? 1.05;
-  const visualLines = estimateVisualLineCount(
-    titleElement.text,
-    titleElement.width,
-    titleElement.fontSize,
-    lineHeight
-  );
-  if (visualLines > 2) {
-    return [];
-  }
-
-  const accent = resolveFirstRenderedWordAccent(titleElement.text);
-  if (!accent?.text) {
-    return [];
-  }
-
-  const accentX = titleElement.x;
-  const accentY = titleElement.y;
-  const accentWidth = Math.ceil(
-    measureTextWidth(accent.text, titleElement.fontSize, titleElement.fontFamily, titleElement.fontStyle)
-  );
-  const textWidth = Math.ceil(clampValue(accentWidth + 4, 16, titleElement.width));
-  const textHeight = Math.ceil(titleElement.fontSize * lineHeight);
-  const accentCoverage = textWidth / Math.max(1, titleElement.width);
-  if (accentCoverage > 0.7 && visualLines > 1) {
-    return [];
-  }
-
-  if (palette.accentMode === "chip" || palette.accentMode === "text") {
-    const chipPadX = Math.max(8, Math.round(titleElement.fontSize * 0.14));
-    const chipPadY = Math.max(5, Math.round(titleElement.fontSize * 0.08));
-    const maxChipWidth = Math.max(34, titleElement.width);
-    const chipWidth = clampValue(accentWidth + chipPadX * 2, 34, maxChipWidth);
-    return [
-      createShapeElement({
-        metaKey: "managed-title-accent-chip",
-        x: accentX - chipPadX,
-        y: accentY - chipPadY,
-        width: chipWidth,
-        height: textHeight + chipPadY * 2,
-        fill: palette.accent,
-        opacity: 0.92,
-        cornerRadius: Math.round(titleElement.fontSize * 0.08)
-      })
-    ];
-  }
+  void titleElement;
+  void palette;
   return [];
 }
 

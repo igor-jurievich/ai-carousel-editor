@@ -1579,7 +1579,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setEditingValue(textElement.text);
   };
 
-  const handleCommitTextEditing = () => {
+  const handleCommitTextEditing = (nextValue?: string) => {
     if (generationLocked) {
       return;
     }
@@ -1592,12 +1592,13 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       element.type === "text"
         ? {
             ...element,
-            text: editingValue
+            text: nextValue ?? editingValue
           }
         : element
     );
 
     setEditingTextElementId(null);
+    setEditingValue("");
     setStatus("Текст обновлён.");
   };
 
@@ -1642,6 +1643,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return;
     }
 
+    if (editingTextElementId && slideId !== activeSlideId) {
+      handleCommitTextEditing(editingValue);
+    }
+
     if (slideId !== activeSlideId) {
       trackEvent({
         name: "slide_selected",
@@ -1671,12 +1676,12 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return;
     }
 
+    if (editingTextElementId && elementId !== editingTextElementId) {
+      handleCommitTextEditing(editingValue);
+    }
+
     setActiveSlideId(slideId);
     setSelectedElementId(elementId);
-
-    if (editingTextElementId && elementId !== editingTextElementId) {
-      setEditingTextElementId(null);
-    }
   };
 
   const handleVisibleSlideChange = (slideId: string) => {
@@ -1696,7 +1701,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setActiveSlideId(slideId);
     setSelectedElementId(null);
     if (editingTextElementId) {
-      setEditingTextElementId(null);
+      handleCommitTextEditing(editingValue);
     }
   };
 
@@ -2524,7 +2529,13 @@ function prepareSlidesForExport(
 function cloneSlides(slides: Slide[]) {
   return slides.map((slide) => ({
     ...slide,
-    elements: slide.elements.map((element) => ({ ...element }))
+    elements: slide.elements
+      .filter(
+        (element) =>
+          element.metaKey !== "managed-title-accent-chip" &&
+          element.metaKey !== "managed-title-accent-text"
+      )
+      .map((element) => ({ ...element }))
   }));
 }
 

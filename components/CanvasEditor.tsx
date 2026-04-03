@@ -20,7 +20,7 @@ type CanvasEditorProps = {
   editingTextElement: TextElement | null;
   editingValue: string;
   onEditingValueChange: (value: string) => void;
-  onCommitTextEditing: () => void;
+  onCommitTextEditing: (value?: string) => void;
   onCancelTextEditing: () => void;
   onStartTextEditing: (slideId: string, elementId: string) => void;
   onSelectSlide: (slideId: string) => void;
@@ -301,11 +301,11 @@ export function CanvasEditor({
                     autoFocus
                     value={editingValue}
                     onChange={(event) => onEditingValueChange(event.target.value)}
-                    onBlur={onCommitTextEditing}
+                    onBlur={(event) => onCommitTextEditing(event.currentTarget.value)}
                     onKeyDown={(event) => {
                       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                         event.preventDefault();
-                        onCommitTextEditing();
+                        onCommitTextEditing((event.currentTarget as HTMLTextAreaElement).value);
                       }
 
                       if (event.key === "Escape") {
@@ -494,11 +494,11 @@ export function CanvasEditor({
                           autoFocus
                           value={editingValue}
                           onChange={(event) => onEditingValueChange(event.target.value)}
-                          onBlur={onCommitTextEditing}
+                          onBlur={(event) => onCommitTextEditing(event.currentTarget.value)}
                           onKeyDown={(event) => {
                             if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                               event.preventDefault();
-                              onCommitTextEditing();
+                              onCommitTextEditing((event.currentTarget as HTMLTextAreaElement).value);
                             }
 
                             if (event.key === "Escape") {
