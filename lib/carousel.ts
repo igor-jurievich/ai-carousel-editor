@@ -234,6 +234,33 @@ const TITLE_DEDUPE_STOP_WORDS = new Set([
 ]);
 const LEGACY_TITLE_TEMPLATE_RE =
   /\b(по\s+теме|в\s+теме|где\s+ломается\s+поток|что\s+это\s+стоит\s+в\s+теме|разбор\s+под\s+ваш\s+кейс)\b/iu;
+const TITLE_ACCENT_STOP_WORDS = new Set([
+  "как",
+  "когда",
+  "почему",
+  "что",
+  "это",
+  "если",
+  "или",
+  "чтобы",
+  "для",
+  "про",
+  "под",
+  "без",
+  "при",
+  "у",
+  "в",
+  "на",
+  "по",
+  "из",
+  "до",
+  "после",
+  "и",
+  "а",
+  "но",
+  "мы",
+  "вы"
+]);
 
 function shouldDedupeTitleToken(token: string) {
   return token.length >= 4 && !TITLE_DEDUPE_STOP_WORDS.has(token);
@@ -534,7 +561,7 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       titleColor: template.titleColor,
       bodyColor: template.bodyColor,
       accent: template.accent,
-      accentMode: blueprint.slideType === "image_text" ? "chip" : "text",
+      accentMode: "chip",
       gridMode: "full",
       gridStep: baseGridStep,
       gridColor: baseGridColor
@@ -547,7 +574,7 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       titleColor: template.titleColor,
       bodyColor: template.bodyColor,
       accent: template.accent,
-      accentMode: blueprint.slideType === "cta" ? "text" : "chip",
+      accentMode: "chip",
       gridMode: "dots",
       gridStep: baseGridStep,
       gridColor: "rgba(20, 24, 32, 0.12)"
@@ -560,7 +587,7 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       titleColor: template.titleColor,
       bodyColor: template.bodyColor,
       accent: template.accent,
-      accentMode: blueprint.slideType === "big_text" ? "none" : "text",
+      accentMode: blueprint.slideType === "big_text" ? "none" : "chip",
       gridMode: "vertical",
       gridStep: baseGridStep,
       gridColor: baseGridColor
@@ -585,6 +612,17 @@ function trimAccentEdge(raw: string) {
     .replace(/[\s.,;:!?'"«»(){}\[\]—-]+$/u, "");
 }
 
+function isAccentCandidateWord(value: string) {
+  const normalized = trimAccentEdge(value).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (normalized.length < 2 || normalized.length > 24) {
+    return false;
+  }
+  return !TITLE_ACCENT_STOP_WORDS.has(normalized);
+}
+
 function resolveTitleAccent(title: string) {
   const normalized = normalizeMultilineText(title);
   if (!normalized) {
@@ -593,26 +631,85 @@ function resolveTitleAccent(title: string) {
 
   const tokenPattern = /[\p{L}\p{N}-]+/gu;
   const tokens = Array.from(normalized.matchAll(tokenPattern));
-  const firstToken = tokens[0];
-  if (!firstToken) {
+  if (!tokens.length) {
     return null;
   }
 
-  const best = trimAccentEdge(firstToken[0] ?? "");
-  if (!best || best.length < 2 || best.length > 24) {
-    return null;
+  const pickToken = (token: RegExpMatchArray | undefined) => {
+    if (!token) {
+      return null;
+    }
+    const raw = token[0] ?? "";
+    const text = trimAccentEdge(raw);
+    if (!isAccentCandidateWord(text)) {
+      return null;
+    }
+    const start = typeof token.index === "number" ? token.index : normalized.indexOf(raw);
+    if (start < 0) {
+      return null;
+    }
+    return {
+      text,
+      start,
+      end: start + text.length
+    };
+  };
+
+  const quotePattern = /["«](.+?)["»]/gu;
+  const quotes = Array.from(normalized.matchAll(quotePattern));
+  for (const quoteMatch of quotes) {
+    const quoteStart = quoteMatch.index ?? -1;
+    if (quoteStart < 0) {
+      continue;
+    }
+    const quoteText = quoteMatch[0] ?? "";
+    const quoteEnd = quoteStart + quoteText.length;
+    const tokensInQuote = tokens.filter((token) => {
+      if (typeof token.index !== "number") {
+        return false;
+      }
+      return token.index > quoteStart && token.index < quoteEnd;
+    });
+
+    for (let index = tokensInQuote.length - 1; index >= 0; index -= 1) {
+      const picked = pickToken(tokensInQuote[index]);
+      if (picked) {
+        return picked;
+      }
+    }
   }
 
-  const start = typeof firstToken.index === "number" ? firstToken.index : normalized.indexOf(best);
-  if (start !== 0) {
+  const numericCandidate = tokens.find((token) => /[\d%]/u.test(token[0] ?? ""));
+  const pickedNumeric = pickToken(numericCandidate);
+  if (pickedNumeric) {
+    return pickedNumeric;
+  }
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const picked = pickToken(tokens[index]);
+    if (!picked) {
+      continue;
+    }
+    if (picked.text.length >= 5 || index === 0) {
+      return picked;
+    }
+  }
+
+  const fallbackToken = tokens[0];
+  const fallbackText = trimAccentEdge(fallbackToken?.[0] ?? "");
+  if (!fallbackText || fallbackText.length < 2 || fallbackText.length > 24) {
     return null;
   }
-  const end = start + best.length;
+  const fallbackStart =
+    typeof fallbackToken?.index === "number" ? fallbackToken.index : normalized.indexOf(fallbackText);
+  if (fallbackStart < 0) {
+    return null;
+  }
 
   return {
-    text: best,
-    start,
-    end
+    text: fallbackText,
+    start: fallbackStart,
+    end: fallbackStart + fallbackText.length
   };
 }
 
@@ -635,6 +732,111 @@ function resolveReadableAccentTextColor(fill: string) {
   const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
   return luma > 0.6 ? "#101621" : "#ffffff";
+}
+
+function estimateTextWidth(value: string, fontSize: number) {
+  if (!value) {
+    return 0;
+  }
+  return value.split("").reduce((sum, char) => sum + estimateCharWidth(char, fontSize), 0);
+}
+
+function wrapTextLinesByWidth(text: string, width: number, fontSize: number) {
+  const normalized = normalizeMultilineText(text);
+  if (!normalized) {
+    return [] as string[];
+  }
+
+  const lines: string[] = [];
+  const spaceWidth = estimateCharWidth(" ", fontSize);
+  const paragraphs = normalized.split("\n");
+
+  for (const paragraph of paragraphs) {
+    const words = paragraph.trim().split(/\s+/u).filter(Boolean);
+    if (!words.length) {
+      lines.push("");
+      continue;
+    }
+
+    let currentLine = words[0];
+    let currentWidth = estimateTextWidth(words[0], fontSize);
+
+    for (let index = 1; index < words.length; index += 1) {
+      const word = words[index];
+      const wordWidth = estimateTextWidth(word, fontSize);
+      const nextWidth = currentWidth + spaceWidth + wordWidth;
+
+      if (nextWidth <= width || !currentLine) {
+        currentLine = `${currentLine} ${word}`;
+        currentWidth = nextWidth;
+        continue;
+      }
+
+      lines.push(currentLine);
+      currentLine = word;
+      currentWidth = wordWidth;
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+  }
+
+  return lines;
+}
+
+function isWordChar(value: string) {
+  return /[\p{L}\p{N}-]/u.test(value);
+}
+
+function findAccentInLine(line: string, accentText: string) {
+  const haystack = line.toLowerCase();
+  const needle = accentText.toLowerCase();
+  if (!needle) {
+    return -1;
+  }
+
+  let index = haystack.indexOf(needle);
+  while (index !== -1) {
+    const before = index > 0 ? line[index - 1] : "";
+    const after = index + needle.length < line.length ? line[index + needle.length] : "";
+    const isBoundaryBefore = !before || !isWordChar(before);
+    const isBoundaryAfter = !after || !isWordChar(after);
+    if (isBoundaryBefore && isBoundaryAfter) {
+      return index;
+    }
+    index = haystack.indexOf(needle, index + 1);
+  }
+
+  return -1;
+}
+
+function resolveTitleAccentPosition(titleElement: TextElement, accentText: string) {
+  const lineHeight = titleElement.lineHeight ?? 1.05;
+  const lines = wrapTextLinesByWidth(titleElement.text, titleElement.width, titleElement.fontSize);
+  if (!lines.length) {
+    return null;
+  }
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    const startInLine = findAccentInLine(line, accentText);
+    if (startInLine === -1) {
+      continue;
+    }
+
+    const prefix = line.slice(0, startInLine);
+    const xOffset = Math.round(estimateTextWidth(prefix, titleElement.fontSize));
+    const yOffset = Math.round(lineIndex * titleElement.fontSize * lineHeight);
+
+    return {
+      x: titleElement.x + xOffset,
+      y: titleElement.y + yOffset,
+      lineIndex
+    };
+  }
+
+  return null;
 }
 
 function buildTitleAccentElements(params: {
@@ -673,25 +875,27 @@ function buildTitleAccentElements(params: {
     return [];
   }
 
-  if (accent.text.includes(" ") || accent.text.includes("\n")) {
+  const accentPosition = resolveTitleAccentPosition(titleElement, accent.text);
+  if (!accentPosition) {
     return [];
   }
-  const accentX = titleElement.x;
-  const accentY = titleElement.y;
+  const accentX = accentPosition.x;
+  const accentY = accentPosition.y;
   const accentWidth = Math.ceil(
     accent.text.split("").reduce((sum, char) => sum + estimateCharWidth(char, titleElement.fontSize), 0)
   );
   const textWidth = Math.ceil(clampValue(accentWidth + 4, 16, titleElement.width));
   const textHeight = Math.ceil(titleElement.fontSize * lineHeight);
   const accentCoverage = textWidth / Math.max(1, titleElement.width);
-  if (accentCoverage > 0.45 && visualLines > 1) {
+  if (accentCoverage > 0.7 && visualLines > 1) {
     return [];
   }
 
-  if (palette.accentMode === "chip") {
+  if (palette.accentMode === "chip" || palette.accentMode === "text") {
     const chipPadX = Math.max(8, Math.round(titleElement.fontSize * 0.14));
     const chipPadY = Math.max(5, Math.round(titleElement.fontSize * 0.08));
-    const chipWidth = clampValue(accentWidth + chipPadX * 2, 34, titleElement.width);
+    const maxChipWidth = Math.max(34, titleElement.width - Math.max(0, accentX - titleElement.x));
+    const chipWidth = clampValue(accentWidth + chipPadX * 2, 34, maxChipWidth);
     return [
       createShapeElement({
         metaKey: "managed-title-accent-chip",
@@ -722,38 +926,7 @@ function buildTitleAccentElements(params: {
       })
     ];
   }
-
-  // For text accent mode we use an underline shape instead of a second text layer.
-  // This preserves the accent effect and avoids duplicated/shifted glyph rendering.
-  if (palette.accentMode === "text") {
-    const lineThickness = Math.max(7, Math.round(titleElement.fontSize * 0.28));
-    const lineY = accentY + Math.max(4, Math.round(textHeight * 0.72));
-    return [
-      createShapeElement({
-        metaKey: "managed-title-accent-chip",
-        x: accentX - 2,
-        y: lineY,
-        width: Math.min(titleElement.width, textWidth + 6),
-        height: lineThickness,
-        fill: palette.accent,
-        opacity: 0.92,
-        cornerRadius: Math.max(2, Math.round(lineThickness * 0.35))
-      })
-    ];
-  }
-
-  return [
-    createShapeElement({
-      metaKey: "managed-title-accent-chip",
-      x: accentX - 2,
-      y: accentY + Math.max(4, Math.round(textHeight * 0.7)),
-      width: Math.min(titleElement.width, textWidth + 6),
-      height: Math.max(7, Math.round(titleElement.fontSize * 0.28)),
-      fill: palette.accent,
-      opacity: 0.9,
-      cornerRadius: Math.max(2, Math.round(titleElement.fontSize * 0.08))
-    })
-  ];
+  return [];
 }
 
 function composeTitleAndAccentElements(params: {
