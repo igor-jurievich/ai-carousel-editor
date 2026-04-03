@@ -384,17 +384,12 @@ export function CanvasEditor({
               <MobileIconButton
                 icon="trash"
                 title="Удалить слайд"
-                label="Удалить"
+                label="Удал."
                 onClick={() => onDeleteSlide(activeSlide.id)}
                 disabled={slides.length <= 1 || disabled}
                 destructive
               />
             </div>
-          )}
-          {previewMode || hideMobileSlideTools ? null : (
-            <p className="mobile-slide-tools-hint">
-              Листайте свайпом или кнопками ←/→. Кнопка <strong>«Добавить»</strong> создаёт новый слайд.
-            </p>
           )}
         </div>
       </section>

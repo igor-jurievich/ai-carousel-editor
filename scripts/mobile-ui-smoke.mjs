@@ -317,11 +317,7 @@ async function testMobileToolSheetLayout(page, failures) {
           failures
         );
       }
-      assert(
-        !probe.isSlideToolsVisible,
-        `tool sheet: tab "${label}" keeps slide action row visible and stacked`,
-        failures
-      );
+      assert(probe.isSlideToolsVisible, `tool sheet: tab "${label}" hides slide action row`, failures);
     } else {
       assert(
         probe.templateModalVisible || probe.sheetVisible || probe.templateTriggerVisible,
