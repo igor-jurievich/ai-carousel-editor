@@ -26,6 +26,7 @@ type SlideStageProps = {
   onTransformElement?: (elementId: string, updates: Record<string, number>) => void;
   onStartTextEditing?: (elementId: string) => void;
   onRequestSlidePhotoUpload?: (slideId: string) => void;
+  hiddenElementId?: string | null;
   stageRef?: (node: Konva.Stage | null) => void;
   showSlideBadge?: boolean;
 };
@@ -519,6 +520,7 @@ export function SlideStage({
   onTransformElement,
   onStartTextEditing,
   onRequestSlidePhotoUpload,
+  hiddenElementId = null,
   stageRef,
   showSlideBadge = true
 }: SlideStageProps) {
@@ -729,6 +731,9 @@ export function SlideStage({
 
         {slide.elements
           .filter((element) => {
+            if (hiddenElementId && element.id === hiddenElementId) {
+              return false;
+            }
             if (showSlideBadge) {
               if (element.metaKey === "managed-title-accent-text") {
                 return false;

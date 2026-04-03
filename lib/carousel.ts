@@ -745,6 +745,36 @@ function resolveLeadingTitleAccent(title: string) {
   return null;
 }
 
+function resolveFirstRenderedWordAccent(title: string) {
+  const normalized = normalizeMultilineText(title);
+  if (!normalized) {
+    return null;
+  }
+
+  const tokenPattern = /[\p{L}\p{N}-]+/gu;
+  const token = tokenPattern.exec(normalized);
+  if (!token) {
+    return null;
+  }
+
+  const raw = token[0] ?? "";
+  const text = trimAccentEdge(raw);
+  if (!text || text.length < 2 || text.length > 32) {
+    return null;
+  }
+
+  const start = typeof token.index === "number" ? token.index : normalized.indexOf(raw);
+  if (start < 0) {
+    return null;
+  }
+
+  return {
+    text,
+    start,
+    end: start + text.length
+  };
+}
+
 function resolveReadableAccentTextColor(fill: string) {
   const hex = fill.trim().replace(/^#/, "");
   const normalized =
@@ -967,53 +997,13 @@ function buildTitleAccentElements(params: {
     return [];
   }
 
-  let accent = resolveLeadingTitleAccent(titleElement.text) ?? resolveTitleAccent(titleElement.text);
+  const accent = resolveFirstRenderedWordAccent(titleElement.text);
   if (!accent?.text) {
     return [];
   }
 
-  const accentLength = accent.text.length;
-  if (accentLength < 2 || accentLength > 32) {
-    return [];
-  }
-
-  let accentPosition = resolveTitleAccentPosition(titleElement, accent.text);
-  if (accentPosition && accentPosition.lineIndex > 1) {
-    const leadingAccent = resolveLeadingTitleAccent(titleElement.text);
-    if (!leadingAccent?.text) {
-      return [];
-    }
-    const leadingPosition = resolveTitleAccentPosition(titleElement, leadingAccent.text);
-    if (!leadingPosition || leadingPosition.lineIndex > 1) {
-      return [];
-    }
-    accent = leadingAccent;
-    accentPosition = leadingPosition;
-  }
-  if (!accentPosition) {
-    return [];
-  }
-
-  // Keep chip-accent geometry deterministic and avoid drift/duplicates:
-  // only allow accents on the first visual line.
-  const unstableAccentPosition =
-    accentPosition.lineIndex > 0 ||
-    accentPosition.startInLine > 16 ||
-    accentPosition.suffixWidth < Math.round(titleElement.fontSize * 0.22);
-  if (unstableAccentPosition) {
-    const leadingAccent = resolveLeadingTitleAccent(titleElement.text);
-    const leadingPosition =
-      leadingAccent?.text ? resolveTitleAccentPosition(titleElement, leadingAccent.text) : null;
-    if (leadingAccent?.text && leadingPosition && leadingPosition.lineIndex === 0) {
-      accent = leadingAccent;
-      accentPosition = leadingPosition;
-    } else {
-      return [];
-    }
-  }
-
-  const accentX = accentPosition.x;
-  const accentY = accentPosition.y;
+  const accentX = titleElement.x;
+  const accentY = titleElement.y;
   const accentWidth = Math.ceil(
     measureTextWidth(accent.text, titleElement.fontSize, titleElement.fontFamily, titleElement.fontStyle)
   );
@@ -1027,7 +1017,7 @@ function buildTitleAccentElements(params: {
   if (palette.accentMode === "chip" || palette.accentMode === "text") {
     const chipPadX = Math.max(8, Math.round(titleElement.fontSize * 0.14));
     const chipPadY = Math.max(5, Math.round(titleElement.fontSize * 0.08));
-    const maxChipWidth = Math.max(34, titleElement.width - Math.max(0, accentX - titleElement.x));
+    const maxChipWidth = Math.max(34, titleElement.width);
     const chipWidth = clampValue(accentWidth + chipPadX * 2, 34, maxChipWidth);
     return [
       createShapeElement({
@@ -1563,7 +1553,7 @@ function buildMainContent(
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
-  const bodyGap = format === "9:16" ? 40 : format === "4:5" ? 34 : 28;
+  const bodyGap = format === "9:16" ? 46 : format === "4:5" ? 40 : 32;
   const resolveBodyStartY = (title: TextElement, preferredY: number) => {
     const lineHeight = title.lineHeight ?? 1.04;
     const estimatedTitleHeight = estimateTextHeight(title.text, title.width, title.fontSize, lineHeight);
@@ -1809,7 +1799,7 @@ function extractManagedText(slide: Slide, key: "managed-title" | "managed-body")
   const found = slide.elements.find(
     (element): element is TextElement => element.type === "text" && element.metaKey === key
   );
-  return found?.text?.trim() || "";
+  return found ? found.text : null;
 }
 
 function rebuildSlide(
@@ -1820,11 +1810,13 @@ function rebuildSlide(
   format: SlideFormat,
   customElements: CanvasElement[]
 ) {
+  const managedTitle = extractManagedText(slide, "managed-title");
+  const managedBody = extractManagedText(slide, "managed-body");
   const blueprint: SlideBlueprint = {
     role: slide.generationRole ?? (index === 0 ? "hook" : index === totalSlides - 1 ? "cta" : "solution"),
     slideType: slide.slideType ?? "text",
-    title: extractManagedText(slide, "managed-title") || slide.name || "Новый слайд",
-    body: extractManagedText(slide, "managed-body") || "Добавьте основной тезис"
+    title: managedTitle !== null ? managedTitle : slide.name || "Новый слайд",
+    body: managedBody !== null ? managedBody : "Добавьте основной тезис"
   };
   const nextTemplate = getTemplate(templateId);
   const palette = resolveSlidePalette(nextTemplate, blueprint);

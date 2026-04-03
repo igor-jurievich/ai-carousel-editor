@@ -279,6 +279,7 @@ export function CanvasEditor({
                     height={displayHeight}
                     canvasWidth={canvasWidth}
                     canvasHeight={canvasHeight}
+                    hiddenElementId={isEditingActiveSlide ? editingTextElement?.id ?? null : null}
                     selectedElementId={selectedElementId}
                     interactive={!disabled && !previewMode}
                     onSelectElement={(elementId) => onSelectElement(activeSlide.id, elementId)}
@@ -469,6 +470,7 @@ export function CanvasEditor({
                           height={displayHeight}
                           canvasWidth={canvasWidth}
                           canvasHeight={canvasHeight}
+                          hiddenElementId={isEditingSlide ? editingTextElement?.id ?? null : null}
                           selectedElementId={isActive ? selectedElementId : null}
                           interactive={isActive && !disabled && !previewMode}
                           onSelectElement={(elementId) => onSelectElement(slide.id, elementId)}
