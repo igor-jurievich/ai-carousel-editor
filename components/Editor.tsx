@@ -1605,8 +1605,15 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return null;
     }
 
-    const start = Math.max(0, Math.min(selectedTextElement.text.length, selectedTextSelection.start));
-    const end = Math.max(0, Math.min(selectedTextElement.text.length, selectedTextSelection.end));
+    const isEditingSelectedElement =
+      editingTextElementIdRef.current !== null &&
+      editingTextElementIdRef.current === selectedTextElement.id;
+    const sourceTextLength = isEditingSelectedElement
+      ? editingValueRef.current.replace(/\r/g, "").length
+      : selectedTextElement.text.length;
+
+    const start = Math.max(0, Math.min(sourceTextLength, selectedTextSelection.start));
+    const end = Math.max(0, Math.min(sourceTextLength, selectedTextSelection.end));
     if (end <= start) {
       return null;
     }
@@ -1624,8 +1631,15 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return;
     }
 
-    const normalizedStart = Math.max(0, Math.min(selectedTextElement.text.length, start));
-    const normalizedEnd = Math.max(0, Math.min(selectedTextElement.text.length, end));
+    const isEditingSelectedElement =
+      editingTextElementIdRef.current !== null &&
+      editingTextElementIdRef.current === selectedTextElement.id;
+    const sourceTextLength = isEditingSelectedElement
+      ? editingValueRef.current.replace(/\r/g, "").length
+      : selectedTextElement.text.length;
+
+    const normalizedStart = Math.max(0, Math.min(sourceTextLength, start));
+    const normalizedEnd = Math.max(0, Math.min(sourceTextLength, end));
     if (normalizedEnd <= normalizedStart) {
       setSelectedTextSelection(null);
       return;
@@ -1638,21 +1652,45 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   };
 
   const handleApplyHighlightToSelection = (color?: string) => {
-    const selectedRange = resolveSelectedRange();
-    if (!selectedRange) {
+    if (!selectedTextElement) {
+      return;
+    }
+
+    const isEditingSelectedElement =
+      editingTextElementIdRef.current !== null &&
+      editingTextElementIdRef.current === selectedTextElement.id;
+    const sourceText = isEditingSelectedElement
+      ? editingValueRef.current.replace(/\r/g, "")
+      : selectedTextElement.text;
+    const textLength = sourceText.length;
+    const rawRange = resolveSelectedRange();
+    if (!rawRange) {
+      setStatus("Выделите фрагмент текста, чтобы добавить акцент.");
+      return;
+    }
+    const selectedRange = {
+      start: Math.max(0, Math.min(textLength, rawRange.start)),
+      end: Math.max(0, Math.min(textLength, rawRange.end))
+    };
+    if (selectedRange.end <= selectedRange.start) {
       setStatus("Выделите фрагмент текста, чтобы добавить акцент.");
       return;
     }
 
     const nextColor = color || selectedHighlightColor || DEFAULT_HIGHLIGHT_COLOR;
-    updateSelectedTextElement((element) => {
-      const baseline = normalizeHighlightRanges(element.highlights, element.text.length);
+    updateElement(selectedTextElement.id, (element) => {
+      if (element.type !== "text") {
+        return element;
+      }
+      const elementText = isEditingSelectedElement ? sourceText : element.text;
+      const baseline = normalizeHighlightRanges(element.highlights, elementText.length);
       const withoutRange = removeHighlightRange(baseline, selectedRange.start, selectedRange.end);
       return {
         ...element,
+        text: elementText,
         highlights: normalizeHighlightRanges(
           [...withoutRange, { start: selectedRange.start, end: selectedRange.end, color: nextColor }],
-          element.text.length
+          elementText.length
         )
       };
     });
@@ -2345,7 +2383,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                 editingTextElementId={editingTextElementId}
                 editingTextElement={editingTextElement}
                 editingValue={editingValue}
-                  onEditingValueChange={handleEditingValueChange}
+                onEditingValueChange={handleEditingValueChange}
+                onEditingSelectionChange={handleSelectedTextSelectionChange}
                 onCommitTextEditing={handleCommitTextEditing}
                 onCancelTextEditing={handleCancelTextEditing}
                 onStartTextEditing={handleStartTextEditing}
@@ -2556,6 +2595,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               editingTextElement={editingTextElement}
               editingValue={editingValue}
               onEditingValueChange={handleEditingValueChange}
+              onEditingSelectionChange={handleSelectedTextSelectionChange}
               onCommitTextEditing={handleCommitTextEditing}
               onCancelTextEditing={handleCancelTextEditing}
               onStartTextEditing={handleStartTextEditing}

@@ -21,6 +21,7 @@ type CanvasEditorProps = {
   editingTextElement: TextElement | null;
   editingValue: string;
   onEditingValueChange: (value: string) => void;
+  onEditingSelectionChange?: (start: number, end: number) => void;
   onCommitTextEditing: (value?: string) => void;
   onCancelTextEditing: () => void;
   onStartTextEditing: (slideId: string, elementId: string) => void;
@@ -63,6 +64,7 @@ export function CanvasEditor({
   editingTextElement,
   editingValue,
   onEditingValueChange,
+  onEditingSelectionChange,
   onCommitTextEditing,
   onCancelTextEditing,
   onStartTextEditing,
@@ -307,6 +309,24 @@ export function CanvasEditor({
                     autoFocus
                     value={editingValue}
                     onChange={(event) => onEditingValueChange(event.target.value)}
+                    onSelect={(event) =>
+                      onEditingSelectionChange?.(
+                        event.currentTarget.selectionStart ?? 0,
+                        event.currentTarget.selectionEnd ?? 0
+                      )
+                    }
+                    onKeyUp={(event) =>
+                      onEditingSelectionChange?.(
+                        event.currentTarget.selectionStart ?? 0,
+                        event.currentTarget.selectionEnd ?? 0
+                      )
+                    }
+                    onMouseUp={(event) =>
+                      onEditingSelectionChange?.(
+                        event.currentTarget.selectionStart ?? 0,
+                        event.currentTarget.selectionEnd ?? 0
+                      )
+                    }
                     onFocus={(event) => {
                       const cursor = event.currentTarget.value.length;
                       event.currentTarget.setSelectionRange(cursor, cursor);
@@ -497,6 +517,24 @@ export function CanvasEditor({
                           autoFocus
                           value={editingValue}
                           onChange={(event) => onEditingValueChange(event.target.value)}
+                          onSelect={(event) =>
+                            onEditingSelectionChange?.(
+                              event.currentTarget.selectionStart ?? 0,
+                              event.currentTarget.selectionEnd ?? 0
+                            )
+                          }
+                          onKeyUp={(event) =>
+                            onEditingSelectionChange?.(
+                              event.currentTarget.selectionStart ?? 0,
+                              event.currentTarget.selectionEnd ?? 0
+                            )
+                          }
+                          onMouseUp={(event) =>
+                            onEditingSelectionChange?.(
+                              event.currentTarget.selectionStart ?? 0,
+                              event.currentTarget.selectionEnd ?? 0
+                            )
+                          }
                           onFocus={(event) => {
                             const cursor = event.currentTarget.value.length;
                             event.currentTarget.setSelectionRange(cursor, cursor);
