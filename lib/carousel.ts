@@ -920,15 +920,21 @@ function resolveTitleAccentPosition(titleElement: TextElement, accentText: strin
     }
 
     const prefix = line.slice(0, startInLine);
+    const suffix = line.slice(startInLine + accentText.length);
     const xOffset = Math.round(
       measureTextWidth(prefix, titleElement.fontSize, titleElement.fontFamily, titleElement.fontStyle)
+    );
+    const suffixWidth = Math.round(
+      measureTextWidth(suffix, titleElement.fontSize, titleElement.fontFamily, titleElement.fontStyle)
     );
     const yOffset = Math.round(lineIndex * titleElement.fontSize * lineHeight);
 
     return {
       x: titleElement.x + xOffset,
       y: titleElement.y + yOffset,
-      lineIndex
+      lineIndex,
+      startInLine,
+      suffixWidth
     };
   }
 
@@ -987,6 +993,26 @@ function buildTitleAccentElements(params: {
   if (!accentPosition) {
     return [];
   }
+
+  // Keep chip-accent geometry deterministic.
+  // If selected token lands on lower lines, too late in line, or very close to wrap edge,
+  // fallback to leading stable token to avoid visual duplication/drift.
+  const unstableAccentPosition =
+    accentPosition.lineIndex > 0 ||
+    accentPosition.startInLine > 16 ||
+    accentPosition.suffixWidth < Math.round(titleElement.fontSize * 0.22);
+  if (unstableAccentPosition) {
+    const leadingAccent = resolveLeadingTitleAccent(titleElement.text);
+    const leadingPosition =
+      leadingAccent?.text ? resolveTitleAccentPosition(titleElement, leadingAccent.text) : null;
+    if (leadingAccent?.text && leadingPosition && leadingPosition.lineIndex === 0) {
+      accent = leadingAccent;
+      accentPosition = leadingPosition;
+    } else if (accentPosition.lineIndex > 0) {
+      return [];
+    }
+  }
+
   const accentX = accentPosition.x;
   const accentY = accentPosition.y;
   const accentWidth = Math.ceil(
@@ -1564,7 +1590,7 @@ function buildMainContent(
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
-  const bodyGap = format === "9:16" ? 28 : 22;
+  const bodyGap = format === "9:16" ? 34 : format === "4:5" ? 28 : 24;
   const resolveBodyStartY = (title: TextElement, preferredY: number) => {
     const lineHeight = title.lineHeight ?? 1.04;
     const estimatedTitleHeight = estimateTextHeight(title.text, title.width, title.fontSize, lineHeight);
