@@ -220,6 +220,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const editingTextElementIdRef = useRef<string | null>(null);
   const editingValueRef = useRef("");
   const editingDirtyRef = useRef(false);
+  const selectedTextSelectionRef = useRef<{ start: number; end: number } | null>(null);
   const exportStageRefs = useRef<Record<string, Konva.Stage | null>>({});
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const backgroundImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -472,6 +473,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   );
   useEffect(() => {
     setSelectedTextSelection(null);
+    selectedTextSelectionRef.current = null;
   }, [selectedTextElement?.id]);
   const activeHasBackgroundImage = Boolean(activeSlide?.backgroundImage);
   const activePhotoSlotEnabled = Boolean(
@@ -1601,7 +1603,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   };
 
   const resolveSelectedRange = () => {
-    if (!selectedTextElement || !selectedTextSelection) {
+    const sourceSelection = selectedTextSelection ?? selectedTextSelectionRef.current;
+    if (!selectedTextElement || !sourceSelection) {
       return null;
     }
 
@@ -1612,8 +1615,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       ? editingValueRef.current.replace(/\r/g, "").length
       : selectedTextElement.text.length;
 
-    const start = Math.max(0, Math.min(sourceTextLength, selectedTextSelection.start));
-    const end = Math.max(0, Math.min(sourceTextLength, selectedTextSelection.end));
+    const start = Math.max(0, Math.min(sourceTextLength, sourceSelection.start));
+    const end = Math.max(0, Math.min(sourceTextLength, sourceSelection.end));
     if (end <= start) {
       return null;
     }
@@ -1628,6 +1631,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const handleSelectedTextSelectionChange = (start: number, end: number) => {
     if (!selectedTextElement) {
       setSelectedTextSelection(null);
+      selectedTextSelectionRef.current = null;
       return;
     }
 
@@ -1641,14 +1645,15 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     const normalizedStart = Math.max(0, Math.min(sourceTextLength, start));
     const normalizedEnd = Math.max(0, Math.min(sourceTextLength, end));
     if (normalizedEnd <= normalizedStart) {
-      setSelectedTextSelection(null);
       return;
     }
 
-    setSelectedTextSelection({
+    const nextSelection = {
       start: normalizedStart,
       end: normalizedEnd
-    });
+    };
+    selectedTextSelectionRef.current = nextSelection;
+    setSelectedTextSelection(nextSelection);
   };
 
   const handleApplyHighlightToSelection = (color?: string) => {
@@ -1757,6 +1762,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       };
     }, { recordHistory: false });
     setSelectedTextSelection(null);
+    selectedTextSelectionRef.current = null;
   };
 
   const handleSelectedTextColorChange = (value: string) => {
@@ -1833,6 +1839,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
     setActiveSlideId(slideId);
     setSelectedElementId(elementId);
+    setSelectedTextSelection(null);
+    selectedTextSelectionRef.current = null;
     setEditingTextElementId(elementId);
     editingTextElementIdRef.current = elementId;
     editingDirtyRef.current = false;
