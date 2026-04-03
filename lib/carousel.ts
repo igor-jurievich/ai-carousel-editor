@@ -896,6 +896,7 @@ function buildTitleAccentElements(params: {
     const chipPadY = Math.max(5, Math.round(titleElement.fontSize * 0.08));
     const maxChipWidth = Math.max(34, titleElement.width - Math.max(0, accentX - titleElement.x));
     const chipWidth = clampValue(accentWidth + chipPadX * 2, 34, maxChipWidth);
+    const accentTextWidth = Math.max(18, maxChipWidth - chipPadX);
     return [
       createShapeElement({
         metaKey: "managed-title-accent-chip",
@@ -913,7 +914,8 @@ function buildTitleAccentElements(params: {
         text: accent.text,
         x: accentX,
         y: accentY,
-        width: Math.min(titleElement.width, textWidth + 2),
+        // Keep enough width so Konva does not wrap the last symbol to the next visual line.
+        width: accentTextWidth,
         height: textHeight,
         fontSize: titleElement.fontSize,
         lineHeight: titleElement.lineHeight ?? 1.05,
@@ -1454,6 +1456,12 @@ function buildMainContent(
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
+  const bodyGap = format === "9:16" ? 28 : 22;
+  const resolveBodyStartY = (title: TextElement, preferredY: number) => {
+    const lineHeight = title.lineHeight ?? 1.04;
+    const estimatedTitleHeight = estimateTextHeight(title.text, title.width, title.fontSize, lineHeight);
+    return Math.max(preferredY, Math.round(title.y + estimatedTitleHeight + bodyGap));
+  };
 
   const titleElementFor = (overrides: {
     x: number;
@@ -1552,6 +1560,11 @@ function buildMainContent(
       lineHeight: 1.03
     });
 
+    const imageTextBodyY = resolveBodyStartY(
+      title,
+      imageArea.y + imageArea.height + Math.round(metrics.height * 0.22)
+    );
+
     elements.push(
       ...composeTitleAndAccentElements({ titleElement: title, palette, template }),
       createFittedTextElement({
@@ -1559,9 +1572,9 @@ function buildMainContent(
         metaKey: "managed-body",
         text: compactTextLength(blueprint.body, format === "9:16" ? 620 : 540),
         x: metrics.contentX,
-        y: imageArea.y + imageArea.height + Math.round(metrics.height * 0.22),
+        y: imageTextBodyY,
         width: metrics.contentWidth,
-        height: Math.max(96, footerTop - (imageArea.y + imageArea.height + Math.round(metrics.height * 0.22)) - 14),
+        height: Math.max(96, footerTop - imageTextBodyY - 14),
         preferredFontSize: format === "9:16" ? 43 : 39,
         minFontSize: 22,
         fontFamily: template.bodyFont,
@@ -1586,6 +1599,8 @@ function buildMainContent(
       lineHeight: 1.03
     });
 
+    const ctaBodyY = resolveBodyStartY(title, Math.round(metrics.height * 0.58));
+
     return [
       ...composeTitleAndAccentElements({ titleElement: title, palette, template }),
       createFittedTextElement({
@@ -1593,9 +1608,9 @@ function buildMainContent(
         metaKey: "managed-body",
         text: compactTextLength(blueprint.body, format === "9:16" ? 590 : 520),
         x: metrics.contentX,
-        y: Math.round(metrics.height * 0.58),
+        y: ctaBodyY,
         width: metrics.contentWidth,
-        height: Math.max(96, footerTop - Math.round(metrics.height * 0.58) - 18),
+        height: Math.max(96, footerTop - ctaBodyY - 18),
         preferredFontSize: format === "9:16" ? 42 : 39,
         minFontSize: 22,
         fontFamily: template.bodyFont,
@@ -1617,6 +1632,8 @@ function buildMainContent(
     lineHeight: 1.04
   });
 
+  const bodyY = resolveBodyStartY(title, metrics.bodyY);
+
   return [
     ...composeTitleAndAccentElements({ titleElement: title, palette, template }),
     createFittedTextElement({
@@ -1624,9 +1641,9 @@ function buildMainContent(
       metaKey: "managed-body",
       text: compactTextLength(blueprint.body, bodyTextLimit),
       x: metrics.contentX,
-      y: metrics.bodyY,
+      y: bodyY,
       width: metrics.contentWidth,
-      height: Math.max(100, footerTop - metrics.bodyY - 16),
+      height: Math.max(100, footerTop - bodyY - 16),
       preferredFontSize: format === "9:16" ? 44 : 40,
       minFontSize: 22,
       fontFamily: template.bodyFont,
