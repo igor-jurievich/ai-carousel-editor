@@ -208,11 +208,17 @@ function normalizeTextHighlights(element: TextElement) {
   }
 
   const normalized = element.highlights
-    .map((item) => ({
-      start: Math.max(0, Math.min(textLength, Math.floor(item.start))),
-      end: Math.max(0, Math.min(textLength, Math.floor(item.end))),
-      color: item.color || "#1f49ff"
-    }))
+    .map((item) => {
+      const source = item && typeof item === "object" ? item : null;
+      const startSource = source && Number.isFinite(source.start) ? source.start : 0;
+      const endSource = source && Number.isFinite(source.end) ? source.end : 0;
+      const colorSource = source && typeof source.color === "string" ? source.color : "#1f49ff";
+      return {
+        start: Math.max(0, Math.min(textLength, Math.floor(startSource))),
+        end: Math.max(0, Math.min(textLength, Math.floor(endSource))),
+        color: colorSource || "#1f49ff"
+      };
+    })
     .filter((item) => item.end > item.start)
     .sort((a, b) => a.start - b.start || a.end - b.end);
 

@@ -327,6 +327,12 @@ export function CanvasEditor({
                         event.currentTarget.selectionEnd ?? 0
                       )
                     }
+                    onTouchEnd={(event) =>
+                      onEditingSelectionChange?.(
+                        event.currentTarget.selectionStart ?? 0,
+                        event.currentTarget.selectionEnd ?? 0
+                      )
+                    }
                     onFocus={(event) => {
                       const cursor = event.currentTarget.value.length;
                       event.currentTarget.setSelectionRange(cursor, cursor);
@@ -530,6 +536,12 @@ export function CanvasEditor({
                             )
                           }
                           onMouseUp={(event) =>
+                            onEditingSelectionChange?.(
+                              event.currentTarget.selectionStart ?? 0,
+                              event.currentTarget.selectionEnd ?? 0
+                            )
+                          }
+                          onTouchEnd={(event) =>
                             onEditingSelectionChange?.(
                               event.currentTarget.selectionStart ?? 0,
                               event.currentTarget.selectionEnd ?? 0

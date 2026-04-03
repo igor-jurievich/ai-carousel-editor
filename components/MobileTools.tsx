@@ -482,6 +482,12 @@ export function MobileTools({
                         event.currentTarget.selectionEnd ?? 0
                       )
                     }
+                    onTouchEnd={(event) =>
+                      onSelectedTextSelectionChange(
+                        event.currentTarget.selectionStart ?? 0,
+                        event.currentTarget.selectionEnd ?? 0
+                      )
+                    }
                     placeholder="Выберите текст на слайде"
                     rows={3}
                     disabled={disabled || !selectedTextElement}
@@ -506,6 +512,7 @@ export function MobileTools({
                     <button
                       type="button"
                       className="ghost-chip"
+                      onMouseDown={(event) => event.preventDefault()}
                       onClick={onApplyHighlightToSelection}
                       disabled={disabled || !selectedTextElement}
                     >
@@ -514,6 +521,7 @@ export function MobileTools({
                     <button
                       type="button"
                       className="ghost-chip ghost-chip-muted"
+                      onMouseDown={(event) => event.preventDefault()}
                       onClick={onClearHighlightFromSelection}
                       disabled={disabled || !selectedTextElement}
                     >

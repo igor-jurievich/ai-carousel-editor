@@ -79,11 +79,17 @@ function normalizeHighlightRanges(ranges: TextHighlightRange[] | undefined, text
   }
 
   const normalized = ranges
-    .map((range) => ({
-      start: Math.max(0, Math.min(textLength, Math.floor(range.start))),
-      end: Math.max(0, Math.min(textLength, Math.floor(range.end))),
-      color: range.color || DEFAULT_HIGHLIGHT_COLOR
-    }))
+    .map((range) => {
+      const source = range && typeof range === "object" ? range : null;
+      const startSource = source && Number.isFinite(source.start) ? source.start : 0;
+      const endSource = source && Number.isFinite(source.end) ? source.end : 0;
+      const colorSource = source && typeof source.color === "string" ? source.color : DEFAULT_HIGHLIGHT_COLOR;
+      return {
+        start: Math.max(0, Math.min(textLength, Math.floor(startSource))),
+        end: Math.max(0, Math.min(textLength, Math.floor(endSource))),
+        color: colorSource || DEFAULT_HIGHLIGHT_COLOR
+      };
+    })
     .filter((range) => range.end > range.start)
     .sort((a, b) => a.start - b.start || a.end - b.end);
 

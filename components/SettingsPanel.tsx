@@ -325,6 +325,12 @@ export function SettingsPanel({
                     event.currentTarget.selectionEnd ?? 0
                   )
                 }
+                onTouchEnd={(event) =>
+                  onSelectedTextSelectionChange(
+                    event.currentTarget.selectionStart ?? 0,
+                    event.currentTarget.selectionEnd ?? 0
+                  )
+                }
                 disabled={disabled}
               />
             </label>
@@ -344,6 +350,7 @@ export function SettingsPanel({
                 <button
                   type="button"
                   className="ghost-chip"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={onApplyHighlightToSelection}
                   disabled={disabled}
                 >
@@ -352,6 +359,7 @@ export function SettingsPanel({
                 <button
                   type="button"
                   className="ghost-chip ghost-chip-muted"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={onClearHighlightFromSelection}
                   disabled={disabled}
                 >

@@ -828,11 +828,17 @@ function normalizeTextHighlights(ranges: TextHighlightRange[] | undefined, textL
   }
 
   const normalized = ranges
-    .map((range) => ({
-      start: Math.max(0, Math.min(textLength, Math.floor(range.start))),
-      end: Math.max(0, Math.min(textLength, Math.floor(range.end))),
-      color: range.color || "#1f49ff"
-    }))
+    .map((range) => {
+      const source = range && typeof range === "object" ? range : null;
+      const startSource = source && Number.isFinite(source.start) ? source.start : 0;
+      const endSource = source && Number.isFinite(source.end) ? source.end : 0;
+      const colorSource = source && typeof source.color === "string" ? source.color : "#1f49ff";
+      return {
+        start: Math.max(0, Math.min(textLength, Math.floor(startSource))),
+        end: Math.max(0, Math.min(textLength, Math.floor(endSource))),
+        color: colorSource || "#1f49ff"
+      };
+    })
     .filter((range) => range.end > range.start)
     .sort((left, right) => left.start - right.start || left.end - right.end);
 
