@@ -195,12 +195,17 @@ export default function GeneratePage() {
         }
       });
 
-      if (tool === "post") {
-        router.push(`/editor/${saved.id}?tool=post&from=generate`);
-        return;
-      }
+      const targetUrl =
+        tool === "post" ? `/editor/${saved.id}?tool=post&from=generate` : `/editor/${saved.id}`;
+      router.push(targetUrl);
 
-      router.push(`/editor/${saved.id}`);
+      if (typeof window !== "undefined") {
+        window.setTimeout(() => {
+          if (window.location.pathname === "/generate") {
+            window.location.assign(targetUrl);
+          }
+        }, 450);
+      }
     } catch (openEditorError) {
       const message =
         openEditorError instanceof Error

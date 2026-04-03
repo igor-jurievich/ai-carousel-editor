@@ -9,7 +9,8 @@ import type {
   ShapeElement,
   Slide,
   SlideFormat,
-  TextElement
+  TextElement,
+  TextHighlightRange
 } from "@/types/editor";
 import {
   clampSlidesCount,
@@ -147,6 +148,25 @@ const MANAGED_META_KEYS = new Set([
   "image-placeholder-text",
   "image-top"
 ]);
+const STABLE_MANAGED_META_KEYS = new Set([
+  "profile-handle",
+  "footer-counter",
+  "profile-subtitle",
+  "footer-arrow",
+  "managed-title",
+  "managed-body",
+  "image-placeholder",
+  "image-placeholder-text",
+  "image-top"
+]);
+const LEGACY_ACCENT_COLORS = new Set(["#1f49ff", "#ff2a2a", "#ff2d00", "#ff2d20", "#315cff"]);
+
+function resolveElementOpacity(value: number | undefined) {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.max(0, Math.min(1, value as number));
+}
 
 const ROLE_FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
   8: ["hook", "problem", "mistake", "consequence", "shift", "solution", "example", "cta"],
@@ -267,7 +287,9 @@ function shouldDedupeTitleToken(token: string) {
 }
 
 function sanitizeBlueprintText(value: string, maxLength: number, dedupeGlobal = false) {
-  const normalized = normalizeMultilineText(value).replace(/\s+([.,!?;:])/gu, "$1");
+  const normalized = normalizeMultilineText(value)
+    .replace(/\s+([.,!?;:])/gu, "$1")
+    .replace(/(?:\s*(?:\.{3}|…)\s*)+$/u, "");
   if (!normalized) {
     return "";
   }
@@ -296,7 +318,11 @@ function sanitizeBlueprintText(value: string, maxLength: number, dedupeGlobal = 
       }
     }
 
-    return compactWords.join(" ").trim();
+    return compactWords
+      .join(" ")
+      .trim()
+      .replace(/(?:\s*(?:\.{3}|…)\s*)+$/u, "")
+      .replace(/[\s,:;—-]+$/u, "");
   });
 
   const compacted = dedupeGlobal
@@ -796,6 +822,44 @@ function resolveReadableAccentTextColor(fill: string) {
   return luma > 0.6 ? "#101621" : "#ffffff";
 }
 
+function normalizeTextHighlights(ranges: TextHighlightRange[] | undefined, textLength: number): TextHighlightRange[] {
+  if (!ranges?.length || textLength <= 0) {
+    return [];
+  }
+
+  const normalized = ranges
+    .map((range) => ({
+      start: Math.max(0, Math.min(textLength, Math.floor(range.start))),
+      end: Math.max(0, Math.min(textLength, Math.floor(range.end))),
+      color: range.color || "#1f49ff"
+    }))
+    .filter((range) => range.end > range.start)
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+
+  if (!normalized.length) {
+    return [];
+  }
+
+  const merged: TextHighlightRange[] = [];
+
+  for (const range of normalized) {
+    const last = merged[merged.length - 1];
+    if (!last) {
+      merged.push(range);
+      continue;
+    }
+
+    if (range.start <= last.end && range.color.toLowerCase() === last.color.toLowerCase()) {
+      last.end = Math.max(last.end, range.end);
+      continue;
+    }
+
+    merged.push(range);
+  }
+
+  return merged;
+}
+
 function estimateTextWidth(value: string, fontSize: number) {
   if (!value) {
     return 0;
@@ -907,70 +971,6 @@ function isWordChar(value: string) {
   return /[\p{L}\p{N}-]/u.test(value);
 }
 
-function findAccentInLine(line: string, accentText: string) {
-  const haystack = line.toLowerCase();
-  const needle = accentText.toLowerCase();
-  if (!needle) {
-    return -1;
-  }
-
-  let index = haystack.indexOf(needle);
-  while (index !== -1) {
-    const before = index > 0 ? line[index - 1] : "";
-    const after = index + needle.length < line.length ? line[index + needle.length] : "";
-    const isBoundaryBefore = !before || !isWordChar(before);
-    const isBoundaryAfter = !after || !isWordChar(after);
-    if (isBoundaryBefore && isBoundaryAfter) {
-      return index;
-    }
-    index = haystack.indexOf(needle, index + 1);
-  }
-
-  return -1;
-}
-
-function resolveTitleAccentPosition(titleElement: TextElement, accentText: string) {
-  const lineHeight = titleElement.lineHeight ?? 1.05;
-  const lines = wrapTextLinesByWidth(
-    titleElement.text,
-    titleElement.width,
-    titleElement.fontSize,
-    titleElement.fontFamily,
-    titleElement.fontStyle
-  );
-  if (!lines.length) {
-    return null;
-  }
-
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
-    const startInLine = findAccentInLine(line, accentText);
-    if (startInLine === -1) {
-      continue;
-    }
-
-    const prefix = line.slice(0, startInLine);
-    const suffix = line.slice(startInLine + accentText.length);
-    const xOffset = Math.round(
-      measureTextWidth(prefix, titleElement.fontSize, titleElement.fontFamily, titleElement.fontStyle)
-    );
-    const suffixWidth = Math.round(
-      measureTextWidth(suffix, titleElement.fontSize, titleElement.fontFamily, titleElement.fontStyle)
-    );
-    const yOffset = Math.round(lineIndex * titleElement.fontSize * lineHeight);
-
-    return {
-      x: titleElement.x + xOffset,
-      y: titleElement.y + yOffset,
-      lineIndex,
-      startInLine,
-      suffixWidth
-    };
-  }
-
-  return null;
-}
-
 function buildTitleAccentElements(params: {
   titleElement: TextElement;
   palette: SlidePalette;
@@ -989,14 +989,52 @@ function composeTitleAndAccentElements(params: {
   palette: SlidePalette;
   template: CarouselTemplate;
 }) {
-  const { titleElement, palette, template } = params;
-  const accents = buildTitleAccentElements({ titleElement, palette, template });
-
-  if (!accents.length) {
+  const { titleElement, palette } = params;
+  if (palette.accentMode === "none") {
     return [titleElement];
   }
 
-  return [...accents, titleElement];
+  if (titleElement.wasAutoTruncated || normalizeMultilineText(titleElement.text).length > 110) {
+    return [titleElement];
+  }
+
+  const lineHeight = titleElement.lineHeight ?? 1.05;
+  const visualLines = estimateVisualLineCount(
+    titleElement.text,
+    titleElement.width,
+    titleElement.fontSize,
+    lineHeight
+  );
+  if (visualLines > 3) {
+    return [titleElement];
+  }
+
+  const accent = resolveLeadingTitleAccent(titleElement.text) ?? resolveFirstRenderedWordAccent(titleElement.text);
+  if (!accent?.text || accent.end <= accent.start) {
+    return [titleElement];
+  }
+
+  const highlights = normalizeTextHighlights(
+    [
+      {
+        start: accent.start,
+        end: accent.end,
+        color: palette.accent
+      }
+    ],
+    titleElement.text.length
+  );
+
+  if (!highlights.length) {
+    return [titleElement];
+  }
+
+  return [
+    {
+      ...titleElement,
+      highlights
+    }
+  ];
 }
 
 export function createTextElement(
@@ -1011,6 +1049,7 @@ export function createTextElement(
     metaKey: overrides.metaKey,
     wasAutoTruncated: overrides.wasAutoTruncated ?? false,
     text: overrides.text,
+    highlights: normalizeTextHighlights(overrides.highlights, overrides.text.length),
     x: overrides.x ?? 84,
     y: overrides.y ?? (isTitle ? 320 : 530),
     width: overrides.width ?? 912,
@@ -1502,13 +1541,13 @@ function buildMainContent(
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
-  const bodyGap = format === "9:16" ? 46 : format === "4:5" ? 40 : 32;
+  const bodyGap = format === "9:16" ? 58 : format === "4:5" ? 50 : 42;
   const resolveBodyStartY = (title: TextElement, preferredY: number) => {
     const lineHeight = title.lineHeight ?? 1.04;
     const estimatedTitleHeight = estimateTextHeight(title.text, title.width, title.fontSize, lineHeight);
     const safeTitleHeight = Math.max(
       title.height,
-      estimatedTitleHeight + Math.round(title.fontSize * 0.28)
+      estimatedTitleHeight + Math.round(title.fontSize * 0.42)
     );
     return Math.max(preferredY, Math.round(title.y + safeTitleHeight + bodyGap));
   };
@@ -1748,7 +1787,72 @@ function extractManagedText(slide: Slide, key: "managed-title" | "managed-body")
   const found = slide.elements.find(
     (element): element is TextElement => element.type === "text" && element.metaKey === key
   );
-  return found ? found.text : null;
+  if (!found) {
+    return null;
+  }
+
+  return {
+    text: found.text,
+    highlights: normalizeTextHighlights(found.highlights, found.text.length)
+  };
+}
+
+function isLegacyAccentArtifact(element: CanvasElement) {
+  if (element.type === "text" && element.metaKey === "managed-title-accent-text") {
+    return true;
+  }
+
+  if (element.type !== "shape") {
+    return false;
+  }
+
+  if (element.metaKey === "managed-title-accent-chip") {
+    return true;
+  }
+
+  if (element.metaKey) {
+    return false;
+  }
+
+  const fill = element.fill?.toLowerCase?.() ?? "";
+  if (!LEGACY_ACCENT_COLORS.has(fill)) {
+    return false;
+  }
+
+  return (
+    element.shape === "rect" &&
+    element.width >= 24 &&
+    element.width <= 680 &&
+    element.height >= 10 &&
+    element.height <= 150 &&
+    element.width / Math.max(1, element.height) >= 1.3 &&
+    !element.stroke &&
+    resolveElementOpacity(element.opacity) >= 0.72
+  );
+}
+
+function preserveManagedElementIds(previousSlide: Slide, nextElements: CanvasElement[]) {
+  const prevByMeta = new Map<string, CanvasElement>();
+  previousSlide.elements.forEach((element) => {
+    if (element.metaKey && STABLE_MANAGED_META_KEYS.has(element.metaKey) && !prevByMeta.has(element.metaKey)) {
+      prevByMeta.set(element.metaKey, element);
+    }
+  });
+
+  return nextElements.map((element) => {
+    if (!element.metaKey || !STABLE_MANAGED_META_KEYS.has(element.metaKey)) {
+      return element;
+    }
+    const previous = prevByMeta.get(element.metaKey);
+    if (!previous || previous.type !== element.type) {
+      return element;
+    }
+
+    return {
+      ...element,
+      id: previous.id
+    };
+  });
 }
 
 function rebuildSlide(
@@ -1764,8 +1868,8 @@ function rebuildSlide(
   const blueprint: SlideBlueprint = {
     role: slide.generationRole ?? (index === 0 ? "hook" : index === totalSlides - 1 ? "cta" : "solution"),
     slideType: slide.slideType ?? "text",
-    title: managedTitle !== null ? managedTitle : slide.name || "Новый слайд",
-    body: managedBody !== null ? managedBody : "Добавьте основной тезис"
+    title: managedTitle?.text ?? slide.name ?? "Новый слайд",
+    body: managedBody?.text ?? "Добавьте основной тезис"
   };
   const nextTemplate = getTemplate(templateId);
   const palette = resolveSlidePalette(nextTemplate, blueprint);
@@ -1784,9 +1888,41 @@ function rebuildSlide(
     elements: []
   };
 
+  const rebuiltManagedElements = buildManagedElements(
+    rebuiltBase,
+    blueprint,
+    templateId,
+    index,
+    totalSlides,
+    format
+  ).map((element) => {
+    if (element.type !== "text") {
+      return element;
+    }
+
+    if (element.metaKey === "managed-title" && managedTitle?.highlights?.length) {
+      return {
+        ...element,
+        highlights: normalizeTextHighlights(managedTitle.highlights, element.text.length)
+      };
+    }
+
+    if (element.metaKey === "managed-body" && managedBody?.highlights?.length) {
+      return {
+        ...element,
+        highlights: normalizeTextHighlights(managedBody.highlights, element.text.length)
+      };
+    }
+
+    return element;
+  });
+
   return {
     ...rebuiltBase,
-    elements: [...buildManagedElements(rebuiltBase, blueprint, templateId, index, totalSlides, format), ...customElements]
+    elements: [
+      ...preserveManagedElementIds(slide, rebuiltManagedElements),
+      ...customElements.filter((element) => !isLegacyAccentArtifact(element))
+    ]
   };
 }
 
@@ -1834,7 +1970,9 @@ export function applyTemplateToSlide(
   totalSlides: number,
   format: SlideFormat
 ): Slide {
-  const customElements = slide.elements.filter((element) => !isManagedElement(element));
+  const customElements = slide.elements.filter(
+    (element) => !isManagedElement(element) && !isLegacyAccentArtifact(element)
+  );
   return rebuildSlide(slide, index, totalSlides, templateId, format, customElements);
 }
 

@@ -40,9 +40,15 @@ type SettingsPanelProps = {
   selectedTextElement: TextElement | null;
   onSelectedTextChange: (value: string) => void;
   onSelectedTextColorChange: (value: string) => void;
+  onSelectedTextHighlightColorChange: (value: string) => void;
+  onSelectedTextSelectionChange: (start: number, end: number) => void;
   onSelectedTextFontChange: (value: string) => void;
   onSelectedTextSizeChange: (value: number) => void;
   onSelectedTextCaseChange: (mode: "normal" | "uppercase" | "lowercase" | "capitalize") => void;
+  onApplyHighlightToSelection: () => void;
+  onClearHighlightFromSelection: () => void;
+  onClearAllHighlights: () => void;
+  selectedTextHighlightColor: string;
   disabled?: boolean;
   previewMode?: boolean;
 };
@@ -84,9 +90,15 @@ export function SettingsPanel({
   selectedTextElement,
   onSelectedTextChange,
   onSelectedTextColorChange,
+  onSelectedTextHighlightColorChange,
+  onSelectedTextSelectionChange,
   onSelectedTextFontChange,
   onSelectedTextSizeChange,
   onSelectedTextCaseChange,
+  onApplyHighlightToSelection,
+  onClearHighlightFromSelection,
+  onClearAllHighlights,
+  selectedTextHighlightColor,
   disabled = false,
   previewMode = false
 }: SettingsPanelProps) {
@@ -295,9 +307,66 @@ export function SettingsPanel({
                 value={selectedTextElement.text}
                 rows={4}
                 onChange={(event) => onSelectedTextChange(event.target.value)}
+                onSelect={(event) =>
+                  onSelectedTextSelectionChange(
+                    event.currentTarget.selectionStart ?? 0,
+                    event.currentTarget.selectionEnd ?? 0
+                  )
+                }
+                onKeyUp={(event) =>
+                  onSelectedTextSelectionChange(
+                    event.currentTarget.selectionStart ?? 0,
+                    event.currentTarget.selectionEnd ?? 0
+                  )
+                }
+                onMouseUp={(event) =>
+                  onSelectedTextSelectionChange(
+                    event.currentTarget.selectionStart ?? 0,
+                    event.currentTarget.selectionEnd ?? 0
+                  )
+                }
                 disabled={disabled}
               />
             </label>
+
+            <div className="field-row field-row-inline">
+              <label className="field-label" style={{ width: 136 }}>
+                Цвет выделения
+                <input
+                  className="field"
+                  type="color"
+                  value={selectedTextHighlightColor}
+                  onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
+                  disabled={disabled}
+                />
+              </label>
+              <div className="field-row field-row-actions" style={{ flex: 1 }}>
+                <button
+                  type="button"
+                  className="ghost-chip"
+                  onClick={onApplyHighlightToSelection}
+                  disabled={disabled}
+                >
+                  Выделить
+                </button>
+                <button
+                  type="button"
+                  className="ghost-chip ghost-chip-muted"
+                  onClick={onClearHighlightFromSelection}
+                  disabled={disabled}
+                >
+                  Снять
+                </button>
+                <button
+                  type="button"
+                  className="ghost-chip ghost-chip-muted"
+                  onClick={onClearAllHighlights}
+                  disabled={disabled}
+                >
+                  Очистить все
+                </button>
+              </div>
+            </div>
 
             <div className="field-row field-row-inline">
               <label className="field-label" style={{ flex: 1 }}>

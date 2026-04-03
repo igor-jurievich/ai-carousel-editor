@@ -38,9 +38,15 @@ type MobileToolsProps = {
   onSlideBackgroundChange: (value: string) => void;
   onSelectedTextChange: (value: string) => void;
   onSelectedTextColorChange: (value: string) => void;
+  onSelectedTextHighlightColorChange: (value: string) => void;
+  onSelectedTextSelectionChange: (start: number, end: number) => void;
   onSelectedTextFontChange: (value: string) => void;
   onSelectedTextSizeChange: (value: number) => void;
   onSelectedTextCaseChange: (mode: "normal" | "uppercase" | "lowercase" | "capitalize") => void;
+  onApplyHighlightToSelection: () => void;
+  onClearHighlightFromSelection: () => void;
+  onClearAllHighlights: () => void;
+  selectedTextHighlightColor: string;
   toolbarRef?: MutableRefObject<HTMLElement | null>;
   toolSheetRef?: MutableRefObject<HTMLElement | null>;
   disabled?: boolean;
@@ -125,9 +131,15 @@ export function MobileTools({
   onSlideBackgroundChange,
   onSelectedTextChange,
   onSelectedTextColorChange,
+  onSelectedTextHighlightColorChange,
+  onSelectedTextSelectionChange,
   onSelectedTextFontChange,
   onSelectedTextSizeChange,
   onSelectedTextCaseChange,
+  onApplyHighlightToSelection,
+  onClearHighlightFromSelection,
+  onClearAllHighlights,
+  selectedTextHighlightColor,
   toolbarRef,
   toolSheetRef,
   disabled = false,
@@ -314,7 +326,7 @@ export function MobileTools({
 
                 <div className="mobile-sheet-row">
                   <label className="field-label">
-                    Цвет выделений
+                    Цвет текста
                     <div className="mobile-color-inline">
                       <input
                         type="color"
@@ -452,11 +464,71 @@ export function MobileTools({
                     className="textarea"
                     value={selectedTextElement?.text ?? ""}
                     onChange={(event) => onSelectedTextChange(event.target.value)}
+                    onSelect={(event) =>
+                      onSelectedTextSelectionChange(
+                        event.currentTarget.selectionStart ?? 0,
+                        event.currentTarget.selectionEnd ?? 0
+                      )
+                    }
+                    onKeyUp={(event) =>
+                      onSelectedTextSelectionChange(
+                        event.currentTarget.selectionStart ?? 0,
+                        event.currentTarget.selectionEnd ?? 0
+                      )
+                    }
+                    onMouseUp={(event) =>
+                      onSelectedTextSelectionChange(
+                        event.currentTarget.selectionStart ?? 0,
+                        event.currentTarget.selectionEnd ?? 0
+                      )
+                    }
                     placeholder="Выберите текст на слайде"
                     rows={3}
                     disabled={disabled || !selectedTextElement}
                   />
                 </label>
+
+                <div className="mobile-sheet-row">
+                  <label className="field-label">
+                    Цвет выделения
+                    <div className="mobile-color-inline">
+                      <input
+                        type="color"
+                        className="color-input"
+                        value={selectedTextHighlightColor}
+                        onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
+                        disabled={disabled || !selectedTextElement}
+                      />
+                      <input className="field" value={selectedTextHighlightColor.toUpperCase()} readOnly />
+                    </div>
+                  </label>
+                  <div className="field-row">
+                    <button
+                      type="button"
+                      className="ghost-chip"
+                      onClick={onApplyHighlightToSelection}
+                      disabled={disabled || !selectedTextElement}
+                    >
+                      Выделить
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-chip ghost-chip-muted"
+                      onClick={onClearHighlightFromSelection}
+                      disabled={disabled || !selectedTextElement}
+                    >
+                      Снять
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-chip ghost-chip-muted"
+                    onClick={onClearAllHighlights}
+                    disabled={disabled || !selectedTextElement}
+                  >
+                    Очистить все выделения
+                  </button>
+                </div>
 
                 <div className="mobile-case-grid">
                   <button

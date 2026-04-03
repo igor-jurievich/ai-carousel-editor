@@ -3,6 +3,11 @@ export type CarouselTemplateId = "dark" | "light" | "color";
 export type SlideFormat = "1:1" | "4:5" | "9:16";
 export type ElementMetaKey = string;
 export type ImageFitMode = "cover" | "contain" | "original";
+export type TextHighlightRange = {
+  start: number;
+  end: number;
+  color: string;
+};
 
 export type CarouselSlideRole =
   | "hook"
@@ -24,6 +29,7 @@ export type TextElement = {
   metaKey?: ElementMetaKey;
   wasAutoTruncated?: boolean;
   text: string;
+  highlights?: TextHighlightRange[];
   x: number;
   y: number;
   width: number;

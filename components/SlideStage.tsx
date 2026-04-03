@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type Konva from "konva";
 import useImage from "use-image";
 import {
+  Group,
   Image as KonvaImage,
   Layer,
   Rect,
@@ -59,15 +60,18 @@ const UI_ACCENT = "#2caea1";
 const UI_ACCENT_SOFT = "rgba(86, 207, 194, 0.24)";
 const UI_ACCENT_FAINT = "rgba(86, 207, 194, 0.12)";
 const UI_ACCENT_GUIDE = "rgba(86, 207, 194, 0.72)";
-const TEMPLATE_ACCENTS: Record<string, string> = {
-  light: "#1f49ff",
-  dark: "#ff2a2a",
-  color: "#ff2d00"
-};
 const LEGACY_ACCENT_COLORS = new Set(["#1f49ff", "#ff2a2a", "#ff2d00", "#ff2d20", "#315cff"]);
+const LEGACY_ACCENT_TEXT_COLORS = new Set(["#ffffff", "#fff", "#f5f7ff", "#f7f9ff"]);
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
+}
+
+function resolveElementOpacity(value: number | undefined) {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.max(0, Math.min(1, value as number));
 }
 
 function resolveSafeArea(canvasWidth: number, canvasHeight: number, stageWidth: number): SafeArea {
@@ -188,33 +192,259 @@ function measureTextWidth(value: string, element: TextElement) {
   return value.length * element.fontSize * 0.58;
 }
 
-function resolveTitleHighlightRect(slide: Slide, title: TextElement) {
-  if (slide.slideType === "big_text" && slide.templateId === "dark") {
-    return null;
+function measureLineWidth(value: string, element: TextElement) {
+  if (!value) {
+    return 0;
+  }
+  const base = measureTextWidth(value, element);
+  const letterSpacing = element.letterSpacing ?? 0;
+  return base + Math.max(0, value.length - 1) * letterSpacing;
+}
+
+function normalizeTextHighlights(element: TextElement) {
+  const textLength = element.text.length;
+  if (!element.highlights?.length || textLength <= 0) {
+    return [] as Array<{ start: number; end: number; color: string }>;
   }
 
-  const firstToken = title.text
-    .trim()
-    .match(/[\p{L}\p{N}-]+/u)?.[0];
-  if (!firstToken) {
-    return null;
+  const normalized = element.highlights
+    .map((item) => ({
+      start: Math.max(0, Math.min(textLength, Math.floor(item.start))),
+      end: Math.max(0, Math.min(textLength, Math.floor(item.end))),
+      color: item.color || "#1f49ff"
+    }))
+    .filter((item) => item.end > item.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  if (!normalized.length) {
+    return [];
   }
 
-  const chipPadX = Math.max(8, Math.round(title.fontSize * 0.14));
-  const chipPadY = Math.max(5, Math.round(title.fontSize * 0.08));
-  const tokenWidth = Math.ceil(measureTextWidth(firstToken, title));
-  const chipWidth = Math.max(34, Math.min(title.width, tokenWidth + chipPadX * 2));
-  const lineHeight = title.lineHeight ?? 1.05;
-  const textHeight = Math.ceil(title.fontSize * lineHeight);
-  const accent = TEMPLATE_ACCENTS[slide.templateId ?? "light"] ?? TEMPLATE_ACCENTS.light;
+  const merged: Array<{ start: number; end: number; color: string }> = [];
+  for (const item of normalized) {
+    const previous = merged[merged.length - 1];
+    if (
+      previous &&
+      item.start <= previous.end &&
+      item.color.toLowerCase() === previous.color.toLowerCase()
+    ) {
+      previous.end = Math.max(previous.end, item.end);
+      continue;
+    }
+    merged.push(item);
+  }
 
-  return {
-    x: title.x - chipPadX,
-    y: title.y - chipPadY,
-    width: chipWidth,
-    height: textHeight + chipPadY * 2,
-    fill: accent
-  };
+  return merged;
+}
+
+function splitLongTokenByWidth(token: string, maxWidth: number, element: TextElement) {
+  if (!token) {
+    return [] as string[];
+  }
+
+  const chunks: string[] = [];
+  let buffer = "";
+  for (const char of token) {
+    const candidate = `${buffer}${char}`;
+    if (!buffer || measureLineWidth(candidate, element) <= maxWidth) {
+      buffer = candidate;
+      continue;
+    }
+
+    chunks.push(buffer);
+    buffer = char;
+  }
+
+  if (buffer) {
+    chunks.push(buffer);
+  }
+
+  return chunks;
+}
+
+type TextLineLayout = {
+  text: string;
+  start: number;
+  width: number;
+};
+
+function buildTextLineLayout(element: TextElement): TextLineLayout[] {
+  const source = element.text.replace(/\r/g, "");
+  if (!source) {
+    return [];
+  }
+
+  const maxWidth = Math.max(1, element.width);
+  const result: TextLineLayout[] = [];
+  const paragraphs = source.split("\n");
+  let globalOffset = 0;
+
+  for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex += 1) {
+    const paragraph = paragraphs[paragraphIndex] ?? "";
+    const paragraphStart = globalOffset;
+    globalOffset += paragraph.length;
+    if (paragraphIndex < paragraphs.length - 1) {
+      globalOffset += 1;
+    }
+
+    if (!paragraph) {
+      result.push({ text: "", start: paragraphStart, width: 0 });
+      continue;
+    }
+
+    const tokens = paragraph.split(/(\s+)/u).filter((token) => token.length > 0);
+    const lines: string[] = [];
+    let currentLine = "";
+
+    const commitLine = () => {
+      lines.push(currentLine.trimEnd());
+      currentLine = "";
+    };
+
+    for (const token of tokens) {
+      const isWhitespace = /^\s+$/u.test(token);
+
+      if (isWhitespace) {
+        if (currentLine) {
+          currentLine += token;
+        }
+        continue;
+      }
+
+      if (!currentLine) {
+        if (measureLineWidth(token, element) <= maxWidth) {
+          currentLine = token;
+          continue;
+        }
+
+        const pieces = splitLongTokenByWidth(token, maxWidth, element);
+        if (!pieces.length) {
+          currentLine = token;
+          continue;
+        }
+        lines.push(...pieces.slice(0, -1));
+        currentLine = pieces[pieces.length - 1] ?? "";
+        continue;
+      }
+
+      const candidate = `${currentLine}${token}`;
+      if (measureLineWidth(candidate, element) <= maxWidth) {
+        currentLine = candidate;
+        continue;
+      }
+
+      commitLine();
+      if (measureLineWidth(token, element) <= maxWidth) {
+        currentLine = token;
+        continue;
+      }
+
+      const pieces = splitLongTokenByWidth(token, maxWidth, element);
+      if (!pieces.length) {
+        currentLine = token;
+        continue;
+      }
+      lines.push(...pieces.slice(0, -1));
+      currentLine = pieces[pieces.length - 1] ?? "";
+    }
+
+    if (currentLine || !lines.length) {
+      lines.push(currentLine.trimEnd());
+    }
+
+    let paragraphCursor = 0;
+    for (const line of lines) {
+      const normalizedLine = line.trimEnd();
+      const foundAt = normalizedLine
+        ? paragraph.indexOf(normalizedLine, paragraphCursor)
+        : paragraphCursor;
+      const lineStart = foundAt >= 0 ? foundAt : paragraphCursor;
+      paragraphCursor = lineStart + normalizedLine.length;
+      result.push({
+        text: normalizedLine,
+        start: paragraphStart + lineStart,
+        width: measureLineWidth(normalizedLine, element)
+      });
+    }
+  }
+
+  return result;
+}
+
+type TextHighlightRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+};
+
+function resolveHighlightRects(element: TextElement): TextHighlightRect[] {
+  const ranges = normalizeTextHighlights(element);
+  if (!ranges.length || !element.text.trim()) {
+    return [];
+  }
+
+  const lineLayout = buildTextLineLayout(element);
+  if (!lineLayout.length) {
+    return [];
+  }
+
+  const lineHeight = element.lineHeight ?? 1.1;
+  const lineHeightPx = element.fontSize * lineHeight;
+  const fontHeight = Math.max(10, element.fontSize);
+  const padX = Math.max(3, Math.round(element.fontSize * 0.1));
+  const padY = Math.max(2, Math.round(element.fontSize * 0.08));
+  const rects: TextHighlightRect[] = [];
+
+  for (let lineIndex = 0; lineIndex < lineLayout.length; lineIndex += 1) {
+    const line = lineLayout[lineIndex];
+    const lineStart = line.start;
+    const lineEnd = line.start + line.text.length;
+    if (lineEnd <= lineStart) {
+      continue;
+    }
+
+    const alignOffset =
+      element.align === "center"
+        ? Math.max(0, (element.width - line.width) / 2)
+        : element.align === "right"
+          ? Math.max(0, element.width - line.width)
+          : 0;
+    const lineTop = element.y + lineIndex * lineHeightPx;
+    const baseY = lineTop + Math.max(0, (lineHeightPx - fontHeight) / 2);
+
+    for (const range of ranges) {
+      const overlapStart = Math.max(range.start, lineStart);
+      const overlapEnd = Math.min(range.end, lineEnd);
+
+      if (overlapEnd <= overlapStart) {
+        continue;
+      }
+
+      const startInLine = overlapStart - lineStart;
+      const endInLine = overlapEnd - lineStart;
+      const prefix = line.text.slice(0, startInLine);
+      const highlighted = line.text.slice(startInLine, endInLine);
+      if (!/[\p{L}\p{N}]/u.test(highlighted)) {
+        continue;
+      }
+      const width = measureLineWidth(highlighted, element);
+      if (width <= 0) {
+        continue;
+      }
+
+      rects.push({
+        x: Math.round(element.x + alignOffset + measureLineWidth(prefix, element) - padX),
+        y: Math.round(baseY - padY),
+        width: Math.round(width + padX * 2),
+        height: Math.round(fontHeight + padY * 2),
+        color: range.color
+      });
+    }
+  }
+
+  return rects;
 }
 
 function shouldHideLegacyAccentChip(element: CanvasElement) {
@@ -232,14 +462,82 @@ function shouldHideLegacyAccentChip(element: CanvasElement) {
     return false;
   }
   const looksLikeChip =
-    element.width >= 40 &&
-    element.width <= 560 &&
-    element.height >= 20 &&
-    element.height <= 120 &&
-    element.opacity >= 0.75 &&
+    element.width >= 24 &&
+    element.width <= 640 &&
+    element.height >= 10 &&
+    element.height <= 140 &&
+    resolveElementOpacity(element.opacity) >= 0.75 &&
     !element.stroke &&
-    (element.cornerRadius ?? 0) >= 6;
+    element.shape === "rect" &&
+    element.width / Math.max(1, element.height) >= 1.3;
   return looksLikeChip;
+}
+
+function normalizeLegacyToken(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[«»"“”„'`]/gu, "")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function shouldHideLegacyAccentText(
+  element: CanvasElement,
+  legacyChipRects: Array<{ x: number; y: number; width: number; height: number }>,
+  titleText: string
+) {
+  if (element.type !== "text" || element.metaKey || !legacyChipRects.length) {
+    return false;
+  }
+
+  const compact = element.text.replace(/\s+/gu, " ").trim();
+  if (!compact || compact.includes("\n") || compact.length > 42) {
+    return false;
+  }
+
+  const words = compact.split(" ").filter(Boolean);
+  if (words.length > 4) {
+    return false;
+  }
+
+  const fill = (element.fill ?? "").toLowerCase();
+  if (!LEGACY_ACCENT_TEXT_COLORS.has(fill)) {
+    return false;
+  }
+
+  const centerX = element.x + element.width / 2;
+  const centerY = element.y + Math.max(12, element.height / 2);
+  const overlapsChip = legacyChipRects.some(
+    (chip) =>
+      centerX >= chip.x - 30 &&
+      centerX <= chip.x + chip.width + 30 &&
+      centerY >= chip.y - 34 &&
+      centerY <= chip.y + chip.height + 34
+  );
+
+  if (!overlapsChip) {
+    return false;
+  }
+
+  const normalizedTitle = normalizeLegacyToken(titleText);
+  const normalizedText = normalizeLegacyToken(compact);
+  if (!normalizedText) {
+    return false;
+  }
+
+  if (!normalizedTitle) {
+    return words.length <= 2;
+  }
+
+  if (normalizedTitle.includes(normalizedText)) {
+    return true;
+  }
+
+  return normalizedText
+    .split(" ")
+    .filter((token) => token.length >= 4)
+    .some((token) => normalizedTitle.includes(token));
 }
 
 function areGuidesEqual(left: SnapGuides, right: SnapGuides) {
@@ -545,65 +843,82 @@ function SlideTextNode({
   nodeRef: (node: Konva.Text | null) => void;
   dragBoundFunc?: (position: { x: number; y: number }) => { x: number; y: number };
 }) {
+  const highlightRects = useMemo(() => resolveHighlightRects(element), [element]);
+
   return (
-    <Text
-      ref={nodeRef}
-      text={element.text}
-      x={element.x}
-      y={element.y}
-      width={element.width}
-      fontSize={element.fontSize}
-      fontFamily={element.fontFamily}
-      fontStyle={element.fontStyle}
-      fill={element.fill}
-      align={element.align}
-      lineHeight={element.lineHeight ?? 1.1}
-      wrap="word"
-      ellipsis={false}
-      opacity={element.opacity}
-      rotation={element.rotation}
-      letterSpacing={element.letterSpacing}
-      textDecoration={element.textDecoration}
-      draggable={interactive && selected}
-      dragDistance={4}
-      dragBoundFunc={dragBoundFunc}
-      onClick={onSelect}
-      onTap={onSelect}
-      onDblClick={onDoubleClick}
-      onDblTap={onDoubleClick}
-      onMouseEnter={(event) => {
-        if (!interactive) {
-          return;
-        }
-        const container = event.target.getStage()?.container();
-        if (container) {
-          container.style.cursor = selected ? "grab" : "pointer";
-        }
-      }}
-      onMouseLeave={(event) => {
-        const container = event.target.getStage()?.container();
-        if (container) {
-          container.style.cursor = "default";
-        }
-      }}
-      onDragStart={(event) => {
-        const container = event.target.getStage()?.container();
-        if (container) {
-          container.style.cursor = "grabbing";
-        }
-      }}
-      onDragEnd={(event) => {
-        const container = event.target.getStage()?.container();
-        if (container) {
-          container.style.cursor = selected ? "grab" : "default";
-        }
-        onDragEnd?.(event.target.x(), event.target.y());
-      }}
-      onTransformEnd={(event) => onTransformEnd?.(event.target as Konva.Text)}
-      strokeEnabled={false}
-      shadowEnabled={false}
-      perfectDrawEnabled={false}
-    />
+    <Group>
+      {highlightRects.map((rect, index) => (
+        <Rect
+          key={`${element.id}-hl-${index}`}
+          x={rect.x}
+          y={rect.y}
+          width={rect.width}
+          height={rect.height}
+          cornerRadius={Math.max(3, Math.round(element.fontSize * 0.08))}
+          fill={rect.color}
+          opacity={0.94}
+          listening={false}
+        />
+      ))}
+      <Text
+        ref={nodeRef}
+        text={element.text}
+        x={element.x}
+        y={element.y}
+        width={element.width}
+        fontSize={element.fontSize}
+        fontFamily={element.fontFamily}
+        fontStyle={element.fontStyle}
+        fill={element.fill}
+        align={element.align}
+        lineHeight={element.lineHeight ?? 1.1}
+        wrap="word"
+        ellipsis={false}
+        opacity={element.opacity}
+        rotation={element.rotation}
+        letterSpacing={element.letterSpacing}
+        textDecoration={element.textDecoration}
+        draggable={interactive && selected}
+        dragDistance={4}
+        dragBoundFunc={dragBoundFunc}
+        onClick={onSelect}
+        onTap={onSelect}
+        onDblClick={onDoubleClick}
+        onDblTap={onDoubleClick}
+        onMouseEnter={(event) => {
+          if (!interactive) {
+            return;
+          }
+          const container = event.target.getStage()?.container();
+          if (container) {
+            container.style.cursor = selected ? "grab" : "pointer";
+          }
+        }}
+        onMouseLeave={(event) => {
+          const container = event.target.getStage()?.container();
+          if (container) {
+            container.style.cursor = "default";
+          }
+        }}
+        onDragStart={(event) => {
+          const container = event.target.getStage()?.container();
+          if (container) {
+            container.style.cursor = "grabbing";
+          }
+        }}
+        onDragEnd={(event) => {
+          const container = event.target.getStage()?.container();
+          if (container) {
+            container.style.cursor = selected ? "grab" : "default";
+          }
+          onDragEnd?.(event.target.x(), event.target.y());
+        }}
+        onTransformEnd={(event) => onTransformEnd?.(event.target as Konva.Text)}
+        strokeEnabled={false}
+        shadowEnabled={false}
+        perfectDrawEnabled={false}
+      />
+    </Group>
   );
 }
 
@@ -667,29 +982,49 @@ export function SlideStage({
     updateSnapGuides(EMPTY_GUIDES);
   }, [selectedElementId, slide.id]);
 
-  const selectedElement = selectedElementId
-    ? slide.elements.find((element) => element.id === selectedElementId) ?? null
-    : null;
-  const selectedTitleElement =
-    selectedElement?.type === "text" && selectedElement.role === "title" ? selectedElement : null;
-  const visibleTitleCandidates = slide.elements.filter(
-    (element): element is TextElement =>
-      element.type === "text" &&
-      element.role === "title" &&
-      element.metaKey !== "managed-title-accent-text" &&
-      (!hiddenElementId || element.id !== hiddenElementId)
+  const selectedElement = useMemo(() => {
+    if (!selectedElementId) {
+      return null;
+    }
+    return slide.elements.find((element) => element.id === selectedElementId) ?? null;
+  }, [selectedElementId, slide.elements]);
+
+  const titleText = useMemo(() => {
+    const managedTitle = slide.elements.find(
+      (element): element is TextElement => element.type === "text" && element.metaKey === "managed-title"
+    );
+    if (managedTitle?.text) {
+      return managedTitle.text;
+    }
+    return (
+      slide.elements.find(
+        (element): element is TextElement => element.type === "text" && element.role === "title"
+      )?.text ?? ""
+    );
+  }, [slide.elements]);
+
+  const legacyChipRects = useMemo(
+    () =>
+      slide.elements
+        .filter((element): element is ShapeElement => element.type === "shape" && shouldHideLegacyAccentChip(element))
+        .map((element) => ({
+          x: element.x,
+          y: element.y,
+          width: element.width,
+          height: element.height
+        })),
+    [slide.elements]
   );
-  const managedTitle = visibleTitleCandidates.find((element) => element.metaKey === "managed-title") ?? null;
-  const titleForHighlight =
-    selectedTitleElement && (!hiddenElementId || hiddenElementId !== selectedTitleElement.id)
-      ? selectedTitleElement
-      : visibleTitleCandidates.length === 1
-        ? visibleTitleCandidates[0]
-        : managedTitle;
-  const titleHighlight =
-    titleForHighlight && visibleTitleCandidates.length <= 1
-      ? resolveTitleHighlightRect(slide, titleForHighlight)
-      : null;
+
+  const hiddenLegacyAccentTextIds = useMemo(
+    () =>
+      new Set(
+        slide.elements
+          .filter((element) => shouldHideLegacyAccentText(element, legacyChipRects, titleText))
+          .map((element) => element.id)
+      ),
+    [legacyChipRects, slide.elements, titleText]
+  );
 
   const handleTransformEnd = (element: CanvasElement, node: Konva.Node) => {
     const scaleX = node.scaleX();
@@ -846,25 +1181,15 @@ export function SlideStage({
           />
         ))}
 
-        {titleHighlight ? (
-          <Rect
-            x={titleHighlight.x}
-            y={titleHighlight.y}
-            width={titleHighlight.width}
-            height={titleHighlight.height}
-            fill={titleHighlight.fill}
-            opacity={0.92}
-            cornerRadius={Math.round((titleForHighlight?.fontSize ?? 24) * 0.08)}
-            listening={false}
-          />
-        ) : null}
-
         {slide.elements
           .filter((element) => {
             if (hiddenElementId && element.id === hiddenElementId) {
               return false;
             }
             if (shouldHideLegacyAccentChip(element)) {
+              return false;
+            }
+            if (hiddenLegacyAccentTextIds.has(element.id)) {
               return false;
             }
             if (showSlideBadge) {

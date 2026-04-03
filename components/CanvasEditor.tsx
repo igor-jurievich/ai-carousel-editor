@@ -17,6 +17,7 @@ type CanvasEditorProps = {
   canvasHeight: number;
   selectedElementId: string | null;
   selectedElement: CanvasElement | null;
+  editingTextElementId?: string | null;
   editingTextElement: TextElement | null;
   editingValue: string;
   onEditingValueChange: (value: string) => void;
@@ -58,6 +59,7 @@ export function CanvasEditor({
   canvasHeight,
   selectedElementId,
   selectedElement,
+  editingTextElementId = null,
   editingTextElement,
   editingValue,
   onEditingValueChange,
@@ -178,7 +180,11 @@ export function CanvasEditor({
   }, [mode, scrollToSlideRequest]);
 
   if (mode === "single" && activeSlide) {
-    const isEditingActiveSlide = editingTextElement && activeSlide.id === activeSlideId;
+    const hiddenEditingElementId =
+      activeSlide.id === activeSlideId
+        ? editingTextElementId ?? editingTextElement?.id ?? null
+        : null;
+    const isEditingActiveSlide = Boolean(hiddenEditingElementId);
     const selectedElementStyle =
       selectedElement
         ? getFloatingActionStyle(selectedElement, scale, displayWidth, displayHeight, {
@@ -279,7 +285,7 @@ export function CanvasEditor({
                     height={displayHeight}
                     canvasWidth={canvasWidth}
                     canvasHeight={canvasHeight}
-                    hiddenElementId={isEditingActiveSlide ? editingTextElement?.id ?? null : null}
+                    hiddenElementId={hiddenEditingElementId}
                     selectedElementId={selectedElementId}
                     interactive={!disabled && !previewMode}
                     onSelectElement={(elementId) => onSelectElement(activeSlide.id, elementId)}
@@ -343,13 +349,6 @@ export function CanvasEditor({
 
           {previewMode || hideMobileSlideTools ? null : (
             <div className="mobile-slide-tools" aria-label="Управление слайдами">
-              <MobileIconButton
-                icon="plus"
-                title="Добавить слайд"
-                label="Добав."
-                onClick={() => onInsertSlideAt(activeSlideIndex + 1, "text")}
-                disabled={disabled}
-              />
               <MobileIconButton
                 icon="templates"
                 title="Выбрать шаблон"
