@@ -713,6 +713,38 @@ function resolveTitleAccent(title: string) {
   };
 }
 
+function resolveLeadingTitleAccent(title: string) {
+  const normalized = normalizeMultilineText(title);
+  if (!normalized) {
+    return null;
+  }
+
+  const tokenPattern = /[\p{L}\p{N}-]+/gu;
+  const tokens = Array.from(normalized.matchAll(tokenPattern));
+  if (!tokens.length) {
+    return null;
+  }
+
+  for (const token of tokens) {
+    const raw = token[0] ?? "";
+    const text = trimAccentEdge(raw);
+    if (!isAccentCandidateWord(text)) {
+      continue;
+    }
+    const start = typeof token.index === "number" ? token.index : normalized.indexOf(raw);
+    if (start < 0) {
+      continue;
+    }
+    return {
+      text,
+      start,
+      end: start + text.length
+    };
+  }
+
+  return null;
+}
+
 function resolveReadableAccentTextColor(fill: string) {
   const hex = fill.trim().replace(/^#/, "");
   const normalized =
@@ -741,14 +773,70 @@ function estimateTextWidth(value: string, fontSize: number) {
   return value.split("").reduce((sum, char) => sum + estimateCharWidth(char, fontSize), 0);
 }
 
-function wrapTextLinesByWidth(text: string, width: number, fontSize: number) {
+let textMeasureCanvas: HTMLCanvasElement | null = null;
+
+function resolveFontWeight(fontStyle?: string) {
+  if (!fontStyle) {
+    return "700";
+  }
+
+  const normalized = fontStyle.toLowerCase();
+  if (normalized.includes("bold")) {
+    return "700";
+  }
+  if (normalized.includes("500")) {
+    return "500";
+  }
+
+  return "400";
+}
+
+function measureTextWidth(
+  value: string,
+  fontSize: number,
+  fontFamily: string,
+  fontStyle?: string
+) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof document !== "undefined") {
+    try {
+      if (!textMeasureCanvas) {
+        textMeasureCanvas = document.createElement("canvas");
+      }
+      const context = textMeasureCanvas.getContext("2d");
+      if (context) {
+        const weight = resolveFontWeight(fontStyle);
+        context.font = `${weight} ${fontSize}px "${fontFamily}", sans-serif`;
+        const measured = context.measureText(value).width;
+        if (Number.isFinite(measured) && measured > 0) {
+          return measured;
+        }
+      }
+    } catch {
+      // Fallback to rough estimate when canvas context/font is unavailable.
+    }
+  }
+
+  return estimateTextWidth(value, fontSize);
+}
+
+function wrapTextLinesByWidth(
+  text: string,
+  width: number,
+  fontSize: number,
+  fontFamily: string,
+  fontStyle?: string
+) {
   const normalized = normalizeMultilineText(text);
   if (!normalized) {
     return [] as string[];
   }
 
   const lines: string[] = [];
-  const spaceWidth = estimateCharWidth(" ", fontSize);
+  const spaceWidth = measureTextWidth(" ", fontSize, fontFamily, fontStyle);
   const paragraphs = normalized.split("\n");
 
   for (const paragraph of paragraphs) {
@@ -759,11 +847,11 @@ function wrapTextLinesByWidth(text: string, width: number, fontSize: number) {
     }
 
     let currentLine = words[0];
-    let currentWidth = estimateTextWidth(words[0], fontSize);
+    let currentWidth = measureTextWidth(words[0], fontSize, fontFamily, fontStyle);
 
     for (let index = 1; index < words.length; index += 1) {
       const word = words[index];
-      const wordWidth = estimateTextWidth(word, fontSize);
+      const wordWidth = measureTextWidth(word, fontSize, fontFamily, fontStyle);
       const nextWidth = currentWidth + spaceWidth + wordWidth;
 
       if (nextWidth <= width || !currentLine) {
@@ -813,7 +901,13 @@ function findAccentInLine(line: string, accentText: string) {
 
 function resolveTitleAccentPosition(titleElement: TextElement, accentText: string) {
   const lineHeight = titleElement.lineHeight ?? 1.05;
-  const lines = wrapTextLinesByWidth(titleElement.text, titleElement.width, titleElement.fontSize);
+  const lines = wrapTextLinesByWidth(
+    titleElement.text,
+    titleElement.width,
+    titleElement.fontSize,
+    titleElement.fontFamily,
+    titleElement.fontStyle
+  );
   if (!lines.length) {
     return null;
   }
@@ -826,7 +920,9 @@ function resolveTitleAccentPosition(titleElement: TextElement, accentText: strin
     }
 
     const prefix = line.slice(0, startInLine);
-    const xOffset = Math.round(estimateTextWidth(prefix, titleElement.fontSize));
+    const xOffset = Math.round(
+      measureTextWidth(prefix, titleElement.fontSize, titleElement.fontFamily, titleElement.fontStyle)
+    );
     const yOffset = Math.round(lineIndex * titleElement.fontSize * lineHeight);
 
     return {
@@ -865,7 +961,7 @@ function buildTitleAccentElements(params: {
     return [];
   }
 
-  const accent = resolveTitleAccent(titleElement.text);
+  let accent = resolveTitleAccent(titleElement.text);
   if (!accent?.text) {
     return [];
   }
@@ -875,14 +971,26 @@ function buildTitleAccentElements(params: {
     return [];
   }
 
-  const accentPosition = resolveTitleAccentPosition(titleElement, accent.text);
+  let accentPosition = resolveTitleAccentPosition(titleElement, accent.text);
+  if (accentPosition && accentPosition.lineIndex > 1) {
+    const leadingAccent = resolveLeadingTitleAccent(titleElement.text);
+    if (!leadingAccent?.text) {
+      return [];
+    }
+    const leadingPosition = resolveTitleAccentPosition(titleElement, leadingAccent.text);
+    if (!leadingPosition || leadingPosition.lineIndex > 1) {
+      return [];
+    }
+    accent = leadingAccent;
+    accentPosition = leadingPosition;
+  }
   if (!accentPosition) {
     return [];
   }
   const accentX = accentPosition.x;
   const accentY = accentPosition.y;
   const accentWidth = Math.ceil(
-    accent.text.split("").reduce((sum, char) => sum + estimateCharWidth(char, titleElement.fontSize), 0)
+    measureTextWidth(accent.text, titleElement.fontSize, titleElement.fontFamily, titleElement.fontStyle)
   );
   const textWidth = Math.ceil(clampValue(accentWidth + 4, 16, titleElement.width));
   const textHeight = Math.ceil(titleElement.fontSize * lineHeight);
