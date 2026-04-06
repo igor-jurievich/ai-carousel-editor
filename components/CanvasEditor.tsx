@@ -182,11 +182,7 @@ export function CanvasEditor({
   }, [mode, scrollToSlideRequest]);
 
   if (mode === "single" && activeSlide) {
-    const hiddenEditingElementId =
-      activeSlide.id === activeSlideId
-        ? editingTextElementId ?? editingTextElement?.id ?? null
-        : null;
-    const isEditingActiveSlide = Boolean(hiddenEditingElementId);
+    const hiddenEditingElementId: string | null = null;
     const selectedElementStyle =
       selectedElement
         ? getFloatingActionStyle(selectedElement, scale, displayWidth, displayHeight, {
@@ -303,52 +299,6 @@ export function CanvasEditor({
                   />
                 </div>
 
-                {isEditingActiveSlide && editingTextElement ? (
-                  <textarea
-                    className="inline-text-editor"
-                    autoFocus
-                    value={editingValue}
-                    onChange={(event) => onEditingValueChange(event.target.value)}
-                    onSelect={(event) =>
-                      onEditingSelectionChange?.(
-                        event.currentTarget.selectionStart ?? 0,
-                        event.currentTarget.selectionEnd ?? 0
-                      )
-                    }
-                    onKeyUp={(event) =>
-                      onEditingSelectionChange?.(
-                        event.currentTarget.selectionStart ?? 0,
-                        event.currentTarget.selectionEnd ?? 0
-                      )
-                    }
-                    onMouseUp={(event) =>
-                      onEditingSelectionChange?.(
-                        event.currentTarget.selectionStart ?? 0,
-                        event.currentTarget.selectionEnd ?? 0
-                      )
-                    }
-                    onTouchEnd={(event) =>
-                      onEditingSelectionChange?.(
-                        event.currentTarget.selectionStart ?? 0,
-                        event.currentTarget.selectionEnd ?? 0
-                      )
-                    }
-                    onBlur={(event) => onCommitTextEditing(event.currentTarget.value)}
-                    onKeyDown={(event) => {
-                      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                        event.preventDefault();
-                        onCommitTextEditing((event.currentTarget as HTMLTextAreaElement).value);
-                      }
-
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        onCancelTextEditing();
-                      }
-                    }}
-                    style={resolveInlineTextEditorStyle(editingTextElement, scale)}
-                  />
-                ) : null}
-
                 {!previewMode && selectedElement && selectedElementStyle ? (
                   <button
                     type="button"
@@ -434,14 +384,14 @@ export function CanvasEditor({
       <div className="canvas-workbench canvas-workbench-stack">
         <div className="canvas-stage-wrap canvas-stage-wrap-stack">
           <div className="canvas-stage-meta">
-            <div>
-              <h2 className="panel-title" style={{ marginBottom: 4 }}>
-                Canvas
-              </h2>
-              <div className="muted">
-                Слайды идут друг под другом. Двойной клик по тексту включает inline-редактирование.
+              <div>
+                <h2 className="panel-title" style={{ marginBottom: 4 }}>
+                  Canvas
+                </h2>
+                <div className="muted">
+                  Слайды идут друг под другом. Редактирование текста выполняется через панель справа.
+                </div>
               </div>
-            </div>
             <span className="status-pill">{formatLabel}</span>
           </div>
 
@@ -454,7 +404,6 @@ export function CanvasEditor({
 
             {slides.map((slide, index) => {
               const isActive = slide.id === activeSlideId;
-              const isEditingSlide = editingTextElement && slide.id === activeSlideId;
               const selectedElementStyle =
                 isActive && selectedElement
                   ? getFloatingActionStyle(selectedElement, scale, displayWidth, displayHeight)
@@ -502,7 +451,7 @@ export function CanvasEditor({
                           height={displayHeight}
                           canvasWidth={canvasWidth}
                           canvasHeight={canvasHeight}
-                          hiddenElementId={isEditingSlide ? editingTextElement?.id ?? null : null}
+                          hiddenElementId={null}
                           selectedElementId={isActive ? selectedElementId : null}
                           interactive={isActive && !disabled && !previewMode}
                           onSelectElement={(elementId) => onSelectElement(slide.id, elementId)}
@@ -519,52 +468,6 @@ export function CanvasEditor({
                           showSlideBadge={showSlideBadge}
                         />
                       </div>
-
-                      {isEditingSlide && editingTextElement ? (
-                        <textarea
-                          className="inline-text-editor"
-                          autoFocus
-                          value={editingValue}
-                          onChange={(event) => onEditingValueChange(event.target.value)}
-                          onSelect={(event) =>
-                            onEditingSelectionChange?.(
-                              event.currentTarget.selectionStart ?? 0,
-                              event.currentTarget.selectionEnd ?? 0
-                            )
-                          }
-                          onKeyUp={(event) =>
-                            onEditingSelectionChange?.(
-                              event.currentTarget.selectionStart ?? 0,
-                              event.currentTarget.selectionEnd ?? 0
-                            )
-                          }
-                          onMouseUp={(event) =>
-                            onEditingSelectionChange?.(
-                              event.currentTarget.selectionStart ?? 0,
-                              event.currentTarget.selectionEnd ?? 0
-                            )
-                          }
-                          onTouchEnd={(event) =>
-                            onEditingSelectionChange?.(
-                              event.currentTarget.selectionStart ?? 0,
-                              event.currentTarget.selectionEnd ?? 0
-                            )
-                          }
-                          onBlur={(event) => onCommitTextEditing(event.currentTarget.value)}
-                          onKeyDown={(event) => {
-                            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                              event.preventDefault();
-                              onCommitTextEditing((event.currentTarget as HTMLTextAreaElement).value);
-                            }
-
-                            if (event.key === "Escape") {
-                              event.preventDefault();
-                              onCancelTextEditing();
-                            }
-                          }}
-                          style={resolveInlineTextEditorStyle(editingTextElement, scale)}
-                        />
-                      ) : null}
 
                       {isActive && !previewMode && selectedElement && selectedElementStyle ? (
                         <button
@@ -637,32 +540,6 @@ export function CanvasEditor({
       </div>
     </section>
   );
-}
-
-function resolveInlineTextEditorStyle(element: TextElement, scale: number) {
-  const fontStyle = element.fontStyle ?? "normal";
-  const hasBold = fontStyle.includes("bold");
-  const hasItalic = fontStyle.includes("italic");
-
-  return {
-    left: element.x * scale,
-    top: element.y * scale,
-    width: element.width * scale,
-    height: Math.max(42, element.height * scale),
-    fontSize: element.fontSize * scale,
-    fontFamily: element.fontFamily,
-    fontWeight: hasBold ? 700 : 400,
-    fontStyle: hasItalic ? "italic" : "normal",
-    letterSpacing: `${(element.letterSpacing ?? 0) * scale}px`,
-    textDecoration: element.textDecoration || "none",
-    color: element.fill,
-    textAlign: element.align,
-    lineHeight: String(element.lineHeight ?? 1.1),
-    transform: `rotate(${element.rotation}deg)`,
-    whiteSpace: "pre-wrap",
-    overflow: "auto",
-    overflowWrap: "break-word"
-  } as const;
 }
 
 function getFloatingActionStyle(

@@ -29,6 +29,12 @@ const PRESET_TOPICS = [
   "Как упаковать кейс в 9 слайдов без воды",
   "Ответы на частые возражения в нише услуг"
 ];
+const CONTENT_MODE_CHIPS = [
+  { id: "carousel", label: "Карусель", enabled: true },
+  { id: "reels", label: "Рилс", enabled: false },
+  { id: "ideas", label: "Идеи", enabled: false },
+  { id: "headlines", label: "Заголовки", enabled: false }
+] as const;
 
 export default function GeneratePage() {
   const router = useRouter();
@@ -69,17 +75,6 @@ export default function GeneratePage() {
       return { type: slide.type, title: "Слайд без заголовка" };
     });
   }, [previewSlides]);
-
-  const advancedFieldStyle = {
-    minWidth: 0
-  } as const;
-
-  const advancedInputStyle = {
-    width: "100%",
-    maxWidth: "100%",
-    minWidth: 0,
-    boxSizing: "border-box"
-  } as const;
 
   const handleGenerate = async () => {
     if (!canGenerate) {
@@ -226,21 +221,37 @@ export default function GeneratePage() {
   return (
     <main className="page-shell generate-page-shell">
       <div className="editor-shell editor-shell-redesigned">
-        <header className="prompt-shell">
-          <div className="prompt-brand">
-            <span className="prompt-eyebrow">AI Carousel Editor</span>
-            <h1>Сгенерируйте карусель за 30–90 секунд</h1>
+        <header className="prompt-shell prompt-shell-hero">
+          <div className="prompt-brand prompt-brand-hero">
+            <span className="prompt-greeting">⚡ Привет!</span>
+            <h1>Соберите карусель за 30–90 секунд</h1>
+            <p className="prompt-subtitle">
+              Напишите тему, выберите параметры и сразу откройте готовый проект в редакторе.
+            </p>
           </div>
 
-          <div className="prompt-composer">
+          <div className="prompt-composer prompt-composer-hero">
             <textarea
               value={topic}
               onChange={(event) => setTopic(event.target.value)}
-              placeholder="Например: «Почему посты не дают заявок» или «Как эксперту поднять чек»"
+              placeholder="Напиши тему или опиши свою идею..."
               rows={4}
               maxLength={MAX_TOPIC_CHARS}
             />
-            <div className="field-row generate-presets-row" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div className="generate-mode-row" aria-label="Режимы контента">
+              {CONTENT_MODE_CHIPS.map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  className={`generate-mode-chip ${mode.enabled ? "active" : ""}`}
+                  disabled={!mode.enabled}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="field-row generate-presets-row">
               {PRESET_TOPICS.map((preset) => (
                 <button
                   key={preset}
@@ -254,32 +265,29 @@ export default function GeneratePage() {
               ))}
             </div>
 
-            <details className="settings-card generate-advanced" style={{ marginTop: 12 }}>
+            <details className="settings-card generate-advanced">
               <summary className="generate-advanced-summary">Дополнительные настройки</summary>
               <div className="generate-advanced-grid">
-                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
+                <label className="field-label generate-advanced-field">
                   Ниша
                   <input
                     className="field"
-                    style={advancedInputStyle}
                     value={niche}
                     onChange={(event) => setNiche(event.target.value)}
                   />
                 </label>
-                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
+                <label className="field-label generate-advanced-field">
                   Целевая аудитория
                   <input
                     className="field"
-                    style={advancedInputStyle}
                     value={audience}
                     onChange={(event) => setAudience(event.target.value)}
                   />
                 </label>
-                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
+                <label className="field-label generate-advanced-field">
                   Тон
                   <select
                     className="field"
-                    style={advancedInputStyle}
                     value={tone}
                     onChange={(event) => setTone(event.target.value)}
                   >
@@ -288,11 +296,10 @@ export default function GeneratePage() {
                     <option value="sharp">Острый</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
+                <label className="field-label generate-advanced-field">
                   Цель
                   <select
                     className="field"
-                    style={advancedInputStyle}
                     value={goal}
                     onChange={(event) => setGoal(event.target.value)}
                   >
@@ -301,11 +308,10 @@ export default function GeneratePage() {
                     <option value="warming">Прогрев</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
+                <label className="field-label generate-advanced-field">
                   Формат
                   <select
                     className="field"
-                    style={advancedInputStyle}
                     value={format}
                     onChange={(event) => setFormat(event.target.value as SlideFormat)}
                   >
@@ -314,11 +320,10 @@ export default function GeneratePage() {
                     <option value="9:16">9:16</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
+                <label className="field-label generate-advanced-field">
                   Тема
                   <select
                     className="field"
-                    style={advancedInputStyle}
                     value={theme}
                     onChange={(event) => setTheme(event.target.value as CarouselTemplateId)}
                   >
@@ -327,11 +332,10 @@ export default function GeneratePage() {
                     <option value="color">Цветная</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field" style={advancedFieldStyle}>
+                <label className="field-label generate-advanced-field">
                   Количество карточек
                   <select
                     className="field"
-                    style={advancedInputStyle}
                     value={slidesCount}
                     onChange={(event) => setSlidesCount(clampSlidesCount(Number(event.target.value)))}
                   >
@@ -345,7 +349,7 @@ export default function GeneratePage() {
               </div>
             </details>
 
-            <div className="prompt-actions" style={{ marginTop: 14 }}>
+            <div className="prompt-actions prompt-actions-hero">
               <button className="btn prompt-generate-btn" type="button" onClick={handleGenerate} disabled={!canGenerate}>
                 {isGenerating ? "Генерируем..." : "Сгенерировать карусель"}
               </button>

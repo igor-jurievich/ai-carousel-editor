@@ -31,6 +31,7 @@ type SettingsPanelProps = {
   onGenerateCaption: () => void;
   onCopyCaption: () => void;
   onPhotoSlotEnabledChange: (value: boolean) => void;
+  onAddSlidePhoto: () => void;
   onUploadBackgroundImage: () => void;
   onRemoveBackgroundImage: () => void;
   onSlideBackgroundChange: (value: string) => void;
@@ -64,6 +65,15 @@ type SettingsPanelProps = {
 };
 
 const FONT_OPTIONS = ["Inter", "Manrope", "Advent Pro", "Fira Code", "Russo One", "Oswald"];
+const NON_CONTENT_TEXT_META_KEYS = new Set([
+  "slide-chip-text",
+  "managed-title-accent-text",
+  "profile-handle",
+  "footer-counter",
+  "profile-subtitle",
+  "footer-arrow",
+  "image-placeholder-text"
+]);
 
 export function SettingsPanel({
   slides,
@@ -91,6 +101,7 @@ export function SettingsPanel({
   onGenerateCaption,
   onCopyCaption,
   onPhotoSlotEnabledChange,
+  onAddSlidePhoto,
   onUploadBackgroundImage,
   onRemoveBackgroundImage,
   onSlideBackgroundChange,
@@ -126,6 +137,34 @@ export function SettingsPanel({
     0,
     slides.findIndex((item) => item.id === (activeSlideId ?? slide.id))
   );
+  const orderedTextElements = slide.elements
+    .filter(
+      (element): element is TextElement =>
+        element.type === "text" && !NON_CONTENT_TEXT_META_KEYS.has(element.metaKey ?? "")
+    )
+    .sort((left, right) => left.y - right.y);
+  const fallbackTitleTextElement =
+    slide.elements.find(
+      (element): element is TextElement =>
+        element.type === "text" &&
+        (element.metaKey === "managed-title" || element.role === "title")
+    ) ??
+    orderedTextElements[0] ??
+    null;
+  const fallbackBodyTextElement =
+    slide.elements.find(
+      (element): element is TextElement =>
+        element.type === "text" &&
+        (element.metaKey === "managed-body" || element.role === "body")
+    ) ??
+    orderedTextElements.find((element) => element.id !== fallbackTitleTextElement?.id) ??
+    fallbackTitleTextElement;
+  const activeTextElement =
+    selectedTextElement ??
+    (selectedTextTargetRole === "body"
+      ? fallbackBodyTextElement ?? fallbackTitleTextElement
+      : fallbackTitleTextElement ?? fallbackBodyTextElement);
+  const isAutoSelectedText = !selectedTextElement && Boolean(activeTextElement);
 
   if (previewMode) {
     return (
@@ -295,6 +334,14 @@ export function SettingsPanel({
           <button
             type="button"
             className="ghost-chip"
+            onClick={onAddSlidePhoto}
+            disabled={disabled}
+          >
+            Добавить на слайд
+          </button>
+          <button
+            type="button"
+            className="ghost-chip"
             onClick={onUploadBackgroundImage}
             disabled={disabled}
           >
@@ -351,11 +398,11 @@ export function SettingsPanel({
         <div className="settings-inline-head">
           <h3>Текст и шрифт</h3>
           <span className="status-pill">
-            {selectedTextElement ? "Элемент выбран" : "Элемент не выбран"}
+            {activeTextElement ? (isAutoSelectedText ? "Автовыбор текста" : "Элемент выбран") : "Элемент не выбран"}
           </span>
         </div>
 
-        {selectedTextElement ? (
+        {activeTextElement ? (
           <>
             <div className="segment-control">
               <button
@@ -380,7 +427,7 @@ export function SettingsPanel({
               Текст элемента
               <textarea
                 className="field"
-                value={selectedTextElement.text}
+                value={activeTextElement.text}
                 rows={4}
                 onChange={(event) => onSelectedTextChange(event.target.value)}
                 onSelect={(event) =>
@@ -473,7 +520,7 @@ export function SettingsPanel({
                 Шрифт
                 <select
                   className="select"
-                  value={selectedTextElement.fontFamily}
+                  value={activeTextElement.fontFamily}
                   onChange={(event) => onSelectedTextFontChange(event.target.value)}
                   disabled={disabled}
                 >
@@ -492,7 +539,7 @@ export function SettingsPanel({
                   type="number"
                   min={14}
                   max={96}
-                  value={Math.round(selectedTextElement.fontSize)}
+                  value={Math.round(activeTextElement.fontSize)}
                   onChange={(event) => onSelectedTextSizeChange(Number(event.target.value))}
                   disabled={disabled}
                 />
@@ -539,7 +586,7 @@ export function SettingsPanel({
               <input
                 className="field"
                 type="color"
-                value={selectedTextElement.fill}
+                value={activeTextElement.fill}
                 onChange={(event) => onSelectedTextColorChange(event.target.value)}
                 disabled={disabled}
               />

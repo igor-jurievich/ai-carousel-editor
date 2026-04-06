@@ -308,6 +308,71 @@ button:disabled {
   padding: 11px 12px;
 }
 
+.prompt-shell-hero {
+  grid-template-columns: minmax(260px, 336px) minmax(0, 1fr) minmax(230px, 300px);
+}
+
+.prompt-brand-hero {
+  gap: 8px;
+}
+
+.prompt-greeting {
+  font-size: 44px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #1d272b;
+}
+
+.prompt-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.prompt-composer-hero {
+  gap: 10px;
+}
+
+.generate-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.generate-mode-chip {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(198, 214, 211, 0.95);
+  background: rgba(247, 252, 251, 0.95);
+  color: #5b6a72;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.generate-mode-chip.active {
+  border-color: rgba(82, 187, 177, 0.9);
+  background: rgba(215, 244, 239, 0.92);
+  color: #1f5751;
+}
+
+.prompt-actions-hero {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.generate-advanced {
+  margin-top: 2px;
+}
+
+.generate-presets-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .studio-grid {
   display: grid;
   grid-template-columns: var(--rail-width) minmax(0, 1fr) minmax(320px, var(--sidebar-width));
@@ -398,14 +463,17 @@ button:disabled {
 }
 
 .canvas-panel {
-  padding: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .canvas-workbench {
-  border-radius: 20px;
-  border: 1px solid rgba(191, 209, 206, 0.86);
-  background: linear-gradient(180deg, rgba(247, 252, 251, 0.98) 0%, rgba(241, 249, 247, 0.98) 100%);
-  padding: 12px;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .canvas-workbench-stack {
@@ -482,17 +550,17 @@ button:disabled {
   display: flex;
   align-items: flex-start;
   gap: 11px;
-  padding: 12px;
-  border-radius: 24px;
-  border: 1px solid rgba(177, 203, 198, 0.48);
-  background: rgba(250, 253, 252, 0.98);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  padding: 0;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  transition: none;
 }
 
 .slide-stack-shell.active {
-  border-color: rgba(79, 182, 172, 0.9);
-  box-shadow: 0 12px 26px rgba(51, 124, 117, 0.18);
-  background: rgba(245, 252, 250, 0.99);
+  border: 0;
+  box-shadow: none;
+  background: transparent;
 }
 
 .active-slide-pill {
@@ -512,7 +580,7 @@ button:disabled {
 
 .canvas-stage {
   position: relative;
-  border-radius: 26px;
+  border-radius: 0;
 }
 
 .canvas-stage-editor {
@@ -520,11 +588,11 @@ button:disabled {
 }
 
 .canvas-stage-center {
-  border-radius: 20px;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid rgba(181, 199, 196, 0.66);
+  border: 0;
   background: #ffffff;
-  box-shadow: 0 12px 26px rgba(26, 47, 45, 0.11);
+  box-shadow: none;
   line-height: 0;
   touch-action: none;
   overscroll-behavior: contain;
@@ -1690,7 +1758,7 @@ button:disabled {
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1040px) {
   .prompt-shell {
     grid-template-columns: 1fr;
   }
@@ -3945,19 +4013,47 @@ button:disabled {
 
 /* Canonical mobile layout override (single source of truth) */
 @media (max-width: 768px) {
+  .mobile-only,
+  .mobile-editor-shell {
+    overflow-x: hidden !important;
+  }
+
   .mobile-editor-shell {
     gap: 8px !important;
+    padding-inline: 8px !important;
     padding-bottom: calc(82px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .mobile-topbar {
+    gap: 8px !important;
+    padding: 8px !important;
   }
 
   .mobile-canvas-zone {
     overflow-x: hidden !important;
-    padding-inline: 8px !important;
+    padding-inline: 4px !important;
     padding-bottom: calc(var(--mobile-bottom-offset, 82px) + 84px + env(safe-area-inset-bottom)) !important;
   }
 
+  .mobile-preview-shell,
+  .mobile-slide-shell {
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-stage-editor .canvas-stage-center,
+  .mobile-stage-surface {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
   .mobile-canvas-frame {
-    padding-inline: 10px !important;
+    padding-inline: 8px !important;
   }
 
   .mobile-slide-tools {
@@ -4019,12 +4115,12 @@ button:disabled {
 
   .mobile-editor-shell .mobile-tool-sheet.mobile-tool-sheet-v2 {
     position: fixed !important;
-    left: 8px !important;
-    right: 8px !important;
+    left: max(8px, env(safe-area-inset-left)) !important;
+    right: max(8px, env(safe-area-inset-right)) !important;
     top: auto !important;
     bottom: calc(72px + env(safe-area-inset-bottom)) !important;
     height: auto !important;
-    max-height: min(50svh, 420px) !important;
+    max-height: min(44svh, 340px) !important;
     border-radius: 14px !important;
     z-index: 92 !important;
   }
@@ -4106,4 +4202,39 @@ button:disabled {
   border: 0 !important;
   box-shadow: none !important;
   background: #ffffff !important;
+}
+
+@media (max-width: 1024px) {
+  .prompt-shell-hero {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .prompt-greeting {
+    font-size: clamp(32px, 8vw, 44px);
+  }
+}
+
+@media (max-width: 768px) {
+  .generate-page-shell .prompt-brand,
+  .generate-page-shell .prompt-composer,
+  .generate-page-shell .prompt-status {
+    border-radius: 16px !important;
+  }
+
+  .generate-page-shell .prompt-composer textarea {
+    min-height: 108px !important;
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+  }
+
+  .generate-mode-row {
+    gap: 6px !important;
+  }
+
+  .generate-mode-chip {
+    min-height: 30px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+  }
 }

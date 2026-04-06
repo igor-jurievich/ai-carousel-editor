@@ -34,6 +34,7 @@ type MobileToolsProps = {
   onPhotoSlotEnabledChange: (value: boolean) => void;
   slideBackground: string;
   onUploadBackgroundImage: () => void;
+  onAddSlidePhoto: () => void;
   onRemoveBackgroundImage: () => void;
   onGridVisibilityChange: (visible: boolean, options?: { applyAll?: boolean }) => void;
   onOpenTemplateModal: () => void;
@@ -141,6 +142,7 @@ export function MobileTools({
   onPhotoSlotEnabledChange,
   slideBackground,
   onUploadBackgroundImage,
+  onAddSlidePhoto,
   onRemoveBackgroundImage,
   onGridVisibilityChange,
   onOpenTemplateModal,
@@ -172,13 +174,48 @@ export function MobileTools({
   const [colorMode, setColorMode] = useState<"single" | "double">("single");
   const [applyStyleForAll, setApplyStyleForAll] = useState(true);
   const [applySizeForAll, setApplySizeForAll] = useState(false);
+  const activeTextElement = selectedTextElement;
+  const applyColorMode = (nextMode: "single" | "double") => {
+    setColorMode(nextMode);
+
+    if (!activeTextElement || disabled) {
+      return;
+    }
+
+    if (nextMode === "single") {
+      const unifiedColor = activeTextElement.fill || selectedTextHighlightColor || "#56cfc2";
+      onSelectedTextColorChange(unifiedColor);
+      onSelectedTextHighlightColorChange(unifiedColor);
+      if (selectedTextHighlightOpacity < 0.65) {
+        onSelectedTextHighlightOpacityChange(0.82);
+      }
+      return;
+    }
+
+    const normalizedText = (activeTextElement.fill ?? "").trim().toLowerCase();
+    const normalizedHighlight = (selectedTextHighlightColor ?? "").trim().toLowerCase();
+    if (normalizedText && normalizedText === normalizedHighlight) {
+      onSelectedTextHighlightColorChange(normalizedText === "#1f49ff" ? "#ff2d00" : "#1f49ff");
+    }
+    if (selectedTextHighlightOpacity < 0.65) {
+      onSelectedTextHighlightOpacityChange(0.9);
+    }
+  };
+  const handleSinglePaletteColorChange = (value: string) => {
+    onSelectedTextColorChange(value);
+    onSelectedTextHighlightColorChange(value);
+  };
   const selectedElementLabel = selectedElement
     ? selectedElement.type === "text"
       ? "Выбран текст"
       : selectedElement.type === "image"
         ? "Выбрано изображение"
         : "Выбрана фигура"
-    : "";
+    : activeTextElement
+      ? selectedTextTargetRole === "body"
+        ? "Автовыбор: описание"
+        : "Автовыбор: заголовок"
+      : "";
 
   const handleSheetTouchStart = (event: TouchEvent<HTMLElement>) => {
     const touch = event.touches[0];
@@ -330,7 +367,7 @@ export function MobileTools({
                   <button
                     type="button"
                     className={`segment-item ${colorMode === "single" ? "active" : ""}`}
-                    onClick={() => setColorMode("single")}
+                    onClick={() => applyColorMode("single")}
                     disabled={disabled}
                   >
                     Одинарная
@@ -338,46 +375,71 @@ export function MobileTools({
                   <button
                     type="button"
                     className={`segment-item ${colorMode === "double" ? "active" : ""}`}
-                    onClick={() => setColorMode("double")}
+                    onClick={() => applyColorMode("double")}
                     disabled={disabled}
                   >
                     Двойная
                   </button>
                 </div>
 
-                <div className="mobile-sheet-row">
-                  <label className="field-label">
-                    {colorMode === "single" ? "Цвет текста" : "Цвет выделения"}
-                    <div className="mobile-color-inline">
-                      <input
-                        type="color"
-                        className="color-input"
-                        value={
-                          colorMode === "single"
-                            ? selectedTextElement?.fill ?? "#56cfc2"
-                            : selectedTextHighlightColor
-                        }
-                        onChange={(event) =>
-                          colorMode === "single"
-                            ? onSelectedTextColorChange(event.target.value)
-                            : onSelectedTextHighlightColorChange(event.target.value)
-                        }
-                        disabled={disabled || !selectedTextElement}
-                      />
-                      <input
-                        className="field"
-                        value={
-                          (
-                            colorMode === "single"
-                              ? selectedTextElement?.fill ?? "#56cfc2"
-                              : selectedTextHighlightColor
-                          ).toUpperCase()
-                        }
-                        readOnly
-                      />
-                    </div>
-                  </label>
-                </div>
+                {colorMode === "single" ? (
+                  <div className="mobile-sheet-row">
+                    <label className="field-label">
+                      Единый цвет текста и выделения
+                      <div className="mobile-color-inline">
+                        <input
+                          type="color"
+                          className="color-input"
+                          value={activeTextElement?.fill ?? "#56cfc2"}
+                          onChange={(event) => handleSinglePaletteColorChange(event.target.value)}
+                          disabled={disabled || !activeTextElement}
+                        />
+                        <input
+                          className="field"
+                          value={(activeTextElement?.fill ?? "#56cfc2").toUpperCase()}
+                          readOnly
+                        />
+                      </div>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="mobile-sheet-row">
+                    <label className="field-label">
+                      Цвет текста
+                      <div className="mobile-color-inline">
+                        <input
+                          type="color"
+                          className="color-input"
+                          value={activeTextElement?.fill ?? "#56cfc2"}
+                          onChange={(event) => onSelectedTextColorChange(event.target.value)}
+                          disabled={disabled || !activeTextElement}
+                        />
+                        <input
+                          className="field"
+                          value={(activeTextElement?.fill ?? "#56cfc2").toUpperCase()}
+                          readOnly
+                        />
+                      </div>
+                    </label>
+                    <label className="field-label">
+                      Цвет выделения
+                      <div className="mobile-color-inline">
+                        <input
+                          type="color"
+                          className="color-input"
+                          value={selectedTextHighlightColor}
+                          onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
+                          disabled={disabled || !activeTextElement}
+                        />
+                        <input
+                          className="field"
+                          value={selectedTextHighlightColor.toUpperCase()}
+                          readOnly
+                        />
+                      </div>
+                    </label>
+                  </div>
+                )}
               </div>
             ) : null}
 
@@ -419,6 +481,16 @@ export function MobileTools({
                     disabled={disabled}
                   />
                 </label>
+                <div className="field-row">
+                  <button
+                    type="button"
+                    className="ghost-chip"
+                    onClick={onAddSlidePhoto}
+                    disabled={disabled}
+                  >
+                    + Добавить фото на слайд
+                  </button>
+                </div>
                 <div className="field-row">
                   <button
                     type="button"
@@ -525,7 +597,7 @@ export function MobileTools({
                   Текст элемента
                   <textarea
                     className="textarea"
-                    value={selectedTextElement?.text ?? ""}
+                    value={activeTextElement?.text ?? ""}
                     onChange={(event) => onSelectedTextChange(event.target.value)}
                     onSelect={(event) =>
                       onSelectedTextSelectionChange(
@@ -553,7 +625,7 @@ export function MobileTools({
                     }
                     placeholder="Выберите текст на слайде"
                     rows={3}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   />
                 </label>
 
@@ -566,7 +638,7 @@ export function MobileTools({
                         className="color-input"
                         value={selectedTextHighlightColor}
                         onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
-                        disabled={disabled || !selectedTextElement}
+                        disabled={disabled || !activeTextElement}
                       />
                       <input className="field" value={selectedTextHighlightColor.toUpperCase()} readOnly />
                     </div>
@@ -577,7 +649,7 @@ export function MobileTools({
                       className="ghost-chip"
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={onApplyHighlightToSelection}
-                      disabled={disabled || !selectedTextElement}
+                      disabled={disabled || !activeTextElement}
                     >
                       Выделить
                     </button>
@@ -586,7 +658,7 @@ export function MobileTools({
                       className="ghost-chip ghost-chip-muted"
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={onClearHighlightFromSelection}
-                      disabled={disabled || !selectedTextElement}
+                      disabled={disabled || !activeTextElement}
                     >
                       Снять
                     </button>
@@ -595,7 +667,7 @@ export function MobileTools({
                     type="button"
                     className="ghost-chip ghost-chip-muted"
                     onClick={onClearAllHighlights}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   >
                     Очистить все выделения
                   </button>
@@ -613,7 +685,7 @@ export function MobileTools({
                     onChange={(event) =>
                       onSelectedTextHighlightOpacityChange(Number(event.target.value) / 100)
                     }
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   />
                 </label>
 
@@ -622,7 +694,7 @@ export function MobileTools({
                     type="button"
                     className="mobile-case-btn"
                     onClick={() => onSelectedTextCaseChange("capitalize")}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   >
                     Aa
                   </button>
@@ -630,7 +702,7 @@ export function MobileTools({
                     type="button"
                     className="mobile-case-btn"
                     onClick={() => onSelectedTextCaseChange("uppercase")}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   >
                     AA
                   </button>
@@ -638,7 +710,7 @@ export function MobileTools({
                     type="button"
                     className="mobile-case-btn"
                     onClick={() => onSelectedTextCaseChange("lowercase")}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   >
                     aa
                   </button>
@@ -646,7 +718,7 @@ export function MobileTools({
                     type="button"
                     className="mobile-case-btn"
                     onClick={() => onSelectedTextCaseChange("normal")}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   >
                     Норм
                   </button>
@@ -754,14 +826,14 @@ export function MobileTools({
                 </div>
                 <div className="mobile-font-grid">
                   {FONT_OPTIONS.map((fontName) => {
-                    const isActive = selectedTextElement?.fontFamily === fontName;
+                    const isActive = activeTextElement?.fontFamily === fontName;
                     return (
                       <button
                         key={`font-${fontName}`}
                         type="button"
                         className={`mobile-font-item ${isActive ? "active" : ""}`}
                         onClick={() => onSelectedTextFontChange(fontName)}
-                        disabled={disabled || !selectedTextElement}
+                        disabled={disabled || !activeTextElement}
                         style={{ fontFamily: fontName }}
                       >
                         {fontName}
@@ -806,7 +878,7 @@ export function MobileTools({
                     type="button"
                     className="mobile-case-btn"
                     onClick={() => onSelectedTextCaseChange("capitalize")}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   >
                     Aa
                   </button>
@@ -814,7 +886,7 @@ export function MobileTools({
                     type="button"
                     className="mobile-case-btn"
                     onClick={() => onSelectedTextCaseChange("uppercase")}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   >
                     AA
                   </button>
@@ -822,7 +894,7 @@ export function MobileTools({
                     type="button"
                     className="mobile-case-btn"
                     onClick={() => onSelectedTextCaseChange("lowercase")}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   >
                     aa
                   </button>
@@ -830,7 +902,7 @@ export function MobileTools({
                     type="button"
                     className="mobile-case-btn"
                     onClick={() => onSelectedTextCaseChange("normal")}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   >
                     Aa
                   </button>
@@ -842,11 +914,11 @@ export function MobileTools({
                     min={14}
                     max={96}
                     step={1}
-                    value={Math.round(selectedTextElement?.fontSize ?? 28)}
+                    value={Math.round(activeTextElement?.fontSize ?? 28)}
                     onChange={(event) => onSelectedTextSizeChange(Number(event.target.value))}
-                    disabled={disabled || !selectedTextElement}
+                    disabled={disabled || !activeTextElement}
                   />
-                  <div className="mobile-size-value">{Math.round(selectedTextElement?.fontSize ?? 28)}px</div>
+                  <div className="mobile-size-value">{Math.round(activeTextElement?.fontSize ?? 28)}px</div>
                 </div>
                 <label className="mobile-switch-row">
                   <span>Применить для всех слайдов</span>
