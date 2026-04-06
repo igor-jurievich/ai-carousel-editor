@@ -56,11 +56,24 @@ const ROTATION_SNAP_VALUES = [-180, -90, 0, 90, 180];
 const ROTATION_SNAP_THRESHOLD = 6;
 const EMPTY_GUIDES: SnapGuides = { vertical: [], horizontal: [] };
 const NON_INTERACTIVE_TEXT_META_KEYS = new Set<string>(["managed-title-accent-text"]);
+const MANAGED_TEXT_META_KEYS = new Set<string>(["managed-title", "managed-body"]);
 const UI_ACCENT = "#2caea1";
 const UI_ACCENT_SOFT = "rgba(86, 207, 194, 0.24)";
 const UI_ACCENT_FAINT = "rgba(86, 207, 194, 0.12)";
 const UI_ACCENT_GUIDE = "rgba(86, 207, 194, 0.72)";
-const LEGACY_ACCENT_COLORS = new Set(["#1f49ff", "#ff2a2a", "#ff2d00", "#ff2d20", "#315cff"]);
+const LEGACY_ACCENT_COLORS = new Set([
+  "#1f49ff",
+  "#315cff",
+  "#3558ff",
+  "#3d5afe",
+  "#2f50ff",
+  "#ff2a2a",
+  "#ff2d00",
+  "#ff2d20",
+  "#ff3b30",
+  "#ff4028",
+  "#ff4630"
+]);
 const LEGACY_ACCENT_TEXT_COLORS = new Set(["#ffffff", "#fff", "#f5f7ff", "#f7f9ff"]);
 
 function clamp(value: number, min: number, max: number) {
@@ -204,7 +217,7 @@ function measureLineWidth(value: string, element: TextElement) {
 function normalizeTextHighlights(element: TextElement) {
   const textLength = element.text.length;
   if (!element.highlights?.length || textLength <= 0) {
-    return [] as Array<{ start: number; end: number; color: string }>;
+    return [] as Array<{ start: number; end: number; color: string; opacity: number }>;
   }
 
   const normalized = element.highlights
@@ -213,10 +226,13 @@ function normalizeTextHighlights(element: TextElement) {
       const startSource = source && Number.isFinite(source.start) ? source.start : 0;
       const endSource = source && Number.isFinite(source.end) ? source.end : 0;
       const colorSource = source && typeof source.color === "string" ? source.color : "#1f49ff";
+      const opacitySource =
+        source && Number.isFinite(source.opacity) ? (source.opacity as number) : 0.94;
       return {
         start: Math.max(0, Math.min(textLength, Math.floor(startSource))),
         end: Math.max(0, Math.min(textLength, Math.floor(endSource))),
-        color: colorSource || "#1f49ff"
+        color: colorSource || "#1f49ff",
+        opacity: Math.max(0.08, Math.min(1, opacitySource))
       };
     })
     .filter((item) => item.end > item.start)
@@ -226,13 +242,14 @@ function normalizeTextHighlights(element: TextElement) {
     return [];
   }
 
-  const merged: Array<{ start: number; end: number; color: string }> = [];
+  const merged: Array<{ start: number; end: number; color: string; opacity: number }> = [];
   for (const item of normalized) {
     const previous = merged[merged.length - 1];
     if (
       previous &&
       item.start <= previous.end &&
-      item.color.toLowerCase() === previous.color.toLowerCase()
+      item.color.toLowerCase() === previous.color.toLowerCase() &&
+      Math.abs(item.opacity - previous.opacity) < 0.0001
     ) {
       previous.end = Math.max(previous.end, item.end);
       continue;
@@ -383,6 +400,7 @@ type TextHighlightRect = {
   width: number;
   height: number;
   color: string;
+  opacity: number;
 };
 
 function resolveHighlightRects(element: TextElement): TextHighlightRect[] {
@@ -417,7 +435,7 @@ function resolveHighlightRects(element: TextElement): TextHighlightRect[] {
         : element.align === "right"
           ? Math.max(0, element.width - line.width)
           : 0;
-    const lineTop = element.y + lineIndex * lineHeightPx;
+    const lineTop = lineIndex * lineHeightPx;
     const baseY = lineTop + Math.max(0, (lineHeightPx - fontHeight) / 2);
 
     for (const range of ranges) {
@@ -441,11 +459,12 @@ function resolveHighlightRects(element: TextElement): TextHighlightRect[] {
       }
 
       rects.push({
-        x: Math.round(element.x + alignOffset + measureLineWidth(prefix, element) - padX),
+        x: Math.round(alignOffset + measureLineWidth(prefix, element) - padX),
         y: Math.round(baseY - padY),
         width: Math.round(width + padX * 2),
         height: Math.round(fontHeight + padY * 2),
-        color: range.color
+        color: range.color,
+        opacity: Math.max(0.08, Math.min(1, range.opacity ?? 0.94))
       });
     }
   }
@@ -472,7 +491,6 @@ function shouldHideLegacyAccentChip(element: CanvasElement) {
     element.width <= 640 &&
     element.height >= 10 &&
     element.height <= 140 &&
-    resolveElementOpacity(element.opacity) >= 0.75 &&
     !element.stroke &&
     element.shape === "rect" &&
     element.width / Math.max(1, element.height) >= 1.3;
@@ -507,11 +525,6 @@ function shouldHideLegacyAccentText(
     return false;
   }
 
-  const fill = (element.fill ?? "").toLowerCase();
-  if (!LEGACY_ACCENT_TEXT_COLORS.has(fill)) {
-    return false;
-  }
-
   const centerX = element.x + element.width / 2;
   const centerY = element.y + Math.max(12, element.height / 2);
   const overlapsChip = legacyChipRects.some(
@@ -533,7 +546,7 @@ function shouldHideLegacyAccentText(
   }
 
   if (!normalizedTitle) {
-    return words.length <= 2;
+    return words.length <= 2 && LEGACY_ACCENT_TEXT_COLORS.has((element.fill ?? "").toLowerCase());
   }
 
   if (normalizedTitle.includes(normalizedText)) {
@@ -853,19 +866,21 @@ function SlideTextNode({
 
   return (
     <Group>
-      {highlightRects.map((rect, index) => (
-        <Rect
-          key={`${element.id}-hl-${index}`}
-          x={rect.x}
-          y={rect.y}
-          width={rect.width}
-          height={rect.height}
-          cornerRadius={Math.max(3, Math.round(element.fontSize * 0.08))}
-          fill={rect.color}
-          opacity={0.94}
-          listening={false}
-        />
-      ))}
+      <Group x={element.x} y={element.y} rotation={element.rotation} listening={false}>
+        {highlightRects.map((rect, index) => (
+          <Rect
+            key={`${element.id}-hl-${index}`}
+            x={rect.x}
+            y={rect.y}
+            width={rect.width}
+            height={rect.height}
+            cornerRadius={Math.max(3, Math.round(element.fontSize * 0.08))}
+            fill={rect.color}
+            opacity={rect.opacity}
+            listening={false}
+          />
+        ))}
+      </Group>
       <Text
         ref={nodeRef}
         text={element.text}
@@ -1187,7 +1202,9 @@ export function SlideStage({
           />
         ))}
 
-        {slide.elements
+        {(() => {
+          const seenManagedTextMeta = new Set<string>();
+          return slide.elements
           .filter((element) => {
             if (hiddenElementId && element.id === hiddenElementId) {
               return false;
@@ -1213,6 +1230,19 @@ export function SlideStage({
               element.metaKey !== "managed-title-accent-text" &&
               element.metaKey !== "managed-title-accent-chip"
             );
+          })
+          .filter((element) => {
+            if (element.type !== "text" || !element.metaKey) {
+              return true;
+            }
+            if (!MANAGED_TEXT_META_KEYS.has(element.metaKey)) {
+              return true;
+            }
+            if (seenManagedTextMeta.has(element.metaKey)) {
+              return false;
+            }
+            seenManagedTextMeta.add(element.metaKey);
+            return true;
           })
           .map((element) => {
             const selected = selectedElementId === element.id;
@@ -1341,7 +1371,8 @@ export function SlideStage({
                 onTransformEnd={(node) => handleTransformEnd(element, node)}
               />
             );
-          })}
+          });
+        })()}
 
         {interactive ? (
           <Transformer

@@ -13,8 +13,11 @@ type SettingsPanelProps = {
   totalSlides: number;
   activeTemplateName: string;
   activeFormat: SlideFormat;
+  slideBackground: string;
+  gridVisible: boolean;
   profileHandle: string;
   profileSubtitle: string;
+  subtitlesVisibleAcrossSlides: boolean;
   photoSlotEnabled: boolean;
   canUsePhotoSlot: boolean;
   hasBackgroundImage: boolean;
@@ -30,6 +33,8 @@ type SettingsPanelProps = {
   onPhotoSlotEnabledChange: (value: boolean) => void;
   onUploadBackgroundImage: () => void;
   onRemoveBackgroundImage: () => void;
+  onSlideBackgroundChange: (value: string) => void;
+  onGridVisibilityChange: (visible: boolean) => void;
   onFormatChange: (format: SlideFormat) => void;
   onOpenTemplateModal: () => void;
   onSelectSlide: (slideId: string) => void;
@@ -37,18 +42,23 @@ type SettingsPanelProps = {
   onDeleteSlide: (slideId: string) => void;
   onProfileHandleChange: (value: string) => void;
   onProfileSubtitleChange: (value: string) => void;
+  onToggleSubtitleAcrossSlides: (visible: boolean) => void;
   selectedTextElement: TextElement | null;
+  selectedTextTargetRole: "title" | "body";
   onSelectedTextChange: (value: string) => void;
   onSelectedTextColorChange: (value: string) => void;
   onSelectedTextHighlightColorChange: (value: string) => void;
+  onSelectedTextHighlightOpacityChange: (value: number) => void;
   onSelectedTextSelectionChange: (start: number, end: number) => void;
   onSelectedTextFontChange: (value: string) => void;
   onSelectedTextSizeChange: (value: number) => void;
   onSelectedTextCaseChange: (mode: "normal" | "uppercase" | "lowercase" | "capitalize") => void;
+  onSelectedTextTargetRoleChange: (role: "title" | "body") => void;
   onApplyHighlightToSelection: () => void;
   onClearHighlightFromSelection: () => void;
   onClearAllHighlights: () => void;
   selectedTextHighlightColor: string;
+  selectedTextHighlightOpacity: number;
   disabled?: boolean;
   previewMode?: boolean;
 };
@@ -63,8 +73,11 @@ export function SettingsPanel({
   totalSlides,
   activeTemplateName,
   activeFormat,
+  slideBackground,
+  gridVisible,
   profileHandle,
   profileSubtitle,
+  subtitlesVisibleAcrossSlides,
   photoSlotEnabled,
   canUsePhotoSlot,
   hasBackgroundImage,
@@ -80,6 +93,8 @@ export function SettingsPanel({
   onPhotoSlotEnabledChange,
   onUploadBackgroundImage,
   onRemoveBackgroundImage,
+  onSlideBackgroundChange,
+  onGridVisibilityChange,
   onFormatChange,
   onOpenTemplateModal,
   onSelectSlide,
@@ -87,18 +102,23 @@ export function SettingsPanel({
   onDeleteSlide,
   onProfileHandleChange,
   onProfileSubtitleChange,
+  onToggleSubtitleAcrossSlides,
   selectedTextElement,
+  selectedTextTargetRole,
   onSelectedTextChange,
   onSelectedTextColorChange,
   onSelectedTextHighlightColorChange,
+  onSelectedTextHighlightOpacityChange,
   onSelectedTextSelectionChange,
   onSelectedTextFontChange,
   onSelectedTextSizeChange,
   onSelectedTextCaseChange,
+  onSelectedTextTargetRoleChange,
   onApplyHighlightToSelection,
   onClearHighlightFromSelection,
   onClearAllHighlights,
   selectedTextHighlightColor,
+  selectedTextHighlightOpacity,
   disabled = false,
   previewMode = false
 }: SettingsPanelProps) {
@@ -232,6 +252,34 @@ export function SettingsPanel({
         </div>
       </section>
 
+      <section className="settings-card settings-card-style">
+        <h3>Стиль</h3>
+        <label className="field-label">
+          Цвет фона
+          <select
+            className="select"
+            value={slideBackground}
+            onChange={(event) => onSlideBackgroundChange(event.target.value)}
+            disabled={disabled}
+          >
+            <option value="#ffffff">Белый</option>
+            <option value="#f2f2f2">Светло-серый</option>
+            <option value="#f6f2ed">Теплый</option>
+            <option value="#edf3f6">Холодный</option>
+            <option value="#1f2428">Графит</option>
+          </select>
+        </label>
+        <label className="mobile-switch-row">
+          <span>Показывать сетку</span>
+          <input
+            type="checkbox"
+            checked={gridVisible}
+            onChange={(event) => onGridVisibilityChange(event.target.checked)}
+            disabled={disabled}
+          />
+        </label>
+      </section>
+
       <section className="settings-card settings-card-photo">
         <h3>Фото</h3>
         <label className="mobile-switch-row">
@@ -248,7 +296,7 @@ export function SettingsPanel({
             type="button"
             className="ghost-chip"
             onClick={onUploadBackgroundImage}
-            disabled={disabled || !photoSlotEnabled}
+            disabled={disabled}
           >
             Загрузить
           </button>
@@ -256,7 +304,7 @@ export function SettingsPanel({
             type="button"
             className="ghost-chip ghost-chip-muted"
             onClick={onRemoveBackgroundImage}
-            disabled={!hasBackgroundImage || disabled || !photoSlotEnabled}
+            disabled={!hasBackgroundImage || disabled}
           >
             Удалить
           </button>
@@ -268,6 +316,15 @@ export function SettingsPanel({
 
       <section className="settings-card settings-card-signature">
         <h3>Подпись</h3>
+        <label className="mobile-switch-row">
+          <span>Показывать подпись на всех слайдах</span>
+          <input
+            type="checkbox"
+            checked={subtitlesVisibleAcrossSlides}
+            onChange={(event) => onToggleSubtitleAcrossSlides(event.target.checked)}
+            disabled={disabled}
+          />
+        </label>
         <label className="field-label">
           Ник
           <input
@@ -300,6 +357,25 @@ export function SettingsPanel({
 
         {selectedTextElement ? (
           <>
+            <div className="segment-control">
+              <button
+                type="button"
+                className={`segment-item ${selectedTextTargetRole === "title" ? "active" : ""}`}
+                onClick={() => onSelectedTextTargetRoleChange("title")}
+                disabled={disabled}
+              >
+                Заголовок
+              </button>
+              <button
+                type="button"
+                className={`segment-item ${selectedTextTargetRole === "body" ? "active" : ""}`}
+                onClick={() => onSelectedTextTargetRoleChange("body")}
+                disabled={disabled}
+              >
+                Описание
+              </button>
+            </div>
+
             <label className="field-label">
               Текст элемента
               <textarea
@@ -375,6 +451,22 @@ export function SettingsPanel({
                 </button>
               </div>
             </div>
+
+            <label className="field-label">
+              Прозрачность выделения
+              <input
+                className="range"
+                type="range"
+                min={8}
+                max={100}
+                step={1}
+                value={Math.round(selectedTextHighlightOpacity * 100)}
+                onChange={(event) =>
+                  onSelectedTextHighlightOpacityChange(Number(event.target.value) / 100)
+                }
+                disabled={disabled}
+              />
+            </label>
 
             <div className="field-row field-row-inline">
               <label className="field-label" style={{ flex: 1 }}>

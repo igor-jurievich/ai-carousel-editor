@@ -69,9 +69,23 @@ const MOBILE_PREVIEW_MAX_WIDTH: Record<SlideFormat, number> = {
 };
 const MANAGED_TEXT_META_KEYS = new Set(["managed-title", "managed-body"]);
 const MANAGED_TITLE_META_KEY = "managed-title";
+const MANAGED_BODY_META_KEY = "managed-body";
 const DEFAULT_HIGHLIGHT_COLOR = "#1f49ff";
-const LEGACY_ACCENT_COLORS = new Set(["#1f49ff", "#ff2a2a", "#ff2d00", "#ff2d20", "#315cff"]);
+const LEGACY_ACCENT_COLORS = new Set([
+  "#1f49ff",
+  "#315cff",
+  "#3558ff",
+  "#3d5afe",
+  "#2f50ff",
+  "#ff2a2a",
+  "#ff2d00",
+  "#ff2d20",
+  "#ff3b30",
+  "#ff4028",
+  "#ff4630"
+]);
 const LEGACY_ACCENT_TEXT_COLORS = new Set(["#ffffff", "#fff", "#f5f7ff", "#f7f9ff"]);
+type EditableTextTargetRole = "title" | "body";
 
 function normalizeHighlightRanges(ranges: TextHighlightRange[] | undefined, textLength: number) {
   if (!ranges?.length || textLength <= 0) {
@@ -84,10 +98,13 @@ function normalizeHighlightRanges(ranges: TextHighlightRange[] | undefined, text
       const startSource = source && Number.isFinite(source.start) ? source.start : 0;
       const endSource = source && Number.isFinite(source.end) ? source.end : 0;
       const colorSource = source && typeof source.color === "string" ? source.color : DEFAULT_HIGHLIGHT_COLOR;
+      const opacitySource =
+        source && Number.isFinite(source.opacity) ? (source.opacity as number) : 0.94;
       return {
         start: Math.max(0, Math.min(textLength, Math.floor(startSource))),
         end: Math.max(0, Math.min(textLength, Math.floor(endSource))),
-        color: colorSource || DEFAULT_HIGHLIGHT_COLOR
+        color: colorSource || DEFAULT_HIGHLIGHT_COLOR,
+        opacity: Math.max(0.08, Math.min(1, opacitySource))
       };
     })
     .filter((range) => range.end > range.start)
@@ -103,7 +120,8 @@ function normalizeHighlightRanges(ranges: TextHighlightRange[] | undefined, text
     if (
       previous &&
       range.start <= previous.end &&
-      range.color.toLowerCase() === previous.color.toLowerCase()
+      range.color.toLowerCase() === previous.color.toLowerCase() &&
+      Math.abs((range.opacity ?? 0.94) - (previous.opacity ?? 0.94)) < 0.0001
     ) {
       previous.end = Math.max(previous.end, range.end);
       continue;
@@ -199,6 +217,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     start: number;
     end: number;
   } | null>(null);
+  const [selectedTextTargetRole, setSelectedTextTargetRole] = useState<EditableTextTargetRole>("title");
+  const [selectedTextHighlightColorOverride, setSelectedTextHighlightColorOverride] = useState(
+    DEFAULT_HIGHLIGHT_COLOR
+  );
+  const [selectedTextHighlightOpacityOverride, setSelectedTextHighlightOpacityOverride] = useState(0.94);
   const [exportMode, setExportMode] = useState<ExportMode>("zip");
   const [isExportRendering, setIsExportRendering] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -477,13 +500,76 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     () => (selectedElement?.type === "text" ? selectedElement : null),
     [selectedElement]
   );
+  const managedTitleTextElement = useMemo(
+    () =>
+      activeSlide?.elements.find(
+        (element): element is TextElement =>
+          element.type === "text" &&
+          (element.metaKey === MANAGED_TITLE_META_KEY || element.role === "title")
+      ) ?? null,
+    [activeSlide]
+  );
+  const managedBodyTextElement = useMemo(
+    () =>
+      activeSlide?.elements.find(
+        (element): element is TextElement =>
+          element.type === "text" &&
+          (element.metaKey === MANAGED_BODY_META_KEY || element.role === "body")
+      ) ?? null,
+    [activeSlide]
+  );
+  const effectiveSelectedTextElement = useMemo(() => {
+    if (selectedTextElement) {
+      return selectedTextElement;
+    }
+    if (selectedTextTargetRole === "body") {
+      return managedBodyTextElement ?? managedTitleTextElement;
+    }
+    return managedTitleTextElement ?? managedBodyTextElement;
+  }, [managedBodyTextElement, managedTitleTextElement, selectedTextElement, selectedTextTargetRole]);
+
+  useEffect(() => {
+    if (!selectedTextElement) {
+      return;
+    }
+    const nextRole: EditableTextTargetRole =
+      selectedTextElement.metaKey === MANAGED_BODY_META_KEY || selectedTextElement.role === "body"
+        ? "body"
+        : "title";
+    setSelectedTextTargetRole(nextRole);
+  }, [selectedTextElement]);
+
   useEffect(() => {
     setSelectedTextSelection(null);
     selectedTextSelectionRef.current = null;
-  }, [selectedTextElement?.id]);
+  }, [effectiveSelectedTextElement?.id]);
+  useEffect(() => {
+    const firstRange = effectiveSelectedTextElement?.highlights?.find(
+      (range) => range.end > range.start
+    );
+    if (!firstRange) {
+      return;
+    }
+    if (firstRange.color) {
+      setSelectedTextHighlightColorOverride(firstRange.color);
+    }
+    if (Number.isFinite(firstRange.opacity)) {
+      setSelectedTextHighlightOpacityOverride(
+        Math.max(0.08, Math.min(1, firstRange.opacity as number))
+      );
+    }
+  }, [effectiveSelectedTextElement?.id, effectiveSelectedTextElement?.highlights]);
   const activeHasBackgroundImage = Boolean(activeSlide?.backgroundImage);
   const activePhotoSlotEnabled = Boolean(
     activeSlide?.slideType === "image_text" && activeSlide.photoSlotEnabled !== false
+  );
+  const activeGridVisible = Boolean(
+    activeSlide?.elements.some(
+      (element) =>
+        element.type === "shape" &&
+        element.metaKey === "decor-grid-line" &&
+        (element.opacity ?? 1) > 0.04
+    )
   );
 
   const editingTextElement = useMemo(() => {
@@ -506,6 +592,13 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const activeTemplateName = useMemo(
     () => getTemplate(activeTemplateId).name,
     [activeTemplateId]
+  );
+  const subtitlesVisibleAcrossSlides = useMemo(
+    () =>
+      slides.some((slide) =>
+        Boolean(normalizeProfileSubtitleForUi(slide.profileSubtitle ?? "").trim())
+      ),
+    [slides]
   );
   const generationLocked = isGenerating || isExportRendering;
   const exportModeLabel = getExportModeLabel(exportMode);
@@ -741,6 +834,16 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [generationLocked, historyPast, historyFuture, slides, activeSlideId, slideFormat]);
+
+  const updateSlides = (
+    updater: (slides: Slide[]) => Slide[],
+    options?: { recordHistory?: boolean }
+  ) => {
+    if (options?.recordHistory !== false) {
+      pushHistorySnapshot();
+    }
+    setSlides(updater);
+  };
 
   const updateSlide = (
     slideId: string,
@@ -1498,6 +1601,35 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setEditingTextElementId(null);
   };
 
+  const handleToggleSubtitleAcrossSlides = (visible: boolean) => {
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
+      return;
+    }
+
+    pushHistorySnapshot(true);
+    setSlides((current) =>
+      current.map((slide, index, items) =>
+        updateSlideFooter(
+          slide,
+          {
+            profileSubtitle: visible
+              ? normalizeProfileSubtitleForUi(slide.profileSubtitle ?? "") || "Подпись"
+              : ""
+          },
+          index,
+          items.length,
+          slideFormat
+        )
+      )
+    );
+    setStatus(
+      visible
+        ? "Подпись включена на всех слайдах."
+        : "Подпись скрыта на всех слайдах."
+    );
+  };
+
   const handleGenerateCaption = async () => {
     if (generationLocked || isGeneratingCaption) {
       setStatus("Дождитесь завершения текущей операции и повторите.");
@@ -1597,29 +1729,52 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     updater: (element: TextElement) => TextElement,
     options?: { recordHistory?: boolean }
   ) => {
-    if (!selectedTextElement) {
+    if (!effectiveSelectedTextElement) {
       return;
     }
 
     updateElement(
-      selectedTextElement.id,
+      effectiveSelectedTextElement.id,
       (element) => (element.type === "text" ? updater(element) : element),
       options
     );
   };
 
+  const resolveSelectedRangeFromActiveField = () => {
+    if (typeof document === "undefined") {
+      return null;
+    }
+
+    const active = document.activeElement;
+    if (!(active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement)) {
+      return null;
+    }
+
+    const start = active.selectionStart;
+    const end = active.selectionEnd;
+    if (typeof start !== "number" || typeof end !== "number" || end <= start) {
+      return null;
+    }
+
+    return {
+      start: Math.max(0, Math.floor(start)),
+      end: Math.max(0, Math.floor(end))
+    };
+  };
+
   const resolveSelectedRange = () => {
-    const sourceSelection = selectedTextSelection ?? selectedTextSelectionRef.current;
-    if (!selectedTextElement || !sourceSelection) {
+    const sourceSelection =
+      selectedTextSelection ?? selectedTextSelectionRef.current ?? resolveSelectedRangeFromActiveField();
+    if (!effectiveSelectedTextElement || !sourceSelection) {
       return null;
     }
 
     const isEditingSelectedElement =
       editingTextElementIdRef.current !== null &&
-      editingTextElementIdRef.current === selectedTextElement.id;
+      editingTextElementIdRef.current === effectiveSelectedTextElement.id;
     const sourceTextLength = isEditingSelectedElement
       ? editingValueRef.current.replace(/\r/g, "").length
-      : selectedTextElement.text.length;
+      : effectiveSelectedTextElement.text.length;
 
     const start = Math.max(0, Math.min(sourceTextLength, sourceSelection.start));
     const end = Math.max(0, Math.min(sourceTextLength, sourceSelection.end));
@@ -1627,15 +1782,20 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return null;
     }
 
-    return { start, end };
+    const normalizedSelection = { start, end };
+    selectedTextSelectionRef.current = normalizedSelection;
+    return normalizedSelection;
   };
 
   const selectedHighlightColor =
-    selectedTextElement?.highlights?.find((range) => range.end > range.start)?.color ??
-    DEFAULT_HIGHLIGHT_COLOR;
+    effectiveSelectedTextElement?.highlights?.find((range) => range.end > range.start)?.color ??
+    selectedTextHighlightColorOverride;
+  const selectedHighlightOpacity =
+    effectiveSelectedTextElement?.highlights?.find((range) => range.end > range.start)?.opacity ??
+    selectedTextHighlightOpacityOverride;
 
   const handleSelectedTextSelectionChange = (start: number, end: number) => {
-    if (!selectedTextElement) {
+    if (!effectiveSelectedTextElement) {
       setSelectedTextSelection(null);
       selectedTextSelectionRef.current = null;
       return;
@@ -1643,14 +1803,16 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
     const isEditingSelectedElement =
       editingTextElementIdRef.current !== null &&
-      editingTextElementIdRef.current === selectedTextElement.id;
+      editingTextElementIdRef.current === effectiveSelectedTextElement.id;
     const sourceTextLength = isEditingSelectedElement
       ? editingValueRef.current.replace(/\r/g, "").length
-      : selectedTextElement.text.length;
+      : effectiveSelectedTextElement.text.length;
 
     const normalizedStart = Math.max(0, Math.min(sourceTextLength, start));
     const normalizedEnd = Math.max(0, Math.min(sourceTextLength, end));
     if (normalizedEnd <= normalizedStart) {
+      setSelectedTextSelection(null);
+      selectedTextSelectionRef.current = null;
       return;
     }
 
@@ -1662,17 +1824,17 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setSelectedTextSelection(nextSelection);
   };
 
-  const handleApplyHighlightToSelection = (color?: string) => {
-    if (!selectedTextElement) {
+  const handleApplyHighlightToSelection = (color?: string, opacity?: number) => {
+    if (!effectiveSelectedTextElement) {
       return;
     }
 
     const isEditingSelectedElement =
       editingTextElementIdRef.current !== null &&
-      editingTextElementIdRef.current === selectedTextElement.id;
+      editingTextElementIdRef.current === effectiveSelectedTextElement.id;
     const sourceText = isEditingSelectedElement
       ? editingValueRef.current.replace(/\r/g, "")
-      : selectedTextElement.text;
+      : effectiveSelectedTextElement.text;
     const textLength = sourceText.length;
     const rawRange = resolveSelectedRange();
     if (!rawRange) {
@@ -1689,7 +1851,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     }
 
     const nextColor = color || selectedHighlightColor || DEFAULT_HIGHLIGHT_COLOR;
-    updateElement(selectedTextElement.id, (element) => {
+    const nextOpacity = Math.max(0.08, Math.min(1, opacity ?? selectedHighlightOpacity ?? 0.94));
+    updateElement(effectiveSelectedTextElement.id, (element) => {
       if (element.type !== "text") {
         return element;
       }
@@ -1700,7 +1863,15 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         ...element,
         text: elementText,
         highlights: normalizeHighlightRanges(
-          [...withoutRange, { start: selectedRange.start, end: selectedRange.end, color: nextColor }],
+          [
+            ...withoutRange,
+            {
+              start: selectedRange.start,
+              end: selectedRange.end,
+              color: nextColor,
+              opacity: nextOpacity
+            }
+          ],
           elementText.length
         )
       };
@@ -1725,7 +1896,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   };
 
   const handleClearAllHighlights = () => {
-    if (!selectedTextElement?.highlights?.length) {
+    if (!effectiveSelectedTextElement?.highlights?.length) {
       return;
     }
 
@@ -1736,9 +1907,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   };
 
   const handleSelectedTextHighlightColorChange = (value: string) => {
+    setSelectedTextHighlightColorOverride(value);
     const selectedRange = resolveSelectedRange();
     if (selectedRange) {
-      handleApplyHighlightToSelection(value);
+      handleApplyHighlightToSelection(value, selectedHighlightOpacity);
       return;
     }
 
@@ -1758,9 +1930,40 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     });
   };
 
+  const handleSelectedTextHighlightOpacityChange = (value: number) => {
+    const nextOpacity = Math.max(0.08, Math.min(1, Number.isFinite(value) ? value : 0.94));
+    setSelectedTextHighlightOpacityOverride(nextOpacity);
+    const selectedRange = resolveSelectedRange();
+    if (selectedRange) {
+      handleApplyHighlightToSelection(selectedHighlightColor, nextOpacity);
+      return;
+    }
+
+    updateSelectedTextElement((element) => {
+      const baseline = normalizeHighlightRanges(element.highlights, element.text.length);
+      if (!baseline.length) {
+        return element;
+      }
+
+      return {
+        ...element,
+        highlights: baseline.map((range) => ({
+          ...range,
+          opacity: nextOpacity
+        }))
+      };
+    });
+  };
+
   const handleSelectedTextChange = (value: string) => {
     updateSelectedTextElement((element) => {
       const nextText = value.replace(/\r/g, "");
+      if (
+        !nextText.trim() &&
+        (element.metaKey === MANAGED_TITLE_META_KEY || element.metaKey === MANAGED_BODY_META_KEY)
+      ) {
+        return element;
+      }
       return {
         ...element,
         text: nextText,
@@ -1814,7 +2017,37 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     );
   };
 
-  const handleSlideBackgroundColorChange = (value: string) => {
+  const handleSelectedTextTargetRoleChange = (role: EditableTextTargetRole) => {
+    setSelectedTextTargetRole(role);
+    const activeSelectedRole: EditableTextTargetRole | null =
+      selectedTextElement?.metaKey === MANAGED_BODY_META_KEY || selectedTextElement?.role === "body"
+        ? "body"
+        : selectedTextElement
+          ? "title"
+          : null;
+
+    if (activeSelectedRole && activeSelectedRole !== role) {
+      setSelectedElementId(null);
+    }
+
+    setSelectedTextSelection(null);
+    selectedTextSelectionRef.current = null;
+  };
+
+  const handleSlideBackgroundColorChange = (
+    value: string,
+    options?: { applyAll?: boolean }
+  ) => {
+    if (options?.applyAll) {
+      updateSlides((current) =>
+        current.map((slide) => ({
+          ...slide,
+          background: value
+        })),
+      { recordHistory: false });
+      return;
+    }
+
     if (!activeSlide) {
       return;
     }
@@ -1827,6 +2060,43 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       }),
       { recordHistory: false }
     );
+  };
+
+  const handleGridVisibilityChange = (
+    enabled: boolean,
+    options?: { applyAll?: boolean }
+  ) => {
+    const applyOnSlide = (slide: Slide) => ({
+      ...slide,
+      elements: slide.elements.map((element) => {
+        if (element.type !== "shape" || element.metaKey !== "decor-grid-line") {
+          return element;
+        }
+
+        if (!enabled) {
+          return {
+            ...element,
+            opacity: 0
+          };
+        }
+
+        return {
+          ...element,
+          opacity: (element.opacity ?? 0) > 0.04 ? (element.opacity ?? 0.12) : 0.12
+        };
+      })
+    });
+
+    if (options?.applyAll) {
+      updateSlides((current) => current.map(applyOnSlide), { recordHistory: false });
+      return;
+    }
+
+    if (!activeSlide) {
+      return;
+    }
+
+    updateSlide(activeSlide.id, applyOnSlide, { recordHistory: false });
   };
 
   const handleStartTextEditing = (slideId: string, elementId: string) => {
@@ -2432,8 +2702,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   totalSlides={slides.length}
                   activeTemplateName={activeTemplateName}
                   activeFormat={slideFormat}
+                  slideBackground={activeSlide.background}
+                  gridVisible={activeGridVisible}
                   profileHandle={activeSlide.profileHandle ?? ""}
                   profileSubtitle={normalizeProfileSubtitleForUi(activeSlide.profileSubtitle ?? "")}
+                  subtitlesVisibleAcrossSlides={subtitlesVisibleAcrossSlides}
                   photoSlotEnabled={activePhotoSlotEnabled}
                   canUsePhotoSlot
                   hasBackgroundImage={activeHasBackgroundImage}
@@ -2460,6 +2733,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                     setStatus("Фоновое изображение удалено.");
                   }}
                   onFormatChange={handleFormatChange}
+                  onSlideBackgroundChange={handleSlideBackgroundColorChange}
+                  onGridVisibilityChange={handleGridVisibilityChange}
                   onOpenTemplateModal={handleOpenTemplateModal}
                   onSelectSlide={(slideId) =>
                     handleSelectSlide(slideId, { syncCanvas: true, source: "list" })
@@ -2470,18 +2745,23 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   onProfileSubtitleChange={(value) =>
                     handleUpdateFooter({ profileSubtitle: normalizeProfileSubtitleForUi(value) })
                   }
-                  selectedTextElement={selectedTextElement}
+                  onToggleSubtitleAcrossSlides={handleToggleSubtitleAcrossSlides}
+                  selectedTextElement={effectiveSelectedTextElement}
+                  selectedTextTargetRole={selectedTextTargetRole}
                   onSelectedTextChange={handleSelectedTextChange}
                   onSelectedTextColorChange={handleSelectedTextColorChange}
                   onSelectedTextHighlightColorChange={handleSelectedTextHighlightColorChange}
+                  onSelectedTextHighlightOpacityChange={handleSelectedTextHighlightOpacityChange}
                   onSelectedTextSelectionChange={handleSelectedTextSelectionChange}
                   onSelectedTextFontChange={handleSelectedTextFontChange}
                   onSelectedTextSizeChange={handleSelectedTextSizeChange}
                   onSelectedTextCaseChange={handleSelectedTextCaseChange}
+                  onSelectedTextTargetRoleChange={handleSelectedTextTargetRoleChange}
                   onApplyHighlightToSelection={handleApplyHighlightToSelection}
                   onClearHighlightFromSelection={handleClearHighlightFromSelection}
                   onClearAllHighlights={handleClearAllHighlights}
                   selectedTextHighlightColor={selectedHighlightColor}
+                  selectedTextHighlightOpacity={selectedHighlightOpacity}
                   disabled={generationLocked}
                   previewMode={isPreviewMode}
                 />
@@ -2639,12 +2919,15 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               activeTab={mobileToolTab}
               onTabChange={setMobileToolTab}
               selectedElement={selectedElement}
-              selectedTextElement={selectedTextElement}
+              selectedTextElement={effectiveSelectedTextElement}
+              selectedTextTargetRole={selectedTextTargetRole}
               activeTemplateName={activeTemplateName}
               profileHandle={activeSlide.profileHandle ?? ""}
               profileSubtitle={normalizeProfileSubtitleForUi(activeSlide.profileSubtitle ?? "")}
+              subtitlesVisibleAcrossSlides={subtitlesVisibleAcrossSlides}
               photoSlotEnabled={activePhotoSlotEnabled}
               hasBackgroundImage={activeHasBackgroundImage}
+              gridVisible={activeGridVisible}
               captionResult={captionResult}
               isGeneratingCaption={isGeneratingCaption}
               onGenerateCaption={handleGenerateCaption}
@@ -2668,18 +2951,23 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onProfileSubtitleChange={(value) =>
                 handleUpdateFooter({ profileSubtitle: normalizeProfileSubtitleForUi(value) })
               }
+              onToggleSubtitleAcrossSlides={handleToggleSubtitleAcrossSlides}
               onSlideBackgroundChange={handleSlideBackgroundColorChange}
+              onGridVisibilityChange={handleGridVisibilityChange}
               onSelectedTextChange={handleSelectedTextChange}
               onSelectedTextColorChange={handleSelectedTextColorChange}
               onSelectedTextHighlightColorChange={handleSelectedTextHighlightColorChange}
+              onSelectedTextHighlightOpacityChange={handleSelectedTextHighlightOpacityChange}
               onSelectedTextSelectionChange={handleSelectedTextSelectionChange}
               onSelectedTextFontChange={handleSelectedTextFontChange}
               onSelectedTextSizeChange={handleSelectedTextSizeChange}
               onSelectedTextCaseChange={handleSelectedTextCaseChange}
+              onSelectedTextTargetRoleChange={handleSelectedTextTargetRoleChange}
               onApplyHighlightToSelection={handleApplyHighlightToSelection}
               onClearHighlightFromSelection={handleClearHighlightFromSelection}
               onClearAllHighlights={handleClearAllHighlights}
               selectedTextHighlightColor={selectedHighlightColor}
+              selectedTextHighlightOpacity={selectedHighlightOpacity}
               toolbarRef={mobileToolbarRef}
               toolSheetRef={mobileToolSheetRef}
               disabled={generationLocked}
@@ -2807,13 +3095,6 @@ function hasCustomSlidePhoto(slide: Slide) {
   );
 }
 
-function resolveElementOpacity(value: number | undefined) {
-  if (!Number.isFinite(value)) {
-    return 1;
-  }
-  return Math.max(0, Math.min(1, value as number));
-}
-
 function normalizeAccentToken(value: string) {
   return value
     .toLowerCase()
@@ -2845,8 +3126,7 @@ function isLegacyAccentChipShape(element: CanvasElement): element is ShapeElemen
     element.height >= 10 &&
     element.height <= 150 &&
     element.width / Math.max(1, element.height) >= 1.3 &&
-    !element.stroke &&
-    resolveElementOpacity(element.opacity) >= 0.72
+    !element.stroke
   );
 }
 
@@ -2866,11 +3146,6 @@ function isLikelyLegacyAccentTextElement(
 
   const words = compact.split(" ").filter(Boolean);
   if (words.length > 4) {
-    return false;
-  }
-
-  const fill = (element.fill ?? "").toLowerCase();
-  if (!LEGACY_ACCENT_TEXT_COLORS.has(fill)) {
     return false;
   }
 
@@ -2895,7 +3170,7 @@ function isLikelyLegacyAccentTextElement(
   }
 
   if (!normalizedTitle) {
-    return words.length <= 2;
+    return words.length <= 2 && LEGACY_ACCENT_TEXT_COLORS.has((element.fill ?? "").toLowerCase());
   }
 
   if (normalizedTitle.includes(normalizedText)) {
@@ -2946,45 +3221,47 @@ function prepareSlidesForExport(
   });
 }
 
-function cloneSlides(slides: Slide[]) {
-  return slides.map((slide) => ({
-    ...slide,
-    elements: (() => {
-      const titleText =
-        slide.elements.find(
-          (element): element is TextElement =>
-            element.type === "text" && element.metaKey === MANAGED_TITLE_META_KEY
-        )?.text ??
-        slide.elements.find(
-          (element): element is TextElement => element.type === "text" && element.role === "title"
-        )?.text ??
-        "";
+function cloneSlides(slides: Slide[]): Slide[] {
+  return slides.map((slide): Slide => {
+    const titleText =
+      slide.elements.find(
+        (element): element is TextElement =>
+          element.type === "text" && element.metaKey === MANAGED_TITLE_META_KEY
+      )?.text ??
+      slide.elements.find(
+        (element): element is TextElement => element.type === "text" && element.role === "title"
+      )?.text ??
+      "";
 
-      const legacyChips = slide.elements.filter(isLegacyAccentChipShape);
+    const legacyChips = slide.elements.filter(isLegacyAccentChipShape);
 
-      return slide.elements
-        .filter((element) => {
-          if (element.metaKey === "managed-title-accent-chip" || element.metaKey === "managed-title-accent-text") {
-            return false;
-          }
-          if (isLegacyAccentChipShape(element)) {
-            return false;
-          }
-          if (isLikelyLegacyAccentTextElement(element, legacyChips, titleText)) {
-            return false;
-          }
-          return true;
-        })
-        .map((element) =>
-          element.type === "text"
-            ? {
-                ...element,
-                highlights: normalizeHighlightRangesForText(element.highlights, element.text)
-              }
-            : { ...element }
-        );
-    })()
-  }));
+    const elements: CanvasElement[] = slide.elements
+      .filter((element) => {
+        if (element.metaKey === "managed-title-accent-chip" || element.metaKey === "managed-title-accent-text") {
+          return false;
+        }
+        if (isLegacyAccentChipShape(element)) {
+          return false;
+        }
+        if (isLikelyLegacyAccentTextElement(element, legacyChips, titleText)) {
+          return false;
+        }
+        return true;
+      })
+      .map((element): CanvasElement =>
+        element.type === "text"
+          ? {
+              ...element,
+              highlights: normalizeHighlightRangesForText(element.highlights, element.text)
+            }
+          : { ...element }
+      );
+
+    return {
+      ...slide,
+      elements
+    };
+  });
 }
 
 function buildOutlineFromSlides(slides: Slide[]): CarouselOutlineSlide[] {

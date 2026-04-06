@@ -383,6 +383,13 @@ export function CanvasEditor({
                 disabled={disabled}
               />
               <MobileIconButton
+                icon="image"
+                title="Добавить фото"
+                label="Фото"
+                onClick={() => onAddImageToSlide(activeSlide.id)}
+                disabled={disabled}
+              />
+              <MobileIconButton
                 icon="layers"
                 title="Добавить текстовый слой"
                 label="Текст"

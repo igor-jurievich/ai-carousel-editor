@@ -7,6 +7,7 @@ export type TextHighlightRange = {
   start: number;
   end: number;
   color: string;
+  opacity?: number;
 };
 
 export type CarouselSlideRole =

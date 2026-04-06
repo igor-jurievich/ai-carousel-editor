@@ -19,11 +19,14 @@ type MobileToolsProps = {
   onTabChange: (tab: MobileToolTab | null) => void;
   selectedElement: CanvasElement | null;
   selectedTextElement: TextElement | null;
+  selectedTextTargetRole: "title" | "body";
   activeTemplateName: string;
   profileHandle: string;
   profileSubtitle: string;
+  subtitlesVisibleAcrossSlides: boolean;
   photoSlotEnabled: boolean;
   hasBackgroundImage: boolean;
+  gridVisible: boolean;
   captionResult: CarouselPostCaption | null;
   isGeneratingCaption: boolean;
   onGenerateCaption: () => void;
@@ -32,21 +35,26 @@ type MobileToolsProps = {
   slideBackground: string;
   onUploadBackgroundImage: () => void;
   onRemoveBackgroundImage: () => void;
+  onGridVisibilityChange: (visible: boolean, options?: { applyAll?: boolean }) => void;
   onOpenTemplateModal: () => void;
   onProfileHandleChange: (value: string) => void;
   onProfileSubtitleChange: (value: string) => void;
-  onSlideBackgroundChange: (value: string) => void;
+  onToggleSubtitleAcrossSlides: (visible: boolean) => void;
+  onSlideBackgroundChange: (value: string, options?: { applyAll?: boolean }) => void;
   onSelectedTextChange: (value: string) => void;
   onSelectedTextColorChange: (value: string) => void;
   onSelectedTextHighlightColorChange: (value: string) => void;
+  onSelectedTextHighlightOpacityChange: (value: number) => void;
   onSelectedTextSelectionChange: (start: number, end: number) => void;
   onSelectedTextFontChange: (value: string) => void;
   onSelectedTextSizeChange: (value: number) => void;
   onSelectedTextCaseChange: (mode: "normal" | "uppercase" | "lowercase" | "capitalize") => void;
+  onSelectedTextTargetRoleChange: (role: "title" | "body") => void;
   onApplyHighlightToSelection: () => void;
   onClearHighlightFromSelection: () => void;
   onClearAllHighlights: () => void;
   selectedTextHighlightColor: string;
+  selectedTextHighlightOpacity: number;
   toolbarRef?: MutableRefObject<HTMLElement | null>;
   toolSheetRef?: MutableRefObject<HTMLElement | null>;
   disabled?: boolean;
@@ -112,11 +120,14 @@ export function MobileTools({
   onTabChange,
   selectedElement,
   selectedTextElement,
+  selectedTextTargetRole,
   activeTemplateName,
   profileHandle,
   profileSubtitle,
+  subtitlesVisibleAcrossSlides,
   photoSlotEnabled,
   hasBackgroundImage,
+  gridVisible,
   captionResult,
   isGeneratingCaption,
   onGenerateCaption,
@@ -125,21 +136,26 @@ export function MobileTools({
   slideBackground,
   onUploadBackgroundImage,
   onRemoveBackgroundImage,
+  onGridVisibilityChange,
   onOpenTemplateModal,
   onProfileHandleChange,
   onProfileSubtitleChange,
+  onToggleSubtitleAcrossSlides,
   onSlideBackgroundChange,
   onSelectedTextChange,
   onSelectedTextColorChange,
   onSelectedTextHighlightColorChange,
+  onSelectedTextHighlightOpacityChange,
   onSelectedTextSelectionChange,
   onSelectedTextFontChange,
   onSelectedTextSizeChange,
   onSelectedTextCaseChange,
+  onSelectedTextTargetRoleChange,
   onApplyHighlightToSelection,
   onClearHighlightFromSelection,
   onClearAllHighlights,
   selectedTextHighlightColor,
+  selectedTextHighlightOpacity,
   toolbarRef,
   toolSheetRef,
   disabled = false,
@@ -148,7 +164,6 @@ export function MobileTools({
   const swipeRef = useRef<{ startY: number; startX: number; drag: number } | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
   const [colorMode, setColorMode] = useState<"single" | "double">("single");
-  const [sizeTarget, setSizeTarget] = useState<"title" | "body">("title");
   const [applyStyleForAll, setApplyStyleForAll] = useState(true);
   const [applySizeForAll, setApplySizeForAll] = useState(false);
   const selectedElementLabel = selectedElement
@@ -326,18 +341,32 @@ export function MobileTools({
 
                 <div className="mobile-sheet-row">
                   <label className="field-label">
-                    Цвет текста
+                    {colorMode === "single" ? "Цвет текста" : "Цвет выделения"}
                     <div className="mobile-color-inline">
                       <input
                         type="color"
                         className="color-input"
-                        value={selectedTextElement?.fill ?? "#56cfc2"}
-                        onChange={(event) => onSelectedTextColorChange(event.target.value)}
+                        value={
+                          colorMode === "single"
+                            ? selectedTextElement?.fill ?? "#56cfc2"
+                            : selectedTextHighlightColor
+                        }
+                        onChange={(event) =>
+                          colorMode === "single"
+                            ? onSelectedTextColorChange(event.target.value)
+                            : onSelectedTextHighlightColorChange(event.target.value)
+                        }
                         disabled={disabled || !selectedTextElement}
                       />
                       <input
                         className="field"
-                        value={(selectedTextElement?.fill ?? "#56cfc2").toUpperCase()}
+                        value={
+                          (
+                            colorMode === "single"
+                              ? selectedTextElement?.fill ?? "#56cfc2"
+                              : selectedTextHighlightColor
+                          ).toUpperCase()
+                        }
                         readOnly
                       />
                     </div>
@@ -354,7 +383,9 @@ export function MobileTools({
                   <select
                     className="field"
                     value={normalizeColor(slideBackground)}
-                    onChange={(event) => onSlideBackgroundChange(event.target.value)}
+                    onChange={(event) =>
+                      onSlideBackgroundChange(event.target.value, { applyAll: applyStyleForAll })
+                    }
                     disabled={disabled}
                   >
                     <option value="#ffffff">Белый</option>
@@ -387,7 +418,7 @@ export function MobileTools({
                     type="button"
                     className="ghost-chip"
                     onClick={onUploadBackgroundImage}
-                    disabled={disabled || !photoSlotEnabled}
+                    disabled={disabled}
                   >
                     + Выбрать файл
                   </button>
@@ -395,7 +426,7 @@ export function MobileTools({
                     type="button"
                     className="ghost-chip ghost-chip-muted"
                     onClick={onRemoveBackgroundImage}
-                    disabled={!hasBackgroundImage || disabled || !photoSlotEnabled}
+                    disabled={!hasBackgroundImage || disabled}
                   >
                     Очистить фото
                   </button>
@@ -424,7 +455,9 @@ export function MobileTools({
                         type="button"
                         className={`mobile-style-chip ${isActive ? "active" : ""}`}
                         disabled={disabled}
-                        onClick={() => onSlideBackgroundChange(preset.background)}
+                        onClick={() =>
+                          onSlideBackgroundChange(preset.background, { applyAll: applyStyleForAll })
+                        }
                       >
                         <span
                           className="mobile-style-chip-preview"
@@ -444,16 +477,37 @@ export function MobileTools({
                     );
                   })}
                 </div>
+                <label className="mobile-switch-row">
+                  <span>Показывать сетку</span>
+                  <input
+                    type="checkbox"
+                    checked={gridVisible}
+                    onChange={(event) =>
+                      onGridVisibilityChange(event.target.checked, { applyAll: applyStyleForAll })
+                    }
+                    disabled={disabled}
+                  />
+                </label>
               </div>
             ) : null}
 
             {activeTab === "text" ? (
               <div className="settings-block">
                 <div className="segment-control">
-                  <button type="button" className="segment-item active">
+                  <button
+                    type="button"
+                    className={`segment-item ${selectedTextTargetRole === "title" ? "active" : ""}`}
+                    onClick={() => onSelectedTextTargetRoleChange("title")}
+                    disabled={disabled}
+                  >
                     Заголовок
                   </button>
-                  <button type="button" className="segment-item" disabled>
+                  <button
+                    type="button"
+                    className={`segment-item ${selectedTextTargetRole === "body" ? "active" : ""}`}
+                    onClick={() => onSelectedTextTargetRoleChange("body")}
+                    disabled={disabled}
+                  >
                     Описание
                   </button>
                 </div>
@@ -538,6 +592,22 @@ export function MobileTools({
                   </button>
                 </div>
 
+                <label className="field-label">
+                  Прозрачность выделения
+                  <input
+                    type="range"
+                    className="range"
+                    min={8}
+                    max={100}
+                    step={1}
+                    value={Math.round(selectedTextHighlightOpacity * 100)}
+                    onChange={(event) =>
+                      onSelectedTextHighlightOpacityChange(Number(event.target.value) / 100)
+                    }
+                    disabled={disabled || !selectedTextElement}
+                  />
+                </label>
+
                 <div className="mobile-case-grid">
                   <button
                     type="button"
@@ -590,6 +660,15 @@ export function MobileTools({
                     value={profileSubtitle}
                     onChange={(event) => onProfileSubtitleChange(event.target.value)}
                     placeholder="Подпись (необязательно)"
+                    disabled={disabled}
+                  />
+                </label>
+                <label className="mobile-switch-row">
+                  <span>Показывать подпись на всех слайдах</span>
+                  <input
+                    type="checkbox"
+                    checked={subtitlesVisibleAcrossSlides}
+                    onChange={(event) => onToggleSubtitleAcrossSlides(event.target.checked)}
                     disabled={disabled}
                   />
                 </label>
@@ -646,31 +725,30 @@ export function MobileTools({
             {activeTab === "font" ? (
               <div className="settings-block">
                 <span className="settings-label">Шрифты</span>
-                <label className="field-label">Заголовок</label>
-                <div className="mobile-font-grid">
-                  {FONT_OPTIONS.map((fontName) => {
-                    const isActive = selectedTextElement?.fontFamily === fontName;
-                    return (
-                      <button
-                        key={`title-${fontName}`}
-                        type="button"
-                        className={`mobile-font-item ${isActive ? "active" : ""}`}
-                        onClick={() => onSelectedTextFontChange(fontName)}
-                        disabled={disabled || !selectedTextElement}
-                        style={{ fontFamily: fontName }}
-                      >
-                        {fontName}
-                      </button>
-                    );
-                  })}
+                <div className="segment-control">
+                  <button
+                    type="button"
+                    className={`segment-item ${selectedTextTargetRole === "title" ? "active" : ""}`}
+                    onClick={() => onSelectedTextTargetRoleChange("title")}
+                    disabled={disabled}
+                  >
+                    Заголовок
+                  </button>
+                  <button
+                    type="button"
+                    className={`segment-item ${selectedTextTargetRole === "body" ? "active" : ""}`}
+                    onClick={() => onSelectedTextTargetRoleChange("body")}
+                    disabled={disabled}
+                  >
+                    Описание
+                  </button>
                 </div>
-                <label className="field-label">Описание</label>
                 <div className="mobile-font-grid">
                   {FONT_OPTIONS.map((fontName) => {
                     const isActive = selectedTextElement?.fontFamily === fontName;
                     return (
                       <button
-                        key={`body-${fontName}`}
+                        key={`font-${fontName}`}
                         type="button"
                         className={`mobile-font-item ${isActive ? "active" : ""}`}
                         onClick={() => onSelectedTextFontChange(fontName)}
@@ -698,16 +776,16 @@ export function MobileTools({
                 <div className="segment-control">
                   <button
                     type="button"
-                    className={`segment-item ${sizeTarget === "title" ? "active" : ""}`}
-                    onClick={() => setSizeTarget("title")}
+                    className={`segment-item ${selectedTextTargetRole === "title" ? "active" : ""}`}
+                    onClick={() => onSelectedTextTargetRoleChange("title")}
                     disabled={disabled}
                   >
                     Заголовок
                   </button>
                   <button
                     type="button"
-                    className={`segment-item ${sizeTarget === "body" ? "active" : ""}`}
-                    onClick={() => setSizeTarget("body")}
+                    className={`segment-item ${selectedTextTargetRole === "body" ? "active" : ""}`}
+                    onClick={() => onSelectedTextTargetRoleChange("body")}
                     disabled={disabled}
                   >
                     Описание

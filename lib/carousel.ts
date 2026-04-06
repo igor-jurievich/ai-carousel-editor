@@ -159,14 +159,20 @@ const STABLE_MANAGED_META_KEYS = new Set([
   "image-placeholder-text",
   "image-top"
 ]);
-const LEGACY_ACCENT_COLORS = new Set(["#1f49ff", "#ff2a2a", "#ff2d00", "#ff2d20", "#315cff"]);
-
-function resolveElementOpacity(value: number | undefined) {
-  if (!Number.isFinite(value)) {
-    return 1;
-  }
-  return Math.max(0, Math.min(1, value as number));
-}
+const LEGACY_ACCENT_COLORS = new Set([
+  "#1f49ff",
+  "#315cff",
+  "#3558ff",
+  "#3d5afe",
+  "#2f50ff",
+  "#ff2a2a",
+  "#ff2d00",
+  "#ff2d20",
+  "#ff3b30",
+  "#ff4028",
+  "#ff4630"
+]);
+const LEGACY_ACCENT_TEXT_COLORS = new Set(["#ffffff", "#fff", "#f5f7ff", "#f7f9ff"]);
 
 const ROLE_FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
   8: ["hook", "problem", "mistake", "consequence", "shift", "solution", "example", "cta"],
@@ -833,10 +839,13 @@ function normalizeTextHighlights(ranges: TextHighlightRange[] | undefined, textL
       const startSource = source && Number.isFinite(source.start) ? source.start : 0;
       const endSource = source && Number.isFinite(source.end) ? source.end : 0;
       const colorSource = source && typeof source.color === "string" ? source.color : "#1f49ff";
+      const opacitySource =
+        source && Number.isFinite(source.opacity) ? (source.opacity as number) : 0.94;
       return {
         start: Math.max(0, Math.min(textLength, Math.floor(startSource))),
         end: Math.max(0, Math.min(textLength, Math.floor(endSource))),
-        color: colorSource || "#1f49ff"
+        color: colorSource || "#1f49ff",
+        opacity: Math.max(0.08, Math.min(1, opacitySource))
       };
     })
     .filter((range) => range.end > range.start)
@@ -855,7 +864,11 @@ function normalizeTextHighlights(ranges: TextHighlightRange[] | undefined, textL
       continue;
     }
 
-    if (range.start <= last.end && range.color.toLowerCase() === last.color.toLowerCase()) {
+    if (
+      range.start <= last.end &&
+      range.color.toLowerCase() === last.color.toLowerCase() &&
+      Math.abs((range.opacity ?? 0.94) - (last.opacity ?? 0.94)) < 0.0001
+    ) {
       last.end = Math.max(last.end, range.end);
       continue;
     }
@@ -1803,19 +1816,22 @@ function extractManagedText(slide: Slide, key: "managed-title" | "managed-body")
   };
 }
 
-function isLegacyAccentArtifact(element: CanvasElement) {
-  if (element.type === "text" && element.metaKey === "managed-title-accent-text") {
-    return true;
-  }
+function normalizeAccentToken(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[«»"“”„'`]/gu, "")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
 
+function isLegacyAccentChipShape(element: CanvasElement): element is ShapeElement {
   if (element.type !== "shape") {
     return false;
   }
-
   if (element.metaKey === "managed-title-accent-chip") {
     return true;
   }
-
   if (element.metaKey) {
     return false;
   }
@@ -1832,9 +1848,70 @@ function isLegacyAccentArtifact(element: CanvasElement) {
     element.height >= 10 &&
     element.height <= 150 &&
     element.width / Math.max(1, element.height) >= 1.3 &&
-    !element.stroke &&
-    resolveElementOpacity(element.opacity) >= 0.72
+    !element.stroke
   );
+}
+
+function isLikelyLegacyAccentTextElement(
+  element: CanvasElement,
+  legacyChips: ShapeElement[],
+  titleText: string
+) {
+  if (element.type !== "text" || element.metaKey || !legacyChips.length) {
+    return false;
+  }
+
+  const compact = (typeof element.text === "string" ? element.text : "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!compact || compact.includes("\n") || compact.length > 42) {
+    return false;
+  }
+
+  const words = compact.split(" ").filter(Boolean);
+  if (words.length > 4) {
+    return false;
+  }
+
+  const centerX = element.x + element.width / 2;
+  const centerY = element.y + Math.max(12, element.height / 2);
+  const overlapsChip = legacyChips.some(
+    (chip) =>
+      centerX >= chip.x - 28 &&
+      centerX <= chip.x + chip.width + 28 &&
+      centerY >= chip.y - 34 &&
+      centerY <= chip.y + chip.height + 34
+  );
+  if (!overlapsChip) {
+    return false;
+  }
+
+  const normalizedText = normalizeAccentToken(compact);
+  const normalizedTitle = normalizeAccentToken(titleText);
+  if (!normalizedText) {
+    return false;
+  }
+
+  if (!normalizedTitle) {
+    return words.length <= 2 && LEGACY_ACCENT_TEXT_COLORS.has((element.fill ?? "").toLowerCase());
+  }
+
+  if (normalizedTitle.includes(normalizedText)) {
+    return true;
+  }
+
+  return normalizedText
+    .split(" ")
+    .filter((token) => token.length >= 4)
+    .some((token) => normalizedTitle.includes(token));
+}
+
+function isLegacyAccentArtifact(element: CanvasElement) {
+  if (element.type === "text" && element.metaKey === "managed-title-accent-text") {
+    return true;
+  }
+
+  return isLegacyAccentChipShape(element);
 }
 
 function preserveManagedElementIds(previousSlide: Slide, nextElements: CanvasElement[]) {
@@ -1923,11 +2000,19 @@ function rebuildSlide(
     return element;
   });
 
+  const titleSource = managedTitle?.text ?? blueprint.title;
+  const legacyChips = customElements.filter(isLegacyAccentChipShape);
+  const filteredCustomElements = customElements.filter(
+    (element) =>
+      !isLegacyAccentArtifact(element) &&
+      !isLikelyLegacyAccentTextElement(element, legacyChips, titleSource)
+  );
+
   return {
     ...rebuiltBase,
     elements: [
       ...preserveManagedElementIds(slide, rebuiltManagedElements),
-      ...customElements.filter((element) => !isLegacyAccentArtifact(element))
+      ...filteredCustomElements
     ]
   };
 }
