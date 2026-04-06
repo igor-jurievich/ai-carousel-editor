@@ -87,6 +87,94 @@ function resolveElementOpacity(value: number | undefined) {
   return Math.max(0, Math.min(1, value as number));
 }
 
+function parseColorChannels(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (/^#([0-9a-f]{3})$/u.test(normalized)) {
+    const [, raw] = normalized.match(/^#([0-9a-f]{3})$/u) ?? [];
+    if (!raw) {
+      return null;
+    }
+    return {
+      r: Number.parseInt(`${raw[0]}${raw[0]}`, 16),
+      g: Number.parseInt(`${raw[1]}${raw[1]}`, 16),
+      b: Number.parseInt(`${raw[2]}${raw[2]}`, 16)
+    };
+  }
+
+  if (/^#([0-9a-f]{6})$/u.test(normalized)) {
+    const [, raw] = normalized.match(/^#([0-9a-f]{6})$/u) ?? [];
+    if (!raw) {
+      return null;
+    }
+    return {
+      r: Number.parseInt(raw.slice(0, 2), 16),
+      g: Number.parseInt(raw.slice(2, 4), 16),
+      b: Number.parseInt(raw.slice(4, 6), 16)
+    };
+  }
+
+  const rgbMatch = normalized.match(/^rgba?\(([^)]+)\)$/u);
+  if (!rgbMatch) {
+    return null;
+  }
+
+  const parts = rgbMatch[1]
+    .split(",")
+    .map((item) => item.trim())
+    .slice(0, 3)
+    .map((item) => Number.parseFloat(item));
+  if (parts.length < 3 || parts.some((item) => !Number.isFinite(item))) {
+    return null;
+  }
+
+  return {
+    r: Math.max(0, Math.min(255, Math.round(parts[0]))),
+    g: Math.max(0, Math.min(255, Math.round(parts[1]))),
+    b: Math.max(0, Math.min(255, Math.round(parts[2])))
+  };
+}
+
+function isLikelyAccentFill(value: string | undefined) {
+  const fill = (value ?? "").trim().toLowerCase();
+  if (!fill) {
+    return false;
+  }
+
+  if (LEGACY_ACCENT_COLORS.has(fill)) {
+    return true;
+  }
+
+  const channels = parseColorChannels(fill);
+  if (!channels) {
+    return false;
+  }
+
+  const isBlueAccent = channels.b >= 150 && channels.r <= 90 && channels.g <= 120;
+  const isRedAccent = channels.r >= 180 && channels.g <= 90 && channels.b <= 90;
+  return isBlueAccent || isRedAccent;
+}
+
+function resolveLikelyManagedTitle(slide: Slide) {
+  return (
+    slide.elements.find(
+      (element): element is TextElement =>
+        element.type === "text" &&
+        (element.metaKey === "managed-title" || element.role === "title")
+    ) ??
+    slide.elements.find(
+      (element): element is TextElement =>
+        element.type === "text" &&
+        element.metaKey !== "slide-chip-text" &&
+        element.metaKey !== "managed-title-accent-text"
+    ) ??
+    null
+  );
+}
+
 function resolveSafeArea(canvasWidth: number, canvasHeight: number, stageWidth: number): SafeArea {
   const mobileLike = stageWidth <= 420;
   const insetX = mobileLike ? 26 : 58;
@@ -472,7 +560,7 @@ function resolveHighlightRects(element: TextElement): TextHighlightRect[] {
   return rects;
 }
 
-function shouldHideLegacyAccentChip(element: CanvasElement) {
+function shouldHideLegacyAccentChip(element: CanvasElement, slide?: Slide) {
   if (element.type !== "shape") {
     return false;
   }
@@ -482,10 +570,10 @@ function shouldHideLegacyAccentChip(element: CanvasElement) {
   if (element.metaKey) {
     return false;
   }
-  const fill = element.fill?.toLowerCase?.() ?? "";
-  if (!LEGACY_ACCENT_COLORS.has(fill)) {
+  if (!isLikelyAccentFill(element.fill)) {
     return false;
   }
+
   const looksLikeChip =
     element.width >= 24 &&
     element.width <= 640 &&
@@ -494,7 +582,28 @@ function shouldHideLegacyAccentChip(element: CanvasElement) {
     !element.stroke &&
     element.shape === "rect" &&
     element.width / Math.max(1, element.height) >= 1.3;
-  return looksLikeChip;
+
+  if (!looksLikeChip) {
+    return false;
+  }
+
+  if (!slide) {
+    return true;
+  }
+
+  const title = resolveLikelyManagedTitle(slide);
+  if (!title) {
+    return element.y <= Math.round((heightByFormat("9:16") * 0.66));
+  }
+
+  const nearTitleY =
+    element.y <= title.y + Math.max(340, title.height + 220) &&
+    element.y + element.height >= title.y - 80;
+  const nearTitleX =
+    element.x + element.width >= title.x - 64 &&
+    element.x <= title.x + title.width + 64;
+
+  return nearTitleY && nearTitleX;
 }
 
 function normalizeLegacyToken(value: string) {
@@ -509,7 +618,8 @@ function normalizeLegacyToken(value: string) {
 function shouldHideLegacyAccentText(
   element: CanvasElement,
   legacyChipRects: Array<{ x: number; y: number; width: number; height: number }>,
-  titleText: string
+  titleText: string,
+  titleElement: TextElement | null
 ) {
   if (element.type !== "text" || element.metaKey || !legacyChipRects.length) {
     return false;
@@ -539,6 +649,17 @@ function shouldHideLegacyAccentText(
     return false;
   }
 
+  if (titleElement) {
+    const nearTitle =
+      element.y <= titleElement.y + Math.max(360, titleElement.height + 240) &&
+      element.y + element.height >= titleElement.y - 90 &&
+      element.x + element.width >= titleElement.x - 70 &&
+      element.x <= titleElement.x + titleElement.width + 70;
+    if (!nearTitle) {
+      return false;
+    }
+  }
+
   const normalizedTitle = normalizeLegacyToken(titleText);
   const normalizedText = normalizeLegacyToken(compact);
   if (!normalizedText) {
@@ -557,6 +678,19 @@ function shouldHideLegacyAccentText(
     .split(" ")
     .filter((token) => token.length >= 4)
     .some((token) => normalizedTitle.includes(token));
+}
+
+function heightByFormat(format: "1:1" | "4:5" | "9:16") {
+  switch (format) {
+    case "1:1":
+      return 1080;
+    case "4:5":
+      return 1350;
+    case "9:16":
+      return 1920;
+    default:
+      return 1920;
+  }
 }
 
 function areGuidesEqual(left: SnapGuides, right: SnapGuides) {
@@ -1010,41 +1144,30 @@ export function SlideStage({
     return slide.elements.find((element) => element.id === selectedElementId) ?? null;
   }, [selectedElementId, slide.elements]);
 
-  const titleText = useMemo(() => {
-    const managedTitle = slide.elements.find(
-      (element): element is TextElement => element.type === "text" && element.metaKey === "managed-title"
-    );
-    if (managedTitle?.text) {
-      return managedTitle.text;
-    }
-    return (
-      slide.elements.find(
-        (element): element is TextElement => element.type === "text" && element.role === "title"
-      )?.text ?? ""
-    );
-  }, [slide.elements]);
+  const likelyTitleElement = useMemo(() => resolveLikelyManagedTitle(slide), [slide]);
+  const titleText = useMemo(() => likelyTitleElement?.text ?? "", [likelyTitleElement]);
 
   const legacyChipRects = useMemo(
     () =>
       slide.elements
-        .filter((element): element is ShapeElement => element.type === "shape" && shouldHideLegacyAccentChip(element))
+        .filter((element): element is ShapeElement => element.type === "shape" && shouldHideLegacyAccentChip(element, slide))
         .map((element) => ({
           x: element.x,
           y: element.y,
           width: element.width,
           height: element.height
         })),
-    [slide.elements]
+    [slide.elements, slide]
   );
 
   const hiddenLegacyAccentTextIds = useMemo(
     () =>
       new Set(
         slide.elements
-          .filter((element) => shouldHideLegacyAccentText(element, legacyChipRects, titleText))
+          .filter((element) => shouldHideLegacyAccentText(element, legacyChipRects, titleText, likelyTitleElement))
           .map((element) => element.id)
       ),
-    [legacyChipRects, slide.elements, titleText]
+    [legacyChipRects, likelyTitleElement, slide.elements, titleText]
   );
 
   const handleTransformEnd = (element: CanvasElement, node: Konva.Node) => {
@@ -1209,7 +1332,7 @@ export function SlideStage({
             if (hiddenElementId && element.id === hiddenElementId) {
               return false;
             }
-            if (shouldHideLegacyAccentChip(element)) {
+            if (shouldHideLegacyAccentChip(element, slide)) {
               return false;
             }
             if (hiddenLegacyAccentTextIds.has(element.id)) {

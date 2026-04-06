@@ -333,10 +333,6 @@ export function CanvasEditor({
                         event.currentTarget.selectionEnd ?? 0
                       )
                     }
-                    onFocus={(event) => {
-                      const cursor = event.currentTarget.value.length;
-                      event.currentTarget.setSelectionRange(cursor, cursor);
-                    }}
                     onBlur={(event) => onCommitTextEditing(event.currentTarget.value)}
                     onKeyDown={(event) => {
                       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -554,10 +550,6 @@ export function CanvasEditor({
                               event.currentTarget.selectionEnd ?? 0
                             )
                           }
-                          onFocus={(event) => {
-                            const cursor = event.currentTarget.value.length;
-                            event.currentTarget.setSelectionRange(cursor, cursor);
-                          }}
                           onBlur={(event) => onCommitTextEditing(event.currentTarget.value)}
                           onKeyDown={(event) => {
                             if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {

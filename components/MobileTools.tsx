@@ -79,39 +79,45 @@ const STYLE_PRESETS = [
     id: "mono",
     label: "Монохром",
     background: "#ffffff",
-    preview: "none"
+    preview: "none",
+    gridVisible: false
   },
   {
     id: "grid",
     label: "Сетка",
     background: "#f8f8f9",
     preview:
-      "repeating-linear-gradient(90deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px), repeating-linear-gradient(180deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px)"
+      "repeating-linear-gradient(90deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px), repeating-linear-gradient(180deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px)",
+    gridVisible: true
   },
   {
     id: "gradient",
     label: "Градиент",
     background: "#f4ede8",
-    preview: "linear-gradient(135deg, #f7f7f7 0%, #f2e8df 100%)"
+    preview: "linear-gradient(135deg, #f7f7f7 0%, #f2e8df 100%)",
+    gridVisible: false
   },
   {
     id: "notes",
     label: "Заметки",
     background: "#ececf1",
-    preview: "linear-gradient(180deg, #f2f2f6 0%, #eaebef 100%)"
+    preview: "linear-gradient(180deg, #f2f2f6 0%, #eaebef 100%)",
+    gridVisible: false
   },
   {
     id: "dots",
     label: "Точки",
     background: "#f5f5f6",
     preview:
-      "radial-gradient(circle, rgba(18,21,27,0.2) 1px, transparent 1.2px), radial-gradient(circle, rgba(18,21,27,0.14) 1px, transparent 1.2px)"
+      "radial-gradient(circle, rgba(18,21,27,0.2) 1px, transparent 1.2px), radial-gradient(circle, rgba(18,21,27,0.14) 1px, transparent 1.2px)",
+    gridVisible: true
   },
   {
     id: "flash",
     label: "Молнии",
     background: "#e8e9ed",
-    preview: "linear-gradient(130deg, #f6f6f7 10%, #e8e9ed 46%, #dfe1e7 100%)"
+    preview: "linear-gradient(130deg, #f6f6f7 10%, #e8e9ed 46%, #dfe1e7 100%)",
+    gridVisible: false
   }
 ] as const;
 
@@ -456,7 +462,10 @@ export function MobileTools({
                         className={`mobile-style-chip ${isActive ? "active" : ""}`}
                         disabled={disabled}
                         onClick={() =>
-                          onSlideBackgroundChange(preset.background, { applyAll: applyStyleForAll })
+                          {
+                            onSlideBackgroundChange(preset.background, { applyAll: applyStyleForAll });
+                            onGridVisibilityChange(preset.gridVisible, { applyAll: applyStyleForAll });
+                          }
                         }
                       >
                         <span
