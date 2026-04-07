@@ -99,6 +99,7 @@ const LEGACY_ACCENT_CHIP_HEX_COLORS = new Set([
   "#ff2a2a"
 ]);
 type EditableTextTargetRole = "title" | "body";
+type MobileColorSchemeMode = "single" | "double";
 
 function normalizeHighlightRanges(ranges: TextHighlightRange[] | undefined, textLength: number) {
   if (!ranges?.length || textLength <= 0) {
@@ -2078,19 +2079,103 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
   const handleSelectedTextTargetRoleChange = (role: EditableTextTargetRole) => {
     setSelectedTextTargetRole(role);
-    const activeSelectedRole: EditableTextTargetRole | null =
-      selectedTextElement?.metaKey === MANAGED_BODY_META_KEY || selectedTextElement?.role === "body"
-        ? "body"
-        : selectedTextElement
-          ? "title"
-          : null;
-
-    if (activeSelectedRole && activeSelectedRole !== role) {
-      setSelectedElementId(null);
-    }
+    const nextTarget =
+      role === "body"
+        ? managedBodyTextElement ?? managedTitleTextElement
+        : managedTitleTextElement ?? managedBodyTextElement;
+    setSelectedElementId(nextTarget?.id ?? null);
 
     setSelectedTextSelection(null);
     selectedTextSelectionRef.current = null;
+  };
+
+  const handleApplyColorScheme = (
+    mode: MobileColorSchemeMode,
+    options?: { applyAll?: boolean }
+  ) => {
+    const currentSlide = activeSlide;
+    if (!currentSlide) {
+      return;
+    }
+
+    const applyOnSlide = (slide: Slide): Slide => {
+      const editableTextElements = slide.elements.filter(
+        (element): element is TextElement =>
+          element.type === "text" && !NON_CONTENT_TEXT_META_KEYS.has(element.metaKey ?? "")
+      );
+      if (!editableTextElements.length) {
+        return slide;
+      }
+
+      const preferredTitle =
+        resolvePreferredManagedTextByMeta(slide, MANAGED_TITLE_META_KEY) ?? editableTextElements[0];
+      const preferredBody =
+        resolvePreferredManagedTextByMeta(slide, MANAGED_BODY_META_KEY) ??
+        editableTextElements.find((element) => element.id !== preferredTitle?.id) ??
+        preferredTitle;
+      const palette = getTemplate(slide.templateId ?? activeTemplateId);
+      const singleToneColor = selectedHighlightColor || palette.accent || DEFAULT_HIGHLIGHT_COLOR;
+      const nextHighlightColor =
+        mode === "single" ? singleToneColor : palette.accent || DEFAULT_HIGHLIGHT_COLOR;
+
+      return {
+        ...slide,
+        elements: slide.elements.map((element) => {
+          if (element.type !== "text" || NON_CONTENT_TEXT_META_KEYS.has(element.metaKey ?? "")) {
+            return element;
+          }
+          const isTitle = element.id === preferredTitle?.id;
+          const baselineHighlights = normalizeHighlightRanges(element.highlights, element.text.length);
+          return {
+            ...element,
+            fill:
+              mode === "single"
+                ? singleToneColor
+                : isTitle
+                  ? palette.titleColor
+                  : palette.bodyColor,
+            highlights: baselineHighlights.map((range) => ({
+              ...range,
+              color: nextHighlightColor
+            }))
+          };
+        })
+      };
+    };
+
+    if (options?.applyAll) {
+      updateSlides((current) => current.map(applyOnSlide), { recordHistory: false });
+    } else {
+      updateSlide(currentSlide.id, applyOnSlide, { recordHistory: false });
+    }
+
+    setSelectedTextHighlightColorOverride(
+      mode === "single"
+        ? selectedHighlightColor || DEFAULT_HIGHLIGHT_COLOR
+        : getTemplate(currentSlide.templateId ?? activeTemplateId).accent || DEFAULT_HIGHLIGHT_COLOR
+    );
+    setStatus(
+      mode === "single"
+        ? "Цветовая схема: единый цвет текста и выделения."
+        : "Цветовая схема: раздельные цвета текста и выделения."
+    );
+  };
+
+  const handleMobileToolTabChange = (nextTab: MobileToolTab | null) => {
+    setMobileToolTab(nextTab);
+    if (!nextTab) {
+      return;
+    }
+
+    if (nextTab === "text" || nextTab === "font" || nextTab === "size" || nextTab === "color") {
+      const preferredText =
+        selectedTextTargetRole === "body"
+          ? managedBodyTextElement ?? managedTitleTextElement
+          : managedTitleTextElement ?? managedBodyTextElement;
+      if (preferredText) {
+        setSelectedElementId(preferredText.id);
+      }
+    }
   };
 
   const handleSlideBackgroundColorChange = (
@@ -2977,7 +3062,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           {activeSlide ? (
             <MobileTools
               activeTab={mobileToolTab}
-              onTabChange={setMobileToolTab}
+              onTabChange={handleMobileToolTabChange}
               selectedElement={selectedElement}
               selectedTextElement={effectiveSelectedTextElement}
               selectedTextTargetRole={selectedTextTargetRole}
@@ -3024,6 +3109,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onSelectedTextSizeChange={handleSelectedTextSizeChange}
               onSelectedTextCaseChange={handleSelectedTextCaseChange}
               onSelectedTextTargetRoleChange={handleSelectedTextTargetRoleChange}
+              onApplyColorScheme={handleApplyColorScheme}
               onApplyHighlightToSelection={handleApplyHighlightToSelection}
               onClearHighlightFromSelection={handleClearHighlightFromSelection}
               onClearAllHighlights={handleClearAllHighlights}

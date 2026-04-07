@@ -51,6 +51,7 @@ type MobileToolsProps = {
   onSelectedTextSizeChange: (value: number) => void;
   onSelectedTextCaseChange: (mode: "normal" | "uppercase" | "lowercase" | "capitalize") => void;
   onSelectedTextTargetRoleChange: (role: "title" | "body") => void;
+  onApplyColorScheme: (mode: "single" | "double", options?: { applyAll?: boolean }) => void;
   onApplyHighlightToSelection: () => void;
   onClearHighlightFromSelection: () => void;
   onClearAllHighlights: () => void;
@@ -159,6 +160,7 @@ export function MobileTools({
   onSelectedTextSizeChange,
   onSelectedTextCaseChange,
   onSelectedTextTargetRoleChange,
+  onApplyColorScheme,
   onApplyHighlightToSelection,
   onClearHighlightFromSelection,
   onClearAllHighlights,
@@ -172,11 +174,13 @@ export function MobileTools({
   const swipeRef = useRef<{ startY: number; startX: number; drag: number } | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
   const [colorMode, setColorMode] = useState<"single" | "double">("single");
+  const [applyColorForAll, setApplyColorForAll] = useState(true);
   const [applyStyleForAll, setApplyStyleForAll] = useState(true);
   const [applySizeForAll, setApplySizeForAll] = useState(false);
   const activeTextElement = selectedTextElement;
   const applyColorMode = (nextMode: "single" | "double") => {
     setColorMode(nextMode);
+    onApplyColorScheme(nextMode, { applyAll: applyColorForAll });
 
     if (!activeTextElement || disabled) {
       return;
@@ -363,6 +367,15 @@ export function MobileTools({
             {activeTab === "color" ? (
               <div className="settings-block">
                 <span className="settings-label">Цветовая схема</span>
+                <label className="mobile-switch-row">
+                  <span>Применить для всех слайдов</span>
+                  <input
+                    type="checkbox"
+                    checked={applyColorForAll}
+                    onChange={(event) => setApplyColorForAll(event.target.checked)}
+                    disabled={disabled}
+                  />
+                </label>
                 <div className="segment-control">
                   <button
                     type="button"
