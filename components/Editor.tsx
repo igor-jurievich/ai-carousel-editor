@@ -81,6 +81,23 @@ const NON_CONTENT_TEXT_META_KEYS = new Set([
   "image-placeholder-text"
 ]);
 const LEGACY_ACCENT_TEXT_COLORS = new Set(["#ffffff", "#fff", "#f5f7ff", "#f7f9ff"]);
+const LEGACY_ACCENT_CHIP_HEX_COLORS = new Set([
+  "#1f49ff",
+  "#254fff",
+  "#325cff",
+  "#3b5fff",
+  "#4366ff",
+  "#4a6dff",
+  "#5676ff",
+  "#ff2d00",
+  "#ff3a1a",
+  "#ff421f",
+  "#ff4a25",
+  "#ff552f",
+  "#ff5e3d",
+  "#ff6b3d",
+  "#ff2a2a"
+]);
 type EditableTextTargetRole = "title" | "body";
 
 function normalizeHighlightRanges(ranges: TextHighlightRange[] | undefined, textLength: number) {
@@ -509,12 +526,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   );
   const managedTitleTextElement = useMemo(
     () => {
-      const explicit =
-        activeSlide?.elements.find(
-          (element): element is TextElement =>
-            element.type === "text" &&
-            (element.metaKey === MANAGED_TITLE_META_KEY || element.role === "title")
-        ) ?? null;
+      const explicit = activeSlide
+        ? resolvePreferredManagedTextByMeta(activeSlide, MANAGED_TITLE_META_KEY)
+        : null;
       if (explicit) {
         return explicit;
       }
@@ -524,12 +538,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   );
   const managedBodyTextElement = useMemo(
     () => {
-      const explicit =
-        activeSlide?.elements.find(
-          (element): element is TextElement =>
-            element.type === "text" &&
-            (element.metaKey === MANAGED_BODY_META_KEY || element.role === "body")
-        ) ?? null;
+      const explicit = activeSlide
+        ? resolvePreferredManagedTextByMeta(activeSlide, MANAGED_BODY_META_KEY)
+        : null;
       if (explicit) {
         return explicit;
       }
@@ -3170,6 +3181,135 @@ function resolveLikelyManagedTitle(slide: Slide) {
   );
 }
 
+function normalizeLegacyColorToken(value: string | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function parseRgbColor(value: string | undefined) {
+  const normalized = normalizeLegacyColorToken(value);
+  const match = normalized.match(/^rgba?\(([^)]+)\)$/u);
+  if (!match) {
+    return null;
+  }
+
+  const parts = match[1]
+    .split(",")
+    .map((chunk) => Number.parseFloat(chunk.trim()))
+    .filter((chunk) => Number.isFinite(chunk));
+  if (parts.length < 3) {
+    return null;
+  }
+
+  return {
+    r: parts[0],
+    g: parts[1],
+    b: parts[2]
+  };
+}
+
+function isCloseRgbColor(
+  color: { r: number; g: number; b: number } | null,
+  target: { r: number; g: number; b: number }
+) {
+  if (!color) {
+    return false;
+  }
+  return (
+    Math.abs(color.r - target.r) <= 18 &&
+    Math.abs(color.g - target.g) <= 18 &&
+    Math.abs(color.b - target.b) <= 18
+  );
+}
+
+function isLikelyLegacyAccentChipColor(fill: string | undefined) {
+  const normalized = normalizeLegacyColorToken(fill);
+  if (!normalized) {
+    return false;
+  }
+  if (LEGACY_ACCENT_CHIP_HEX_COLORS.has(normalized)) {
+    return true;
+  }
+  const rgb = parseRgbColor(normalized);
+  return (
+    isCloseRgbColor(rgb, { r: 31, g: 73, b: 255 }) ||
+    isCloseRgbColor(rgb, { r: 255, g: 45, b: 0 }) ||
+    isCloseRgbColor(rgb, { r: 255, g: 42, b: 42 })
+  );
+}
+
+function resolvePreferredManagedTextByMeta(slide: Slide, metaKey: "managed-title" | "managed-body") {
+  const candidates = slide.elements.filter(
+    (element): element is TextElement => element.type === "text" && element.metaKey === metaKey
+  );
+  if (!candidates.length) {
+    return null;
+  }
+
+  return [...candidates].sort((left, right) => {
+    const leftLength = normalizeAccentToken(left.text).length;
+    const rightLength = normalizeAccentToken(right.text).length;
+    if (leftLength !== rightLength) {
+      return rightLength - leftLength;
+    }
+    if (metaKey === MANAGED_TITLE_META_KEY) {
+      return left.y - right.y;
+    }
+    return left.y - right.y;
+  })[0];
+}
+
+function resolveRectOverlapRatio(left: TextElement, right: TextElement) {
+  const leftX2 = left.x + left.width;
+  const leftY2 = left.y + left.height;
+  const rightX2 = right.x + right.width;
+  const rightY2 = right.y + right.height;
+  const overlapWidth = Math.max(0, Math.min(leftX2, rightX2) - Math.max(left.x, right.x));
+  const overlapHeight = Math.max(0, Math.min(leftY2, rightY2) - Math.max(left.y, right.y));
+  if (overlapWidth <= 0 || overlapHeight <= 0) {
+    return 0;
+  }
+  const overlapArea = overlapWidth * overlapHeight;
+  const minArea = Math.max(1, Math.min(left.width * left.height, right.width * right.height));
+  return overlapArea / minArea;
+}
+
+function isLikelyDuplicatedManagedTextElement(
+  element: CanvasElement,
+  preferredTitle: TextElement | null,
+  preferredBody: TextElement | null
+) {
+  if (element.type !== "text" || element.metaKey) {
+    return false;
+  }
+
+  const normalizedElementText = normalizeAccentToken(element.text);
+  if (!normalizedElementText || normalizedElementText.length < 8) {
+    return false;
+  }
+
+  const checkAgainst = (managed: TextElement | null) => {
+    if (!managed) {
+      return false;
+    }
+    const normalizedManagedText = normalizeAccentToken(managed.text);
+    if (!normalizedManagedText || normalizedManagedText.length < 8) {
+      return false;
+    }
+
+    const sameOrNested =
+      normalizedManagedText === normalizedElementText ||
+      normalizedManagedText.includes(normalizedElementText) ||
+      normalizedElementText.includes(normalizedManagedText);
+    if (!sameOrNested) {
+      return false;
+    }
+
+    return resolveRectOverlapRatio(element, managed) >= 0.58;
+  };
+
+  return checkAgainst(preferredTitle) || checkAgainst(preferredBody);
+}
+
 function isLegacyAccentChipShape(element: CanvasElement, slide?: Slide): element is ShapeElement {
   if (element.type !== "shape") {
     return false;
@@ -3184,14 +3324,23 @@ function isLegacyAccentChipShape(element: CanvasElement, slide?: Slide): element
   const geometryMatches =
     element.shape === "rect" &&
     element.width >= 24 &&
-    element.width <= 680 &&
-    element.height >= 10 &&
-    element.height <= 150 &&
-    element.width / Math.max(1, element.height) >= 1.3 &&
-    !element.stroke &&
+    element.width <= 760 &&
+    element.height >= 8 &&
+    element.height <= 180 &&
+    element.width / Math.max(1, element.height) >= 1.15 &&
     (element.opacity ?? 1) >= 0.25;
 
   if (!geometryMatches) {
+    return false;
+  }
+
+  const strokeWidth = element.strokeWidth ?? 0;
+  const strokeLooksDecorative = Boolean(element.stroke) && strokeWidth > 3;
+  if (strokeLooksDecorative && !isLikelyLegacyAccentChipColor(element.fill)) {
+    return false;
+  }
+
+  if (!isLikelyLegacyAccentChipColor(element.fill) && Boolean(element.stroke)) {
     return false;
   }
 
@@ -3304,12 +3453,30 @@ function prepareSlidesForExport(
 function stripLegacyAccentArtifactsFromSlide(slide: Slide): Slide {
   const titleElement = resolveLikelyManagedTitle(slide);
   const titleText = titleElement?.text ?? "";
+  const preferredManagedTitle = resolvePreferredManagedTextByMeta(slide, MANAGED_TITLE_META_KEY);
+  const preferredManagedBody = resolvePreferredManagedTextByMeta(slide, MANAGED_BODY_META_KEY);
   const legacyChips = slide.elements.filter((element): element is ShapeElement =>
     isLegacyAccentChipShape(element, slide)
   );
 
   const elements: CanvasElement[] = slide.elements
     .filter((element) => {
+      if (
+        element.type === "text" &&
+        element.metaKey === MANAGED_TITLE_META_KEY &&
+        preferredManagedTitle &&
+        element.id !== preferredManagedTitle.id
+      ) {
+        return false;
+      }
+      if (
+        element.type === "text" &&
+        element.metaKey === MANAGED_BODY_META_KEY &&
+        preferredManagedBody &&
+        element.id !== preferredManagedBody.id
+      ) {
+        return false;
+      }
       if (element.metaKey === "managed-title-accent-chip" || element.metaKey === "managed-title-accent-text") {
         return false;
       }
@@ -3317,6 +3484,9 @@ function stripLegacyAccentArtifactsFromSlide(slide: Slide): Slide {
         return false;
       }
       if (isLikelyLegacyAccentTextElement(element, legacyChips, titleText, titleElement)) {
+        return false;
+      }
+      if (isLikelyDuplicatedManagedTextElement(element, preferredManagedTitle, preferredManagedBody)) {
         return false;
       }
       return true;

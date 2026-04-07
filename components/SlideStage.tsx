@@ -75,6 +75,23 @@ const UI_ACCENT_SOFT = "rgba(86, 207, 194, 0.24)";
 const UI_ACCENT_FAINT = "rgba(86, 207, 194, 0.12)";
 const UI_ACCENT_GUIDE = "rgba(86, 207, 194, 0.72)";
 const LEGACY_ACCENT_TEXT_COLORS = new Set(["#ffffff", "#fff", "#f5f7ff", "#f7f9ff"]);
+const LEGACY_ACCENT_CHIP_HEX_COLORS = new Set([
+  "#1f49ff",
+  "#254fff",
+  "#325cff",
+  "#3b5fff",
+  "#4366ff",
+  "#4a6dff",
+  "#5676ff",
+  "#ff2d00",
+  "#ff3a1a",
+  "#ff421f",
+  "#ff4a25",
+  "#ff552f",
+  "#ff5e3d",
+  "#ff6b3d",
+  "#ff2a2a"
+]);
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
@@ -88,6 +105,10 @@ function resolveElementOpacity(value: number | undefined) {
 }
 
 function resolveLikelyManagedTitle(slide: Slide) {
+  const preferredTitle = resolvePreferredManagedTextByMeta(slide, "managed-title");
+  if (preferredTitle) {
+    return preferredTitle;
+  }
   return (
     slide.elements.find(
       (element): element is TextElement =>
@@ -101,6 +122,80 @@ function resolveLikelyManagedTitle(slide: Slide) {
     ) ??
     null
   );
+}
+
+function normalizeLegacyColorToken(value: string | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function parseRgbColor(value: string | undefined) {
+  const normalized = normalizeLegacyColorToken(value);
+  const match = normalized.match(/^rgba?\(([^)]+)\)$/u);
+  if (!match) {
+    return null;
+  }
+  const parts = match[1]
+    .split(",")
+    .map((chunk) => Number.parseFloat(chunk.trim()))
+    .filter((chunk) => Number.isFinite(chunk));
+  if (parts.length < 3) {
+    return null;
+  }
+  return {
+    r: parts[0],
+    g: parts[1],
+    b: parts[2]
+  };
+}
+
+function isCloseRgbColor(
+  color: { r: number; g: number; b: number } | null,
+  target: { r: number; g: number; b: number }
+) {
+  if (!color) {
+    return false;
+  }
+  return (
+    Math.abs(color.r - target.r) <= 18 &&
+    Math.abs(color.g - target.g) <= 18 &&
+    Math.abs(color.b - target.b) <= 18
+  );
+}
+
+function isLikelyLegacyAccentChipColor(fill: string | undefined) {
+  const normalized = normalizeLegacyColorToken(fill);
+  if (!normalized) {
+    return false;
+  }
+  if (LEGACY_ACCENT_CHIP_HEX_COLORS.has(normalized)) {
+    return true;
+  }
+  const rgb = parseRgbColor(normalized);
+  return (
+    isCloseRgbColor(rgb, { r: 31, g: 73, b: 255 }) ||
+    isCloseRgbColor(rgb, { r: 255, g: 45, b: 0 }) ||
+    isCloseRgbColor(rgb, { r: 255, g: 42, b: 42 })
+  );
+}
+
+function resolvePreferredManagedTextByMeta(slide: Slide, metaKey: "managed-title" | "managed-body") {
+  const candidates = slide.elements.filter(
+    (element): element is TextElement => element.type === "text" && element.metaKey === metaKey
+  );
+  if (!candidates.length) {
+    return null;
+  }
+  return [...candidates].sort((left, right) => {
+    const leftLength = normalizeLegacyToken(left.text).length;
+    const rightLength = normalizeLegacyToken(right.text).length;
+    if (leftLength !== rightLength) {
+      return rightLength - leftLength;
+    }
+    if (metaKey === "managed-title") {
+      return left.y - right.y;
+    }
+    return left.y - right.y;
+  })[0];
 }
 
 function resolveSafeArea(canvasWidth: number, canvasHeight: number, stageWidth: number): SafeArea {
@@ -501,15 +596,23 @@ function shouldHideLegacyAccentChip(element: CanvasElement, slide?: Slide) {
 
   const looksLikeChip =
     element.width >= 24 &&
-    element.width <= 640 &&
-    element.height >= 10 &&
-    element.height <= 140 &&
-    !element.stroke &&
+    element.width <= 760 &&
+    element.height >= 8 &&
+    element.height <= 180 &&
     element.shape === "rect" &&
-    element.width / Math.max(1, element.height) >= 1.3 &&
+    element.width / Math.max(1, element.height) >= 1.15 &&
     (element.opacity ?? 1) >= 0.25;
 
   if (!looksLikeChip) {
+    return false;
+  }
+
+  const strokeWidth = element.strokeWidth ?? 0;
+  const strokeLooksDecorative = Boolean(element.stroke) && strokeWidth > 3;
+  if (strokeLooksDecorative && !isLikelyLegacyAccentChipColor(element.fill)) {
+    return false;
+  }
+  if (!isLikelyLegacyAccentChipColor(element.fill) && Boolean(element.stroke)) {
     return false;
   }
 
@@ -1052,6 +1155,14 @@ export function SlideStage({
   }, [selectedElementId, slide.elements]);
 
   const likelyTitleElement = useMemo(() => resolveLikelyManagedTitle(slide), [slide]);
+  const preferredManagedTitle = useMemo(
+    () => resolvePreferredManagedTextByMeta(slide, "managed-title"),
+    [slide]
+  );
+  const preferredManagedBody = useMemo(
+    () => resolvePreferredManagedTextByMeta(slide, "managed-body"),
+    [slide]
+  );
   const titleText = useMemo(() => likelyTitleElement?.text ?? "", [likelyTitleElement]);
 
   const legacyChipRects = useMemo(
@@ -1237,6 +1348,22 @@ export function SlideStage({
           return slide.elements
           .filter((element) => {
             if (hiddenElementId && element.id === hiddenElementId) {
+              return false;
+            }
+            if (
+              element.type === "text" &&
+              element.metaKey === "managed-title" &&
+              preferredManagedTitle &&
+              element.id !== preferredManagedTitle.id
+            ) {
+              return false;
+            }
+            if (
+              element.type === "text" &&
+              element.metaKey === "managed-body" &&
+              preferredManagedBody &&
+              element.id !== preferredManagedBody.id
+            ) {
               return false;
             }
             if (shouldHideLegacyAccentChip(element, slide)) {
