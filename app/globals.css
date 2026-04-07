@@ -20,6 +20,10 @@
   --radius-md: 14px;
   --radius-lg: 18px;
   --radius-xl: 24px;
+  --editor-canvas-radius-desktop: 20px;
+  --editor-canvas-radius-mobile: 16px;
+  --editor-panel-radius: 14px;
+  --editor-button-radius: 12px;
   --shadow-soft: 0 8px 20px rgba(28, 31, 37, 0.08);
   --shadow-card: 0 16px 34px rgba(26, 28, 33, 0.12);
   --shadow-elevated: 0 24px 48px rgba(18, 19, 24, 0.2);
@@ -251,7 +255,7 @@ button:disabled {
   min-width: 146px;
   height: var(--control-height);
   border: none;
-  border-radius: 13px;
+  border-radius: var(--editor-button-radius);
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
   color: #f5fffd;
   font-weight: 800;
@@ -738,7 +742,7 @@ button:disabled {
 }
 
 .settings-card {
-  border-radius: 18px;
+  border-radius: var(--editor-panel-radius);
   border: 1px solid rgba(182, 206, 201, 0.72);
   background: rgba(249, 253, 252, 0.98);
   box-shadow: 0 8px 18px rgba(30, 67, 63, 0.1);
@@ -4035,11 +4039,11 @@ button:disabled {
     padding-bottom: calc(var(--mobile-bottom-offset, 82px) + 84px + env(safe-area-inset-bottom)) !important;
   }
 
-  .mobile-preview-shell,
-  .mobile-slide-shell {
+.mobile-preview-shell,
+.mobile-slide-shell {
     padding: 0 !important;
     border: 0 !important;
-    border-radius: 0 !important;
+    border-radius: var(--editor-canvas-radius-mobile) !important;
     background: transparent !important;
     box-shadow: none !important;
   }
@@ -4047,7 +4051,7 @@ button:disabled {
   .mobile-stage-editor .canvas-stage-center,
   .mobile-stage-surface {
     border: 0 !important;
-    border-radius: 0 !important;
+    border-radius: var(--editor-canvas-radius-mobile) !important;
     box-shadow: none !important;
     background: #ffffff !important;
   }
@@ -4195,7 +4199,7 @@ button:disabled {
 
 .editor-shell .canvas-stage,
 .editor-shell .canvas-stage-center {
-  border-radius: 0 !important;
+  border-radius: var(--editor-canvas-radius-desktop) !important;
 }
 
 .editor-shell .canvas-stage-center {
