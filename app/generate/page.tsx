@@ -30,12 +30,6 @@ const PRESET_TOPICS = [
   "Как упаковать кейс в 9 слайдов без воды",
   "Ответы на частые возражения в нише услуг"
 ];
-const CONTENT_MODE_CHIPS = [
-  { id: "carousel", label: "Карусель", enabled: true },
-  { id: "reels", label: "Рилс", enabled: false },
-  { id: "ideas", label: "Идеи", enabled: false },
-  { id: "headlines", label: "Заголовки", enabled: false }
-] as const;
 
 export default function GeneratePage() {
   const router = useRouter();
@@ -241,19 +235,6 @@ export default function GeneratePage() {
               className={styles.topicInput}
             />
 
-            <div className={styles.modeRow} aria-label="Режимы контента">
-              {CONTENT_MODE_CHIPS.map((mode) => (
-                <button
-                  key={mode.id}
-                  type="button"
-                  className={`${styles.modeChip} ${mode.enabled ? styles.modeChipActive : ""}`}
-                  disabled={!mode.enabled}
-                >
-                  {mode.label}
-                </button>
-              ))}
-            </div>
-
             <div className={styles.presetsRow}>
               {PRESET_TOPICS.map((preset) => (
                 <button
@@ -269,7 +250,7 @@ export default function GeneratePage() {
             </div>
 
             <details className={styles.advanced}>
-              <summary>Дополнительные настройки</summary>
+              <summary>Уточнить генерацию</summary>
               <div className={styles.advancedGrid}>
                 <label className={styles.fieldLabel}>
                   Ниша
