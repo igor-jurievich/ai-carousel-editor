@@ -7,6 +7,7 @@ import { clampSlidesCount, DEFAULT_SLIDES_COUNT, SLIDES_COUNT_OPTIONS } from "@/
 import { saveLocalProject } from "@/lib/projects";
 import { trackEvent } from "@/lib/telemetry";
 import type { CarouselOutlineSlide, CarouselTemplateId, SlideFormat } from "@/types/editor";
+import styles from "./generate-page.module.css";
 
 type GenerateResponse = {
   slides?: CarouselOutlineSlide[];
@@ -219,31 +220,33 @@ export default function GeneratePage() {
   };
 
   return (
-    <main className="page-shell generate-page-shell">
-      <div className="editor-shell editor-shell-redesigned">
-        <header className="prompt-shell prompt-shell-hero">
-          <div className="prompt-brand prompt-brand-hero">
-            <span className="prompt-greeting">⚡ Привет</span>
-            <h1>Что создаём сегодня?</h1>
-            <p className="prompt-subtitle">
-              Опишите тему, выберите параметры и сразу откройте проект в редакторе.
+    <main className={`page-shell ${styles.page}`}>
+      <div className={styles.layout}>
+        <header className={styles.hero}>
+          <div className={styles.heroHeader}>
+            <span className={styles.kicker}>AI CAROUSEL EDITOR</span>
+            <h1>Сгенерируйте карусель за 30–90 секунд</h1>
+            <p>
+              Введите тему, выберите параметры и сразу переходите в редактор без лишних шагов.
             </p>
           </div>
 
-          <div className="prompt-composer prompt-composer-hero">
-              <textarea
-                value={topic}
-                onChange={(event) => setTopic(event.target.value)}
-                placeholder="Напиши тему или опиши свою идею..."
-                rows={4}
-                maxLength={MAX_TOPIC_CHARS}
-              />
-            <div className="generate-mode-row" aria-label="Режимы контента">
+          <div className={styles.composer}>
+            <textarea
+              value={topic}
+              onChange={(event) => setTopic(event.target.value)}
+              placeholder="Напиши тему или опиши свою идею..."
+              rows={4}
+              maxLength={MAX_TOPIC_CHARS}
+              className={styles.topicInput}
+            />
+
+            <div className={styles.modeRow} aria-label="Режимы контента">
               {CONTENT_MODE_CHIPS.map((mode) => (
                 <button
                   key={mode.id}
                   type="button"
-                  className={`generate-mode-chip ${mode.enabled ? "active" : ""}`}
+                  className={`${styles.modeChip} ${mode.enabled ? styles.modeChipActive : ""}`}
                   disabled={!mode.enabled}
                 >
                   {mode.label}
@@ -251,12 +254,12 @@ export default function GeneratePage() {
               ))}
             </div>
 
-            <div className="field-row generate-presets-row">
+            <div className={styles.presetsRow}>
               {PRESET_TOPICS.map((preset) => (
                 <button
                   key={preset}
                   type="button"
-                  className="ghost-chip"
+                  className={styles.presetChip}
                   onClick={() => setTopic(preset)}
                   disabled={isGenerating}
                 >
@@ -265,29 +268,29 @@ export default function GeneratePage() {
               ))}
             </div>
 
-            <details className="settings-card generate-advanced">
-              <summary className="generate-advanced-summary">Дополнительные настройки</summary>
-              <div className="generate-advanced-grid">
-                <label className="field-label generate-advanced-field">
+            <details className={styles.advanced}>
+              <summary>Дополнительные настройки</summary>
+              <div className={styles.advancedGrid}>
+                <label className={styles.fieldLabel}>
                   Ниша
                   <input
-                    className="field"
+                    className={styles.field}
                     value={niche}
                     onChange={(event) => setNiche(event.target.value)}
                   />
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className={styles.fieldLabel}>
                   Целевая аудитория
                   <input
-                    className="field"
+                    className={styles.field}
                     value={audience}
                     onChange={(event) => setAudience(event.target.value)}
                   />
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className={styles.fieldLabel}>
                   Тон
                   <select
-                    className="field"
+                    className={styles.field}
                     value={tone}
                     onChange={(event) => setTone(event.target.value)}
                   >
@@ -296,10 +299,10 @@ export default function GeneratePage() {
                     <option value="sharp">Острый</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className={styles.fieldLabel}>
                   Цель
                   <select
-                    className="field"
+                    className={styles.field}
                     value={goal}
                     onChange={(event) => setGoal(event.target.value)}
                   >
@@ -308,10 +311,10 @@ export default function GeneratePage() {
                     <option value="warming">Прогрев</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className={styles.fieldLabel}>
                   Формат
                   <select
-                    className="field"
+                    className={styles.field}
                     value={format}
                     onChange={(event) => setFormat(event.target.value as SlideFormat)}
                   >
@@ -320,10 +323,10 @@ export default function GeneratePage() {
                     <option value="9:16">9:16</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className={styles.fieldLabel}>
                   Тема
                   <select
-                    className="field"
+                    className={styles.field}
                     value={theme}
                     onChange={(event) => setTheme(event.target.value as CarouselTemplateId)}
                   >
@@ -332,10 +335,10 @@ export default function GeneratePage() {
                     <option value="color">Цветная</option>
                   </select>
                 </label>
-                <label className="field-label generate-advanced-field">
+                <label className={styles.fieldLabel}>
                   Количество карточек
                   <select
-                    className="field"
+                    className={styles.field}
                     value={slidesCount}
                     onChange={(event) => setSlidesCount(clampSlidesCount(Number(event.target.value)))}
                   >
@@ -349,47 +352,56 @@ export default function GeneratePage() {
               </div>
             </details>
 
-            <div className="prompt-actions prompt-actions-hero">
-              <button className="btn prompt-generate-btn" type="button" onClick={handleGenerate} disabled={!canGenerate}>
-                {isGenerating ? "Генерируем..." : "Сгенерировать карусель"}
-              </button>
-            </div>
+            <button
+              className={styles.generateButton}
+              type="button"
+              onClick={handleGenerate}
+              disabled={!canGenerate}
+            >
+              {isGenerating ? "Генерируем..." : "Сгенерировать карусель"}
+            </button>
           </div>
 
-          <div className="prompt-status">
+          <div className={`${styles.status} ${error ? styles.statusError : ""}`}>
             {error ? error : "Сначала сгенерируйте карусель, затем откройте проект в редакторе."}
           </div>
         </header>
 
         {previewList.length ? (
-          <section className="settings-card" style={{ marginTop: 16 }}>
-            <div className="settings-inline-head">
+          <section className={styles.previewCard}>
+            <div className={styles.previewHead}>
               <h3>Предпросмотр структуры</h3>
-              <span className="status-pill">{previewList.length} слайдов</span>
+              <span className={styles.previewCount}>{previewList.length} слайдов</span>
             </div>
-            <div className="slides-list slides-list-compact">
+
+            <div className={styles.previewList}>
               {previewList.map((item, index) => (
-                <div key={`${item.type}-${index}`} className="slides-list-row">
-                  <div className="slides-list-item active" style={{ cursor: "default" }}>
-                    <span className="slides-list-index">{index + 1}</span>
-                    <span className="slides-list-copy">
-                      <strong>{item.title}</strong>
-                      <span>{item.type}</span>
-                    </span>
-                  </div>
+                <div key={`${item.type}-${index}`} className={styles.previewItem}>
+                  <span className={styles.previewIndex}>{index + 1}</span>
+                  <span className={styles.previewCopy}>
+                    <strong>{item.title}</strong>
+                    <span>{item.type}</span>
+                  </span>
                 </div>
               ))}
             </div>
-            <div className="field-row field-row-actions" style={{ marginTop: 14 }}>
-              <button type="button" className="btn" onClick={() => handleOpenInEditor()}>
+
+            <div className={styles.previewActions}>
+              <button type="button" className={styles.primaryAction} onClick={() => handleOpenInEditor()}>
                 Открыть в редакторе
               </button>
-              <button type="button" className="btn secondary" onClick={() => handleOpenInEditor("post")}>
+              <button
+                type="button"
+                className={styles.secondaryAction}
+                onClick={() => handleOpenInEditor("post")}
+              >
                 Открыть + пост
               </button>
             </div>
-            <div className="settings-hint" style={{ marginTop: 10 }}>
-              На мобильной версии генерация подписи к карусели находится во вкладке «Пост» внутри редактора.
+
+            <div className={styles.previewHint}>
+              На мобильной версии генерация подписи к карусели находится во вкладке «Пост» внутри
+              редактора.
             </div>
           </section>
         ) : null}
