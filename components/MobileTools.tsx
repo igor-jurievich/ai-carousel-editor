@@ -42,6 +42,10 @@ type MobileToolsProps = {
   onProfileSubtitleChange: (value: string) => void;
   onToggleSubtitleAcrossSlides: (visible: boolean) => void;
   onSlideBackgroundChange: (value: string, options?: { applyAll?: boolean }) => void;
+  onApplyStylePreset: (
+    presetId: "mono" | "grid" | "gradient" | "notes" | "dots" | "flash",
+    options?: { applyAll?: boolean }
+  ) => void;
   onSelectedTextChange: (value: string) => void;
   onSelectedTextColorChange: (value: string) => void;
   onSelectedTextHighlightColorChange: (value: string) => void;
@@ -151,6 +155,7 @@ export function MobileTools({
   onProfileSubtitleChange,
   onToggleSubtitleAcrossSlides,
   onSlideBackgroundChange,
+  onApplyStylePreset,
   onSelectedTextChange,
   onSelectedTextColorChange,
   onSelectedTextHighlightColorChange,
@@ -547,10 +552,7 @@ export function MobileTools({
                         className={`mobile-style-chip ${isActive ? "active" : ""}`}
                         disabled={disabled}
                         onClick={() =>
-                          {
-                            onSlideBackgroundChange(preset.background, { applyAll: applyStyleForAll });
-                            onGridVisibilityChange(preset.gridVisible, { applyAll: applyStyleForAll });
-                          }
+                          onApplyStylePreset(preset.id, { applyAll: applyStyleForAll })
                         }
                       >
                         <span

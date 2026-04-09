@@ -100,6 +100,198 @@ const LEGACY_ACCENT_CHIP_HEX_COLORS = new Set([
 ]);
 type EditableTextTargetRole = "title" | "body";
 type MobileColorSchemeMode = "single" | "double";
+type GridDecorationMode = "full" | "vertical" | "dots";
+type MobileStylePresetId = "mono" | "grid" | "gradient" | "notes" | "dots" | "flash";
+
+const MOBILE_STYLE_PRESET_CONFIG: Record<
+  MobileStylePresetId,
+  { background: string; gridVisible: boolean; gridMode: GridDecorationMode }
+> = {
+  mono: {
+    background: "#ffffff",
+    gridVisible: false,
+    gridMode: "full"
+  },
+  grid: {
+    background: "#f8f8f9",
+    gridVisible: true,
+    gridMode: "full"
+  },
+  gradient: {
+    background: "#f4ede8",
+    gridVisible: false,
+    gridMode: "vertical"
+  },
+  notes: {
+    background: "#ececf1",
+    gridVisible: true,
+    gridMode: "vertical"
+  },
+  dots: {
+    background: "#f5f5f6",
+    gridVisible: true,
+    gridMode: "dots"
+  },
+  flash: {
+    background: "#e8e9ed",
+    gridVisible: true,
+    gridMode: "vertical"
+  }
+};
+
+function makeEditorElementId(prefix: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function parseRgbFromColor(value: string) {
+  const normalized = value.trim().toLowerCase();
+  const hex = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/u);
+  if (hex) {
+    const token = hex[1];
+    const full =
+      token.length === 3
+        ? token
+            .split("")
+            .map((char) => `${char}${char}`)
+            .join("")
+        : token;
+    return {
+      r: Number.parseInt(full.slice(0, 2), 16),
+      g: Number.parseInt(full.slice(2, 4), 16),
+      b: Number.parseInt(full.slice(4, 6), 16)
+    };
+  }
+
+  const rgb = normalized.match(/^rgba?\(([^)]+)\)$/u);
+  if (!rgb) {
+    return null;
+  }
+
+  const parts = rgb[1]
+    .split(",")
+    .map((part) => Number.parseFloat(part.trim()))
+    .filter((part) => Number.isFinite(part));
+  if (parts.length < 3) {
+    return null;
+  }
+
+  return {
+    r: Math.max(0, Math.min(255, parts[0])),
+    g: Math.max(0, Math.min(255, parts[1])),
+    b: Math.max(0, Math.min(255, parts[2]))
+  };
+}
+
+function resolveGridColorForBackground(background: string) {
+  const rgb = parseRgbFromColor(background);
+  if (!rgb) {
+    return "rgba(24, 28, 34, 0.14)";
+  }
+
+  const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+  return luminance < 0.48 ? "rgba(255, 255, 255, 0.16)" : "rgba(24, 28, 34, 0.14)";
+}
+
+function inferGridModeFromSlide(slide: Slide): GridDecorationMode | null {
+  const gridElements = slide.elements.filter(
+    (element): element is ShapeElement =>
+      element.type === "shape" && element.metaKey === "decor-grid-line"
+  );
+
+  if (!gridElements.length) {
+    return null;
+  }
+
+  if (gridElements.some((element) => element.shape === "circle")) {
+    return "dots";
+  }
+
+  const verticalCount = gridElements.filter((element) => element.height > element.width * 3).length;
+  const horizontalCount = gridElements.filter((element) => element.width > element.height * 3).length;
+  if (verticalCount > 0 && horizontalCount > 0) {
+    return "full";
+  }
+  return "vertical";
+}
+
+function buildGridDecorationElements(
+  format: SlideFormat,
+  mode: GridDecorationMode,
+  color: string
+): ShapeElement[] {
+  const { width, height } = SLIDE_FORMAT_DIMENSIONS[format];
+  const step = Math.max(58, format === "9:16" ? 84 : 72);
+  const elements: ShapeElement[] = [];
+
+  if (mode === "dots") {
+    const dotSize = format === "9:16" ? 6 : 5;
+    const offset = Math.round(step * 0.45);
+    for (let y = offset; y <= height; y += step) {
+      for (let x = offset; x <= width; x += step) {
+        elements.push({
+          id: makeEditorElementId("decor-grid"),
+          type: "shape",
+          metaKey: "decor-grid-line",
+          shape: "circle",
+          x: x - dotSize / 2,
+          y: y - dotSize / 2,
+          width: dotSize,
+          height: dotSize,
+          fill: color,
+          opacity: 1,
+          rotation: 0,
+          cornerRadius: dotSize
+        });
+      }
+    }
+    return elements;
+  }
+
+  for (let x = 0; x <= width; x += step) {
+    elements.push({
+      id: makeEditorElementId("decor-grid"),
+      type: "shape",
+      metaKey: "decor-grid-line",
+      shape: "rect",
+      x,
+      y: 0,
+      width: 1,
+      height,
+      fill: color,
+      opacity: 1,
+      rotation: 0,
+      cornerRadius: 0
+    });
+  }
+
+  if (mode === "full") {
+    for (let y = 0; y <= height; y += step) {
+      elements.push({
+        id: makeEditorElementId("decor-grid"),
+        type: "shape",
+        metaKey: "decor-grid-line",
+        shape: "rect",
+        x: 0,
+        y,
+        width,
+        height: 1,
+        fill: color,
+        opacity: 1,
+        rotation: 0,
+        cornerRadius: 0
+      });
+    }
+  }
+
+  return elements;
+}
+
+function resolveGridElementOpacity(element: Pick<ShapeElement, "shape">) {
+  return element.shape === "circle" ? 0.2 : 0.12;
+}
 
 function normalizeHighlightRanges(ranges: TextHighlightRange[] | undefined, textLength: number) {
   if (!ranges?.length || textLength <= 0) {
@@ -1296,6 +1488,22 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setSelectedElementId(element.id);
   };
 
+  const openFilePicker = (input: HTMLInputElement | null) => {
+    if (!input) {
+      return;
+    }
+    input.value = "";
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        // fallback to click below
+      }
+    }
+    input.click();
+  };
+
   const handleAddImage = (slideId = activeSlideId ?? "") => {
     if (generationLocked) {
       setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
@@ -1303,7 +1511,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     }
 
     setPendingImageSlideId(slideId);
-    imageInputRef.current?.click();
+    openFilePicker(imageInputRef.current);
   };
 
   const handleAddBackgroundImage = (slideId = activeSlideId ?? "") => {
@@ -1313,7 +1521,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     }
 
     setPendingBackgroundSlideId(slideId);
-    backgroundImageInputRef.current?.click();
+    openFilePicker(backgroundImageInputRef.current);
   };
 
   const handleImageSelected = async (file: File | null) => {
@@ -2206,30 +2414,106 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     );
   };
 
+  const handleApplyStylePreset = (
+    presetId: MobileStylePresetId,
+    options?: { applyAll?: boolean }
+  ) => {
+    const preset = MOBILE_STYLE_PRESET_CONFIG[presetId];
+    if (!preset) {
+      return;
+    }
+
+    const applyOnSlide = (slide: Slide): Slide => {
+      const withoutGrid = slide.elements.filter(
+        (element) => !(element.type === "shape" && element.metaKey === "decor-grid-line")
+      );
+      if (!preset.gridVisible) {
+        return {
+          ...slide,
+          background: preset.background,
+          elements: withoutGrid
+        };
+      }
+
+      const gridColor = resolveGridColorForBackground(preset.background);
+      const nextGrid = buildGridDecorationElements(slideFormat, preset.gridMode, gridColor).map((element) => ({
+        ...element,
+        opacity: resolveGridElementOpacity(element)
+      }));
+
+      return {
+        ...slide,
+        background: preset.background,
+        elements: [...withoutGrid, ...nextGrid]
+      };
+    };
+
+    if (options?.applyAll) {
+      updateSlides((current) => current.map(applyOnSlide), { recordHistory: false });
+    } else if (activeSlide) {
+      updateSlide(activeSlide.id, applyOnSlide, { recordHistory: false });
+    }
+
+    setStatus(`Применён стиль: ${presetId}.`);
+  };
+
   const handleGridVisibilityChange = (
     enabled: boolean,
     options?: { applyAll?: boolean }
   ) => {
-    const applyOnSlide = (slide: Slide) => ({
-      ...slide,
-      elements: slide.elements.map((element) => {
-        if (element.type !== "shape" || element.metaKey !== "decor-grid-line") {
-          return element;
-        }
+    const applyOnSlide = (slide: Slide) => {
+      const hasGrid = slide.elements.some(
+        (element) => element.type === "shape" && element.metaKey === "decor-grid-line"
+      );
 
-        if (!enabled) {
+      if (!enabled) {
+        if (!hasGrid) {
+          return slide;
+        }
+        return {
+          ...slide,
+          elements: slide.elements.map((element) => {
+            if (element.type !== "shape" || element.metaKey !== "decor-grid-line") {
+              return element;
+            }
+            return {
+              ...element,
+              opacity: 0
+            };
+          })
+        };
+      }
+
+      const inferredMode = inferGridModeFromSlide(slide) ?? "full";
+      const gridColor = resolveGridColorForBackground(slide.background);
+      if (!hasGrid) {
+        const nextGrid = buildGridDecorationElements(slideFormat, inferredMode, gridColor).map((element) => ({
+          ...element,
+          opacity: resolveGridElementOpacity(element)
+        }));
+        return {
+          ...slide,
+          elements: [...slide.elements, ...nextGrid]
+        };
+      }
+
+      return {
+        ...slide,
+        elements: slide.elements.map((element) => {
+          if (element.type !== "shape" || element.metaKey !== "decor-grid-line") {
+            return element;
+          }
           return {
             ...element,
-            opacity: 0
+            fill: gridColor,
+            opacity:
+              (element.opacity ?? 0) > 0.04
+                ? element.opacity ?? resolveGridElementOpacity(element)
+                : resolveGridElementOpacity(element)
           };
-        }
-
-        return {
-          ...element,
-          opacity: (element.opacity ?? 0) > 0.04 ? (element.opacity ?? 0.12) : 0.12
-        };
-      })
-    });
+        })
+      };
+    };
 
     if (options?.applyAll) {
       updateSlides((current) => current.map(applyOnSlide), { recordHistory: false });
@@ -3099,6 +3383,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               }
               onToggleSubtitleAcrossSlides={handleToggleSubtitleAcrossSlides}
               onSlideBackgroundChange={handleSlideBackgroundColorChange}
+              onApplyStylePreset={handleApplyStylePreset}
               onGridVisibilityChange={handleGridVisibilityChange}
               onSelectedTextChange={handleSelectedTextChange}
               onSelectedTextColorChange={handleSelectedTextColorChange}
@@ -3148,14 +3433,14 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         ref={imageInputRef}
         type="file"
         accept="image/*"
-        hidden
+        className="visually-hidden-file-input"
         onChange={(event) => void handleImageSelected(event.target.files?.[0] ?? null)}
       />
       <input
         ref={backgroundImageInputRef}
         type="file"
         accept="image/*"
-        hidden
+        className="visually-hidden-file-input"
         onChange={(event) => void handleBackgroundImageSelected(event.target.files?.[0] ?? null)}
       />
 
@@ -3420,23 +3705,13 @@ function isLegacyAccentChipShape(element: CanvasElement, slide?: Slide): element
     return false;
   }
 
-  const strokeWidth = element.strokeWidth ?? 0;
-  const strokeLooksDecorative = Boolean(element.stroke) && strokeWidth > 3;
-  if (strokeLooksDecorative && !isLikelyLegacyAccentChipColor(element.fill)) {
-    return false;
-  }
-
-  if (!isLikelyLegacyAccentChipColor(element.fill) && Boolean(element.stroke)) {
-    return false;
-  }
-
   if (!slide) {
     return true;
   }
 
-  // Keep cleanup permissive: legacy chips can drift vertically after edits/resize,
-  // so strict "near title" checks leave orphan rectangles on real projects.
-  return element.y <= Math.round(SLIDE_FORMAT_DIMENSIONS["9:16"].height * 0.82);
+  // Keep cleanup aggressive for legacy artifacts: there is no user-facing tool that creates
+  // free decorative rectangles in this zone, so removing them is safer than leaving "orphan chips".
+  return element.y <= Math.round(SLIDE_FORMAT_DIMENSIONS["9:16"].height * 0.9);
 }
 
 function isLikelyLegacyAccentTextElement(

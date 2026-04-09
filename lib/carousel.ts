@@ -1954,20 +1954,10 @@ function isLegacyAccentChipShape(element: CanvasElement, slide?: Slide): element
     return false;
   }
 
-  const strokeWidth = element.strokeWidth ?? 0;
-  const strokeLooksDecorative = Boolean(element.stroke) && strokeWidth > 3;
-  if (strokeLooksDecorative && !isLikelyLegacyAccentChipColor(element.fill)) {
-    return false;
-  }
-
-  if (!isLikelyLegacyAccentChipColor(element.fill) && Boolean(element.stroke)) {
-    return false;
-  }
-
   if (!slide) {
     return true;
   }
-  return element.y <= Math.round(SLIDE_FORMAT_DIMENSIONS["9:16"].height * 0.82);
+  return element.y <= Math.round(SLIDE_FORMAT_DIMENSIONS["9:16"].height * 0.9);
 }
 
 function isLikelyLegacyAccentTextElement(

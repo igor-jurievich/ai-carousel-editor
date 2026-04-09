@@ -607,19 +607,10 @@ function shouldHideLegacyAccentChip(element: CanvasElement, slide?: Slide) {
     return false;
   }
 
-  const strokeWidth = element.strokeWidth ?? 0;
-  const strokeLooksDecorative = Boolean(element.stroke) && strokeWidth > 3;
-  if (strokeLooksDecorative && !isLikelyLegacyAccentChipColor(element.fill)) {
-    return false;
-  }
-  if (!isLikelyLegacyAccentChipColor(element.fill) && Boolean(element.stroke)) {
-    return false;
-  }
-
   if (!slide) {
     return true;
   }
-  return element.y <= Math.round(heightByFormat("9:16") * 0.82);
+  return element.y <= Math.round(heightByFormat("9:16") * 0.9);
 }
 
 function normalizeLegacyToken(value: string) {
