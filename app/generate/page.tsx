@@ -223,7 +223,7 @@ export default function GeneratePage() {
       <div className="editor-shell editor-shell-redesigned">
         <header className="prompt-shell prompt-shell-hero">
           <div className="prompt-brand prompt-brand-hero">
-            <span className="prompt-greeting">⚡ Привет, Егор</span>
+            <span className="prompt-greeting">⚡ Привет</span>
             <h1>Что создаём сегодня?</h1>
             <p className="prompt-subtitle">
               Опишите тему, выберите параметры и сразу откройте проект в редакторе.
