@@ -223,21 +223,21 @@ export default function GeneratePage() {
       <div className="editor-shell editor-shell-redesigned">
         <header className="prompt-shell prompt-shell-hero">
           <div className="prompt-brand prompt-brand-hero">
-            <span className="prompt-greeting">⚡ Привет!</span>
-            <h1>Соберите карусель за 30–90 секунд</h1>
+            <span className="prompt-greeting">⚡ Привет, Егор</span>
+            <h1>Что создаём сегодня?</h1>
             <p className="prompt-subtitle">
-              Напишите тему, выберите параметры и сразу откройте готовый проект в редакторе.
+              Опишите тему, выберите параметры и сразу откройте проект в редакторе.
             </p>
           </div>
 
           <div className="prompt-composer prompt-composer-hero">
-            <textarea
-              value={topic}
-              onChange={(event) => setTopic(event.target.value)}
-              placeholder="Напиши тему или опиши свою идею..."
-              rows={4}
-              maxLength={MAX_TOPIC_CHARS}
-            />
+              <textarea
+                value={topic}
+                onChange={(event) => setTopic(event.target.value)}
+                placeholder="Напиши тему или опиши свою идею..."
+                rows={4}
+                maxLength={MAX_TOPIC_CHARS}
+              />
             <div className="generate-mode-row" aria-label="Режимы контента">
               {CONTENT_MODE_CHIPS.map((mode) => (
                 <button

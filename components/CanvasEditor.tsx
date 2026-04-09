@@ -322,6 +322,13 @@ export function CanvasEditor({
           {previewMode || hideMobileSlideTools ? null : (
             <div className="mobile-slide-tools" aria-label="Управление слайдами">
               <MobileIconButton
+                icon="plus"
+                title="Добавить слайд"
+                label="Добав."
+                onClick={() => onInsertSlideAt(activeSlideIndex + 1, "text")}
+                disabled={disabled}
+              />
+              <MobileIconButton
                 icon="templates"
                 title="Выбрать шаблон"
                 label="Шаблон"

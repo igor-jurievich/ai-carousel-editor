@@ -3163,6 +3163,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   }}
                   onFormatChange={handleFormatChange}
                   onSlideBackgroundChange={handleSlideBackgroundColorChange}
+                  onApplyStylePreset={handleApplyStylePreset}
                   onGridVisibilityChange={handleGridVisibilityChange}
                   onOpenTemplateModal={handleOpenTemplateModal}
                   onSelectSlide={(slideId) =>

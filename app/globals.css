@@ -1080,6 +1080,10 @@ button:disabled {
   gap: 8px;
 }
 
+.desktop-style-grid {
+  margin-bottom: 10px;
+}
+
 .mobile-style-chip {
   min-height: 34px;
   border-radius: 10px;
@@ -4179,5 +4183,147 @@ button:disabled {
     min-height: 30px !important;
     padding: 0 10px !important;
     font-size: 12px !important;
+  }
+}
+
+/* Final stabilization overrides (single source of truth for compact editor geometry) */
+.editor-shell .canvas-panel,
+.editor-shell .canvas-workbench,
+.editor-shell .canvas-stage-wrap,
+.editor-shell .canvas-stage {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.editor-shell .canvas-stage-center {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+@media (max-width: 768px) {
+  .mobile-editor-shell {
+    min-height: 100svh !important;
+    gap: 8px !important;
+    padding: 8px !important;
+    padding-bottom: calc(92px + env(safe-area-inset-bottom)) !important;
+    background: var(--bg-page) !important;
+    overflow-x: hidden !important;
+  }
+
+  .mobile-topbar {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 90 !important;
+    border: 1px solid rgba(208, 212, 220, 0.95) !important;
+    border-radius: 12px !important;
+    background: rgba(247, 247, 249, 0.97) !important;
+    box-shadow: 0 6px 14px rgba(24, 26, 31, 0.08) !important;
+    backdrop-filter: blur(12px);
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+    padding: 8px !important;
+  }
+
+  .mobile-canvas-zone {
+    min-height: 50svh !important;
+    padding-inline: 0 !important;
+    padding-bottom: calc(var(--mobile-bottom-offset, 84px) + 96px + env(safe-area-inset-bottom)) !important;
+    overflow-x: hidden !important;
+  }
+
+  .mobile-canvas-frame {
+    padding-inline: 6px !important;
+  }
+
+  .mobile-preview-shell,
+  .mobile-slide-shell {
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: var(--editor-canvas-radius-mobile) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-stage-editor .canvas-stage-center,
+  .mobile-stage-surface {
+    border: 0 !important;
+    border-radius: var(--editor-canvas-radius-mobile) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-slide-tools {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    margin: 8px 0 4px !important;
+    padding: 0 2px !important;
+  }
+
+  .mobile-slide-tool {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    height: 50px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 10px rgba(24, 28, 36, 0.09) !important;
+  }
+
+  .mobile-slide-tool-label {
+    font-size: 8px !important;
+    line-height: 1.05 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .mobile-editor-shell .mobile-bottom-toolbar-v2 {
+    position: fixed !important;
+    left: max(0px, env(safe-area-inset-left)) !important;
+    right: max(0px, env(safe-area-inset-right)) !important;
+    bottom: 0 !important;
+    z-index: 96 !important;
+    display: grid !important;
+    grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+    gap: 3px !important;
+    overflow-x: hidden !important;
+    border-radius: 16px 16px 0 0 !important;
+    border: 1px solid rgba(208, 212, 220, 0.95) !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+    background: rgba(247, 247, 249, 0.98) !important;
+    padding: 6px 6px calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .mobile-editor-shell .mobile-bottom-tool {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 48px !important;
+    border-radius: 10px !important;
+    padding: 4px 1px !important;
+  }
+
+  .mobile-editor-shell .mobile-bottom-tool small {
+    font-size: 8px !important;
+    line-height: 1.05 !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet.mobile-tool-sheet-v2 {
+    position: fixed !important;
+    left: max(8px, env(safe-area-inset-left)) !important;
+    right: max(8px, env(safe-area-inset-right)) !important;
+    bottom: calc(70px + env(safe-area-inset-bottom)) !important;
+    max-height: min(52svh, 420px) !important;
+    border-radius: 14px !important;
+    z-index: 98 !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-tool-sheet-body {
+    padding: 0 12px 10px !important;
+    gap: 8px !important;
   }
 }

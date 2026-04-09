@@ -4,6 +4,7 @@ import { AppIcon } from "@/components/icons";
 import type { CarouselPostCaption, Slide, SlideFormat, TextElement } from "@/types/editor";
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
+type StylePresetId = "mono" | "grid" | "gradient" | "notes" | "dots" | "flash";
 
 type SettingsPanelProps = {
   slides: Slide[];
@@ -35,6 +36,7 @@ type SettingsPanelProps = {
   onUploadBackgroundImage: () => void;
   onRemoveBackgroundImage: () => void;
   onSlideBackgroundChange: (value: string) => void;
+  onApplyStylePreset: (presetId: StylePresetId, options?: { applyAll?: boolean }) => void;
   onGridVisibilityChange: (visible: boolean) => void;
   onFormatChange: (format: SlideFormat) => void;
   onOpenTemplateModal: () => void;
@@ -105,6 +107,7 @@ export function SettingsPanel({
   onUploadBackgroundImage,
   onRemoveBackgroundImage,
   onSlideBackgroundChange,
+  onApplyStylePreset,
   onGridVisibilityChange,
   onFormatChange,
   onOpenTemplateModal,
@@ -133,6 +136,14 @@ export function SettingsPanel({
   disabled = false,
   previewMode = false
 }: SettingsPanelProps) {
+  const stylePresets: Array<{ id: StylePresetId; label: string; background: string }> = [
+    { id: "mono", label: "Монохром", background: "#ffffff" },
+    { id: "grid", label: "Сетка", background: "#f1f3f7" },
+    { id: "gradient", label: "Градиент", background: "#e9f3ff" },
+    { id: "notes", label: "Заметки", background: "#f6f2ed" },
+    { id: "dots", label: "Точки", background: "#ffeb0a" },
+    { id: "flash", label: "Молнии", background: "#090d16" }
+  ];
   const activeIndex = Math.max(
     0,
     slides.findIndex((item) => item.id === (activeSlideId ?? slide.id))
@@ -293,6 +304,21 @@ export function SettingsPanel({
 
       <section className="settings-card settings-card-style">
         <h3>Стиль</h3>
+        <div className="mobile-style-grid desktop-style-grid">
+          {stylePresets.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              className={`mobile-style-chip ${
+                slideBackground.toLowerCase() === preset.background.toLowerCase() ? "active" : ""
+              }`}
+              onClick={() => onApplyStylePreset(preset.id, { applyAll: false })}
+              disabled={disabled}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
         <label className="field-label">
           Цвет фона
           <select
