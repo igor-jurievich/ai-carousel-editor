@@ -7,6 +7,7 @@ import type {
 } from "@/types/editor";
 
 const STORAGE_KEY = "ai-carousel.projects.v1";
+const MAX_PERSISTED_DATA_URL_LENGTH = 420_000;
 
 type StoredProject = CarouselProject & {
   id: string;
@@ -254,6 +255,71 @@ function readAllProjects() {
   }
 }
 
+function isLargeImageDataUrl(value: unknown) {
+  return (
+    typeof value === "string" &&
+    value.startsWith("data:image/") &&
+    value.length > MAX_PERSISTED_DATA_URL_LENGTH
+  );
+}
+
+function compactSlideForStorage(slide: Slide) {
+  let changed = false;
+
+  const backgroundImage =
+    isLargeImageDataUrl(slide.backgroundImage) || slide.backgroundImage === undefined
+      ? null
+      : slide.backgroundImage ?? null;
+  if (backgroundImage !== (slide.backgroundImage ?? null)) {
+    changed = true;
+  }
+
+  const elements = slide.elements.filter((element) => {
+    if (element.type !== "image") {
+      return true;
+    }
+
+    if (isLargeImageDataUrl(element.src)) {
+      changed = true;
+      return false;
+    }
+
+    return true;
+  });
+
+  return {
+    slide: changed
+      ? {
+          ...slide,
+          backgroundImage,
+          elements
+        }
+      : slide,
+    changed
+  };
+}
+
+function compactProjectForStorage(project: StoredProject) {
+  let changed = false;
+  const slides = project.slides.map((slide) => {
+    const compacted = compactSlideForStorage(slide);
+    if (compacted.changed) {
+      changed = true;
+    }
+    return compacted.slide;
+  });
+
+  return {
+    project: changed
+      ? normalizeStoredProject({
+          ...project,
+          slides
+        })
+      : project,
+    changed
+  };
+}
+
 function writeAllProjects(projects: StoredProject[]) {
   if (!canUseStorage()) {
     return;
@@ -266,8 +332,17 @@ function writeAllProjects(projects: StoredProject[]) {
       return;
     } catch {
       if (next.length === 1) {
+        const compacted = compactProjectForStorage(next[0]);
+        if (compacted.changed) {
+          try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify([compacted.project]));
+            return;
+          } catch {
+            // no-op, throw below
+          }
+        }
         throw new Error(
-          "Не удалось сохранить проект в браузере. Освободите место в хранилище и повторите."
+          "Не удалось сохранить проект в браузере. Освободите место в хранилище или удалите часть старых проектов."
         );
       }
       // Drop the oldest project and retry if storage quota is exceeded.
