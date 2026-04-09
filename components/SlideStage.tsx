@@ -1089,18 +1089,55 @@ function SlideTextNode({
   onSelect?: () => void;
   onDoubleClick?: () => void;
   onDragEnd?: (x: number, y: number) => void;
-  onTransformEnd?: (node: Konva.Text) => void;
-  nodeRef: (node: Konva.Text | null) => void;
+  onTransformEnd?: (node: Konva.Node) => void;
+  nodeRef: (node: Konva.Node | null) => void;
   dragBoundFunc?: (position: { x: number; y: number }) => { x: number; y: number };
 }) {
   const highlightRects = useMemo(() => resolveHighlightRects(element), [element]);
 
   return (
-    <Group>
+    <Group
+      ref={nodeRef}
+      x={element.x}
+      y={element.y}
+      rotation={element.rotation}
+      opacity={element.opacity}
+      draggable={interactive && selected}
+      dragDistance={4}
+      dragBoundFunc={dragBoundFunc}
+      onClick={onSelect}
+      onTap={onSelect}
+      onMouseEnter={(event) => {
+        if (!interactive) {
+          return;
+        }
+        const container = event.target.getStage()?.container();
+        if (container) {
+          container.style.cursor = selected ? "grab" : "pointer";
+        }
+      }}
+      onMouseLeave={(event) => {
+        const container = event.target.getStage()?.container();
+        if (container) {
+          container.style.cursor = "default";
+        }
+      }}
+      onDragStart={(event) => {
+        const container = event.target.getStage()?.container();
+        if (container) {
+          container.style.cursor = "grabbing";
+        }
+      }}
+      onDragEnd={(event) => {
+        const container = event.target.getStage()?.container();
+        if (container) {
+          container.style.cursor = selected ? "grab" : "default";
+        }
+        onDragEnd?.(event.target.x(), event.target.y());
+      }}
+      onTransformEnd={(event) => onTransformEnd?.(event.target)}
+    >
       <Group
-        x={element.x}
-        y={element.y}
-        rotation={element.rotation}
         listening={false}
         clipX={0}
         clipY={0}
@@ -1122,10 +1159,9 @@ function SlideTextNode({
         ))}
       </Group>
       <Text
-        ref={nodeRef}
         text={element.text}
-        x={element.x}
-        y={element.y}
+        x={0}
+        y={0}
         width={element.width}
         fontSize={element.fontSize}
         fontFamily={element.fontFamily}
@@ -1135,49 +1171,12 @@ function SlideTextNode({
         lineHeight={element.lineHeight ?? 1.1}
         wrap="word"
         ellipsis={false}
-        opacity={element.opacity}
-        rotation={element.rotation}
         letterSpacing={element.letterSpacing}
         textDecoration={element.textDecoration}
-        draggable={interactive && selected}
-        dragDistance={4}
-        dragBoundFunc={dragBoundFunc}
-        onClick={onSelect}
-        onTap={onSelect}
         onDblClick={onDoubleClick}
         onDblTap={onDoubleClick}
-        onMouseEnter={(event) => {
-          if (!interactive) {
-            return;
-          }
-          const container = event.target.getStage()?.container();
-          if (container) {
-            container.style.cursor = selected ? "grab" : "pointer";
-          }
-        }}
-        onMouseLeave={(event) => {
-          const container = event.target.getStage()?.container();
-          if (container) {
-            container.style.cursor = "default";
-          }
-        }}
-        onDragStart={(event) => {
-          const container = event.target.getStage()?.container();
-          if (container) {
-            container.style.cursor = "grabbing";
-          }
-        }}
-        onDragEnd={(event) => {
-          const container = event.target.getStage()?.container();
-          if (container) {
-            container.style.cursor = selected ? "grab" : "default";
-          }
-          onDragEnd?.(event.target.x(), event.target.y());
-        }}
-        onTransformEnd={(event) => onTransformEnd?.(event.target as Konva.Text)}
         strokeEnabled={false}
         shadowEnabled={false}
-        perfectDrawEnabled={false}
       />
     </Group>
   );
@@ -1201,6 +1200,12 @@ export function SlideStage({
   showSlideBadge = true
 }: SlideStageProps) {
   const scale = useMemo(() => width / canvasWidth, [canvasWidth, width]);
+  const stagePixelRatio = useMemo(() => {
+    if (typeof window === "undefined") {
+      return 1;
+    }
+    return Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  }, []);
   const stageNodeRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const nodeRefs = useRef<Record<string, Konva.Node | null>>({});
@@ -1353,6 +1358,7 @@ export function SlideStage({
       ref={handleStageRef}
       width={width}
       height={height}
+      pixelRatio={stagePixelRatio}
       draggable={false}
       style={{ touchAction: "none" }}
       onWheel={(event) => {
@@ -1564,7 +1570,7 @@ export function SlideStage({
                   element={element}
                   selected={selected && !isLockedTextLayer && !isImagePlaceholderText}
                   interactive={interactiveText}
-                  nodeRef={nodeRef as (node: Konva.Text | null) => void}
+                  nodeRef={nodeRef}
                   dragBoundFunc={dragBoundFunc}
                   onSelect={
                     isImagePlaceholderText
