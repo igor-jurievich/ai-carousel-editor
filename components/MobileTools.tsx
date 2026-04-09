@@ -79,6 +79,7 @@ const TOOLBAR_ITEMS: Array<{ id: MobileToolTab; icon: AppIconName; label: string
 ];
 
 const FONT_OPTIONS = ["Inter", "Manrope", "Advent Pro", "Fira Code", "Russo One", "Oswald"];
+const HEX_COLOR_INPUT_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 const STYLE_PRESETS = [
   {
@@ -183,6 +184,8 @@ export function MobileTools({
   const [applyStyleForAll, setApplyStyleForAll] = useState(true);
   const [applySizeForAll, setApplySizeForAll] = useState(false);
   const activeTextElement = selectedTextElement;
+  const normalizedTextColor = normalizeColorForInput(activeTextElement?.fill, "#56cfc2");
+  const normalizedHighlightColor = normalizeColorForInput(selectedTextHighlightColor, "#1f49ff");
   const applyColorMode = (nextMode: "single" | "double") => {
     setColorMode(nextMode);
     onApplyColorScheme(nextMode, { applyAll: applyColorForAll });
@@ -408,13 +411,13 @@ export function MobileTools({
                         <input
                           type="color"
                           className="color-input"
-                          value={activeTextElement?.fill ?? "#56cfc2"}
+                          value={normalizedTextColor}
                           onChange={(event) => handleSinglePaletteColorChange(event.target.value)}
                           disabled={disabled || !activeTextElement}
                         />
                         <input
                           className="field"
-                          value={(activeTextElement?.fill ?? "#56cfc2").toUpperCase()}
+                          value={normalizedTextColor.toUpperCase()}
                           readOnly
                         />
                       </div>
@@ -428,13 +431,13 @@ export function MobileTools({
                         <input
                           type="color"
                           className="color-input"
-                          value={activeTextElement?.fill ?? "#56cfc2"}
+                          value={normalizedTextColor}
                           onChange={(event) => onSelectedTextColorChange(event.target.value)}
                           disabled={disabled || !activeTextElement}
                         />
                         <input
                           className="field"
-                          value={(activeTextElement?.fill ?? "#56cfc2").toUpperCase()}
+                          value={normalizedTextColor.toUpperCase()}
                           readOnly
                         />
                       </div>
@@ -445,13 +448,13 @@ export function MobileTools({
                         <input
                           type="color"
                           className="color-input"
-                          value={selectedTextHighlightColor}
+                          value={normalizedHighlightColor}
                           onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
                           disabled={disabled || !activeTextElement}
                         />
                         <input
                           className="field"
-                          value={selectedTextHighlightColor.toUpperCase()}
+                          value={normalizedHighlightColor.toUpperCase()}
                           readOnly
                         />
                       </div>
@@ -651,11 +654,11 @@ export function MobileTools({
                       <input
                         type="color"
                         className="color-input"
-                        value={selectedTextHighlightColor}
+                        value={normalizedHighlightColor}
                         onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
                         disabled={disabled || !activeTextElement}
                       />
-                      <input className="field" value={selectedTextHighlightColor.toUpperCase()} readOnly />
+                      <input className="field" value={normalizedHighlightColor.toUpperCase()} readOnly />
                     </div>
                   </label>
                   <div className="field-row">
@@ -991,4 +994,14 @@ function normalizeColor(value: string) {
   }
 
   return value;
+}
+
+function normalizeColorForInput(value: string | undefined, fallback: string) {
+  const normalized = (value ?? "").trim();
+  if (HEX_COLOR_INPUT_RE.test(normalized)) {
+    return normalized.length === 4
+      ? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
+      : normalized;
+  }
+  return fallback;
 }

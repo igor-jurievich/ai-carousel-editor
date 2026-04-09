@@ -76,6 +76,17 @@ const NON_CONTENT_TEXT_META_KEYS = new Set([
   "footer-arrow",
   "image-placeholder-text"
 ]);
+const HEX_COLOR_INPUT_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+function normalizeColorForInput(value: string | undefined, fallback: string) {
+  const normalized = (value ?? "").trim();
+  if (HEX_COLOR_INPUT_RE.test(normalized)) {
+    return normalized.length === 4
+      ? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
+      : normalized;
+  }
+  return fallback;
+}
 
 export function SettingsPanel({
   slides,
@@ -490,7 +501,7 @@ export function SettingsPanel({
                 <input
                   className="field"
                   type="color"
-                  value={selectedTextHighlightColor}
+                  value={normalizeColorForInput(selectedTextHighlightColor, "#1f49ff")}
                   onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
                   disabled={disabled}
                 />
@@ -612,7 +623,7 @@ export function SettingsPanel({
               <input
                 className="field"
                 type="color"
-                value={activeTextElement.fill}
+                value={normalizeColorForInput(activeTextElement.fill, "#1b1e24")}
                 onChange={(event) => onSelectedTextColorChange(event.target.value)}
                 disabled={disabled}
               />

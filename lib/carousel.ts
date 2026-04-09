@@ -1930,11 +1930,24 @@ function resolveLikelyManagedTitle(slide: Slide) {
   );
 }
 
+function isLegacyAccentMetaKey(metaKey: string | undefined) {
+  if (!metaKey) {
+    return false;
+  }
+  const normalized = metaKey.toLowerCase();
+  return (
+    normalized === "managed-title-accent-chip" ||
+    normalized === "managed-title-accent-text" ||
+    normalized.includes("accent-chip") ||
+    normalized.includes("accent-text")
+  );
+}
+
 function isLegacyAccentChipShape(element: CanvasElement, slide?: Slide): element is ShapeElement {
   if (element.type !== "shape") {
     return false;
   }
-  if (element.metaKey === "managed-title-accent-chip") {
+  if (isLegacyAccentMetaKey(element.metaKey)) {
     return true;
   }
   if (element.metaKey) {
@@ -1966,8 +1979,11 @@ function isLikelyLegacyAccentTextElement(
   titleText: string,
   titleElement: TextElement | null
 ) {
-  if (element.type !== "text" || element.metaKey) {
+  if (element.type !== "text") {
     return false;
+  }
+  if (element.metaKey) {
+    return isLegacyAccentMetaKey(element.metaKey);
   }
 
   const compact = (typeof element.text === "string" ? element.text : "")
@@ -2071,7 +2087,7 @@ function isLikelyDuplicatedManagedTextElement(
 }
 
 function isLegacyAccentArtifact(element: CanvasElement) {
-  if (element.type === "text" && element.metaKey === "managed-title-accent-text") {
+  if (element.type === "text" && isLegacyAccentMetaKey(element.metaKey)) {
     return true;
   }
 

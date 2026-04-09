@@ -93,6 +93,19 @@ const LEGACY_ACCENT_CHIP_HEX_COLORS = new Set([
   "#ff2a2a"
 ]);
 
+function isLegacyAccentMetaKey(metaKey: string | undefined) {
+  if (!metaKey) {
+    return false;
+  }
+  const normalized = metaKey.toLowerCase();
+  return (
+    normalized === "managed-title-accent-chip" ||
+    normalized === "managed-title-accent-text" ||
+    normalized.includes("accent-chip") ||
+    normalized.includes("accent-text")
+  );
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
 }
@@ -587,7 +600,7 @@ function shouldHideLegacyAccentChip(element: CanvasElement, slide?: Slide) {
   if (element.type !== "shape") {
     return false;
   }
-  if (element.metaKey === "managed-title-accent-chip") {
+  if (isLegacyAccentMetaKey(element.metaKey)) {
     return true;
   }
   if (element.metaKey) {
@@ -628,8 +641,11 @@ function shouldHideLegacyAccentText(
   titleText: string,
   titleElement: TextElement | null
 ) {
-  if (element.type !== "text" || element.metaKey) {
+  if (element.type !== "text") {
     return false;
+  }
+  if (element.metaKey) {
+    return isLegacyAccentMetaKey(element.metaKey);
   }
 
   const compact = element.text.replace(/\s+/gu, " ").trim();
@@ -1364,10 +1380,7 @@ export function SlideStage({
               return false;
             }
             if (showSlideBadge) {
-              if (element.metaKey === "managed-title-accent-text") {
-                return false;
-              }
-              if (element.metaKey === "managed-title-accent-chip") {
+              if (isLegacyAccentMetaKey(element.metaKey)) {
                 return false;
               }
               return true;
@@ -1375,8 +1388,7 @@ export function SlideStage({
             return (
               element.metaKey !== "slide-chip" &&
               element.metaKey !== "slide-chip-text" &&
-              element.metaKey !== "managed-title-accent-text" &&
-              element.metaKey !== "managed-title-accent-chip"
+              !isLegacyAccentMetaKey(element.metaKey)
             );
           })
           .filter((element) => {

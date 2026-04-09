@@ -98,6 +98,7 @@ const LEGACY_ACCENT_CHIP_HEX_COLORS = new Set([
   "#ff6b3d",
   "#ff2a2a"
 ]);
+const HEX_COLOR_INPUT_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 type EditableTextTargetRole = "title" | "body";
 type MobileColorSchemeMode = "single" | "double";
 type GridDecorationMode = "full" | "vertical" | "dots";
@@ -774,7 +775,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return;
     }
     if (firstRange.color) {
-      setSelectedTextHighlightColorOverride(firstRange.color);
+      setSelectedTextHighlightColorOverride(normalizeColorForInput(firstRange.color, DEFAULT_HIGHLIGHT_COLOR));
     }
     if (Number.isFinite(firstRange.opacity)) {
       setSelectedTextHighlightOpacityOverride(
@@ -2058,9 +2059,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     return normalizedSelection;
   };
 
-  const selectedHighlightColor =
+  const selectedHighlightColor = normalizeColorForInput(
     effectiveSelectedTextElement?.highlights?.find((range) => range.end > range.start)?.color ??
-    selectedTextHighlightColorOverride;
+      selectedTextHighlightColorOverride,
+    DEFAULT_HIGHLIGHT_COLOR
+  );
   const selectedHighlightOpacity =
     effectiveSelectedTextElement?.highlights?.find((range) => range.end > range.start)?.opacity ??
     selectedTextHighlightOpacityOverride;
@@ -3537,6 +3540,16 @@ function normalizeAccentToken(value: string) {
     .trim();
 }
 
+function normalizeColorForInput(value: string | undefined, fallback: string) {
+  const normalized = (value ?? "").trim();
+  if (HEX_COLOR_INPUT_RE.test(normalized)) {
+    return normalized.length === 4
+      ? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
+      : normalized;
+  }
+  return fallback;
+}
+
 function resolveLikelyManagedTitle(slide: Slide) {
   return (
     slide.elements.find(
@@ -3682,11 +3695,24 @@ function isLikelyDuplicatedManagedTextElement(
   return checkAgainst(preferredTitle) || checkAgainst(preferredBody);
 }
 
+function isLegacyAccentMetaKey(metaKey: string | undefined) {
+  if (!metaKey) {
+    return false;
+  }
+  const normalized = metaKey.toLowerCase();
+  return (
+    normalized === "managed-title-accent-chip" ||
+    normalized === "managed-title-accent-text" ||
+    normalized.includes("accent-chip") ||
+    normalized.includes("accent-text")
+  );
+}
+
 function isLegacyAccentChipShape(element: CanvasElement, slide?: Slide): element is ShapeElement {
   if (element.type !== "shape") {
     return false;
   }
-  if (element.metaKey === "managed-title-accent-chip") {
+  if (isLegacyAccentMetaKey(element.metaKey)) {
     return true;
   }
   if (element.metaKey) {
@@ -3721,8 +3747,11 @@ function isLikelyLegacyAccentTextElement(
   titleText: string,
   titleElement: TextElement | null
 ) {
-  if (element.type !== "text" || element.metaKey) {
+  if (element.type !== "text") {
     return false;
+  }
+  if (element.metaKey) {
+    return isLegacyAccentMetaKey(element.metaKey);
   }
 
   const compact = element.text.replace(/\s+/gu, " ").trim();
@@ -3839,7 +3868,7 @@ function stripLegacyAccentArtifactsFromSlide(slide: Slide): Slide {
       ) {
         return false;
       }
-      if (element.metaKey === "managed-title-accent-chip" || element.metaKey === "managed-title-accent-text") {
+      if (isLegacyAccentMetaKey(element.metaKey)) {
         return false;
       }
       if (isLegacyAccentChipShape(element, slide)) {
