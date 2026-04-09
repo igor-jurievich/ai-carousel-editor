@@ -101,8 +101,12 @@ function isLegacyAccentMetaKey(metaKey: string | undefined) {
   return (
     normalized === "managed-title-accent-chip" ||
     normalized === "managed-title-accent-text" ||
+    normalized.includes("accent-highlight") ||
+    normalized.includes("highlight-chip") ||
     normalized.includes("accent-chip") ||
-    normalized.includes("accent-text")
+    normalized.includes("accent-text") ||
+    normalized.includes("title-accent") ||
+    normalized.includes("highlight")
   );
 }
 
@@ -209,6 +213,68 @@ function resolvePreferredManagedTextByMeta(slide: Slide, metaKey: "managed-title
     }
     return left.y - right.y;
   })[0];
+}
+
+function resolveRectOverlapRatio(left: TextElement, right: TextElement) {
+  const leftX2 = left.x + left.width;
+  const leftY2 = left.y + left.height;
+  const rightX2 = right.x + right.width;
+  const rightY2 = right.y + right.height;
+  const overlapWidth = Math.max(0, Math.min(leftX2, rightX2) - Math.max(left.x, right.x));
+  const overlapHeight = Math.max(0, Math.min(leftY2, rightY2) - Math.max(left.y, right.y));
+  if (overlapWidth <= 0 || overlapHeight <= 0) {
+    return 0;
+  }
+  const overlapArea = overlapWidth * overlapHeight;
+  const minArea = Math.max(1, Math.min(left.width * left.height, right.width * right.height));
+  return overlapArea / minArea;
+}
+
+function isLikelyDuplicatedManagedTextElement(
+  element: CanvasElement,
+  preferredTitle: TextElement | null,
+  preferredBody: TextElement | null
+) {
+  if (element.type !== "text" || element.metaKey) {
+    return false;
+  }
+
+  const normalizedElementText = normalizeLegacyToken(element.text);
+  if (!normalizedElementText || normalizedElementText.length < 8) {
+    return false;
+  }
+
+  const checkAgainst = (managed: TextElement | null) => {
+    if (!managed) {
+      return false;
+    }
+    const normalizedManagedText = normalizeLegacyToken(managed.text);
+    if (!normalizedManagedText || normalizedManagedText.length < 8) {
+      return false;
+    }
+
+    const sameOrNested =
+      normalizedManagedText === normalizedElementText ||
+      normalizedManagedText.includes(normalizedElementText) ||
+      normalizedElementText.includes(normalizedManagedText);
+    if (!sameOrNested) {
+      return false;
+    }
+
+    const overlapRatio = resolveRectOverlapRatio(element, managed);
+    if (overlapRatio >= 0.42) {
+      return true;
+    }
+
+    const nearSameBlock =
+      Math.abs(element.x - managed.x) <= Math.max(56, managed.width * 0.18) &&
+      Math.abs(element.y - managed.y) <= Math.max(64, managed.height * 0.38) &&
+      Math.abs(element.width - managed.width) <= Math.max(96, managed.width * 0.34);
+
+    return nearSameBlock;
+  };
+
+  return checkAgainst(preferredTitle) || checkAgainst(preferredBody);
 }
 
 function resolveSafeArea(canvasWidth: number, canvasHeight: number, stageWidth: number): SafeArea {
@@ -582,11 +648,25 @@ function resolveHighlightRects(element: TextElement): TextHighlightRect[] {
         continue;
       }
 
+      const rawX = alignOffset + measureLineWidth(prefix, element) - padX;
+      const rawY = baseY - padY;
+      const rawWidth = width + padX * 2;
+      const rawHeight = fontHeight + padY * 2;
+      const clippedX = Math.max(0, rawX);
+      const clippedY = Math.max(0, rawY);
+      const clippedRight = Math.min(element.width, rawX + rawWidth);
+      const clippedBottom = Math.min(element.height, rawY + rawHeight);
+      const clippedWidth = clippedRight - clippedX;
+      const clippedHeight = clippedBottom - clippedY;
+      if (clippedWidth <= 1 || clippedHeight <= 1) {
+        continue;
+      }
+
       rects.push({
-        x: Math.round(alignOffset + measureLineWidth(prefix, element) - padX),
-        y: Math.round(baseY - padY),
-        width: Math.round(width + padX * 2),
-        height: Math.round(fontHeight + padY * 2),
+        x: Math.round(clippedX),
+        y: Math.round(clippedY),
+        width: Math.round(clippedWidth),
+        height: Math.round(clippedHeight),
         color: range.color,
         opacity: Math.max(0.08, Math.min(1, range.opacity ?? 0.94))
       });
@@ -1017,7 +1097,16 @@ function SlideTextNode({
 
   return (
     <Group>
-      <Group x={element.x} y={element.y} rotation={element.rotation} listening={false}>
+      <Group
+        x={element.x}
+        y={element.y}
+        rotation={element.rotation}
+        listening={false}
+        clipX={0}
+        clipY={0}
+        clipWidth={Math.max(1, element.width)}
+        clipHeight={Math.max(1, element.height)}
+      >
         {highlightRects.map((rect, index) => (
           <Rect
             key={`${element.id}-hl-${index}`}
@@ -1189,10 +1278,14 @@ export function SlideStage({
     () =>
       new Set(
         slide.elements
-          .filter((element) => shouldHideLegacyAccentText(element, legacyChipRects, titleText, likelyTitleElement))
+          .filter(
+            (element) =>
+              shouldHideLegacyAccentText(element, legacyChipRects, titleText, likelyTitleElement) ||
+              isLikelyDuplicatedManagedTextElement(element, preferredManagedTitle, preferredManagedBody)
+          )
           .map((element) => element.id)
       ),
-    [legacyChipRects, likelyTitleElement, slide.elements, titleText]
+    [legacyChipRects, likelyTitleElement, preferredManagedBody, preferredManagedTitle, slide.elements, titleText]
   );
 
   const handleTransformEnd = (element: CanvasElement, node: Konva.Node) => {

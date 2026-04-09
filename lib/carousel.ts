@@ -1938,8 +1938,12 @@ function isLegacyAccentMetaKey(metaKey: string | undefined) {
   return (
     normalized === "managed-title-accent-chip" ||
     normalized === "managed-title-accent-text" ||
+    normalized.includes("accent-highlight") ||
+    normalized.includes("highlight-chip") ||
     normalized.includes("accent-chip") ||
-    normalized.includes("accent-text")
+    normalized.includes("accent-text") ||
+    normalized.includes("title-accent") ||
+    normalized.includes("highlight")
   );
 }
 
@@ -2080,7 +2084,17 @@ function isLikelyDuplicatedManagedTextElement(
     if (!sameOrNested) {
       return false;
     }
-    return resolveRectOverlapRatio(element, managed) >= 0.58;
+    const overlapRatio = resolveRectOverlapRatio(element, managed);
+    if (overlapRatio >= 0.42) {
+      return true;
+    }
+
+    const nearSameBlock =
+      Math.abs(element.x - managed.x) <= Math.max(56, managed.width * 0.18) &&
+      Math.abs(element.y - managed.y) <= Math.max(64, managed.height * 0.38) &&
+      Math.abs(element.width - managed.width) <= Math.max(96, managed.width * 0.34);
+
+    return nearSameBlock;
   };
 
   return checkAgainst(managedTitle) || checkAgainst(managedBody);
