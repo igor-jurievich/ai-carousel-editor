@@ -1137,6 +1137,48 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           previous.fill !== next.fill);
 
       if (shouldReflowManagedText) {
+        const managedTextSnapshot = new Map<
+          string,
+          Pick<
+            TextElement,
+            | "x"
+            | "y"
+            | "width"
+            | "fontSize"
+            | "fontFamily"
+            | "fontStyle"
+            | "fill"
+            | "align"
+            | "lineHeight"
+            | "letterSpacing"
+            | "textDecoration"
+            | "highlights"
+          >
+        >();
+
+        nextElements.forEach((element) => {
+          if (
+            element.type === "text" &&
+            element.metaKey &&
+            MANAGED_TEXT_META_KEYS.has(element.metaKey)
+          ) {
+            managedTextSnapshot.set(element.metaKey, {
+              x: element.x,
+              y: element.y,
+              width: element.width,
+              fontSize: element.fontSize,
+              fontFamily: element.fontFamily,
+              fontStyle: element.fontStyle,
+              fill: element.fill,
+              align: element.align,
+              lineHeight: element.lineHeight,
+              letterSpacing: element.letterSpacing,
+              textDecoration: element.textDecoration,
+              highlights: normalizeHighlightRangesForText(element.highlights, element.text)
+            });
+          }
+        });
+
         const rebuiltSlide = applyTemplateToSlide(
           {
             ...slide,
@@ -1148,28 +1190,31 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           slideFormat
         );
         const rebuiltWithPinnedPosition = rebuiltSlide.elements.map((element) => {
-          if (
-            element.type !== "text" ||
-            next.type !== "text" ||
-            element.metaKey !== next.metaKey
-          ) {
+          if (element.type !== "text" || !element.metaKey) {
+            return element;
+          }
+
+          const snapshot = managedTextSnapshot.get(element.metaKey);
+          if (!snapshot) {
             return element;
           }
 
           return {
             ...element,
-            x: next.x,
-            y: next.y,
-            // Keep visual style/position from edited element, but keep rebuilt auto-height.
-            fontSize: next.fontSize,
-            fontFamily: next.fontFamily,
-            fontStyle: next.fontStyle,
-            fill: next.fill,
-            align: next.align,
-            lineHeight: next.lineHeight,
-            letterSpacing: next.letterSpacing,
-            textDecoration: next.textDecoration,
-            highlights: normalizeHighlightRangesForText(next.highlights, next.text)
+            x: snapshot.x,
+            y: snapshot.y,
+            width: snapshot.width,
+            // Keep visual style/position from all managed text elements,
+            // while preserving rebuilt auto-height/content.
+            fontSize: snapshot.fontSize,
+            fontFamily: snapshot.fontFamily,
+            fontStyle: snapshot.fontStyle,
+            fill: snapshot.fill,
+            align: snapshot.align,
+            lineHeight: snapshot.lineHeight,
+            letterSpacing: snapshot.letterSpacing,
+            textDecoration: snapshot.textDecoration,
+            highlights: snapshot.highlights
           };
         });
 
@@ -4114,13 +4159,44 @@ async function fileToDataUrl(file: File) {
 
 async function fileToOptimizedDataUrl(file: File) {
   const original = await fileToDataUrl(file);
+  let best = original;
 
-  try {
-    const optimized = await downscaleDataUrl(original, 1800);
-    return optimized.length < original.length ? optimized : original;
-  } catch {
-    return original;
+  const candidates: Array<{ maxSide: number; format: "webp" | "jpeg"; quality: number }> = [
+    { maxSide: 1600, format: "webp", quality: 0.84 },
+    { maxSide: 1280, format: "webp", quality: 0.78 },
+    { maxSide: 1024, format: "webp", quality: 0.72 },
+    { maxSide: 1024, format: "jpeg", quality: 0.76 }
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const optimized = await downscaleDataUrl(
+        best,
+        candidate.maxSide,
+        candidate.format,
+        candidate.quality
+      );
+      if (optimized.length < best.length) {
+        best = optimized;
+      }
+    } catch {
+      // keep current best result
+    }
   }
+
+  // Hard cap for browser localStorage friendliness (roughly 350-400KB base64 payload).
+  if (best.length > 520_000) {
+    try {
+      const forced = await downscaleDataUrl(best, 900, "jpeg", 0.68);
+      if (forced.length < best.length) {
+        best = forced;
+      }
+    } catch {
+      // keep current best result
+    }
+  }
+
+  return best;
 }
 
 async function dataUrlToBlob(dataUrl: string) {
@@ -4176,15 +4252,19 @@ function transformTextCase(
   return value;
 }
 
-async function downscaleDataUrl(dataUrl: string, maxSide: number) {
+async function downscaleDataUrl(
+  dataUrl: string,
+  maxSide: number,
+  format: "webp" | "jpeg" = "webp",
+  quality = 0.82
+) {
   const image = await loadHtmlImage(dataUrl);
   const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
-
-  if (!longestSide || longestSide <= maxSide) {
+  if (!longestSide) {
     return dataUrl;
   }
 
-  const ratio = maxSide / longestSide;
+  const ratio = longestSide > maxSide ? maxSide / longestSide : 1;
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(image.naturalWidth * ratio);
   canvas.height = Math.round(image.naturalHeight * ratio);
@@ -4195,9 +4275,9 @@ async function downscaleDataUrl(dataUrl: string, maxSide: number) {
   }
 
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-  const webp = canvas.toDataURL("image/webp", 0.88);
-  return webp.startsWith("data:image/webp") ? webp : dataUrl;
+  const mime = format === "jpeg" ? "image/jpeg" : "image/webp";
+  const encoded = canvas.toDataURL(mime, quality);
+  return encoded.startsWith(`data:${mime}`) ? encoded : dataUrl;
 }
 
 async function readImageMeta(dataUrl: string) {
