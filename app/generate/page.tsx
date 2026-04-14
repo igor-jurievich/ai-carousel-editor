@@ -24,12 +24,6 @@ type GenerateResponse = {
 };
 
 const MAX_TOPIC_CHARS = 4000;
-const PRESET_TOPICS = [
-  "Лайки есть — заявок нет: почему и что изменить",
-  "3 ошибки эксперта в карусели, из-за которых не дочитывают",
-  "Как упаковать кейс в 9 слайдов без воды",
-  "Ответы на частые возражения в нише услуг"
-];
 
 export default function GeneratePage() {
   const router = useRouter();
@@ -264,7 +258,7 @@ export default function GeneratePage() {
             <span className={styles.kicker}>AI CAROUSEL EDITOR</span>
             <h1 className={styles.heroTitle}>Давай соберём крутую карусель</h1>
             <p className={styles.heroSubtitle}>
-              Напиши мысль, тему или контекст. Уточнения можно открыть кнопкой «+».
+              Напиши мысль, тему или контекст. Всё лишнее убрали, уточнения открываются по «+».
             </p>
           </div>
 
@@ -396,23 +390,7 @@ export default function GeneratePage() {
             ) : null}
           </div>
 
-          <div className={styles.presetsRow}>
-            {PRESET_TOPICS.map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                className={styles.presetChip}
-                onClick={() => setTopic(preset)}
-                disabled={isGenerating}
-              >
-                {preset}
-              </button>
-            ))}
-          </div>
-
-          <div className={`${styles.status} ${error ? styles.statusError : ""}`}>
-            {error ? error : "Сначала сгенерируйте карусель, затем откройте проект в редакторе."}
-          </div>
+          {error ? <div className={`${styles.status} ${styles.statusError}`}>{error}</div> : null}
         </header>
 
         {previewList.length ? (

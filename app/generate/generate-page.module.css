@@ -1,23 +1,19 @@
 .page {
-  padding-top: 12px;
+  padding-top: 28px;
   padding-bottom: 28px;
 }
 
 .layout {
-  width: min(1060px, 100%);
+  width: min(980px, 100%);
   margin: 0 auto;
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .hero {
   display: grid;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 22px;
-  border: 1px solid rgba(187, 211, 205, 0.9);
-  background: linear-gradient(160deg, rgba(247, 251, 250, 0.96) 0%, rgba(241, 248, 247, 0.98) 100%);
-  box-shadow: 0 14px 28px rgba(21, 54, 50, 0.08);
+  gap: 14px;
+  padding: 0;
 }
 
 .heroTop {
@@ -39,7 +35,7 @@
 
 .heroTitle {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 2.8rem);
+  font-size: clamp(2rem, 4vw, 3rem);
   line-height: 1.03;
   letter-spacing: -0.02em;
   color: #1e252d;
@@ -56,7 +52,7 @@
 
 .chatComposer {
   position: relative;
-  width: min(920px, 100%);
+  width: min(900px, 100%);
   margin: 0 auto;
 }
 
@@ -65,12 +61,12 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
   gap: 8px;
-  min-height: 64px;
-  padding: 8px;
-  border-radius: 20px;
-  border: 1px solid rgba(187, 205, 202, 0.95);
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 8px 20px rgba(25, 56, 52, 0.08);
+  min-height: 68px;
+  padding: 9px;
+  border-radius: 24px;
+  border: 1px solid rgba(195, 211, 208, 0.96);
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(25, 56, 52, 0.06);
 }
 
 .plusButton {
@@ -215,11 +211,10 @@
 }
 
 .status {
-  grid-column: 1 / -1;
   border-radius: 14px;
-  border: 1px solid rgba(183, 213, 207, 0.9);
-  background: rgba(228, 247, 242, 0.9);
-  color: #215850;
+  border: 1px solid rgba(232, 142, 142, 0.85);
+  background: rgba(255, 240, 240, 0.94);
+  color: #892f2f;
   font-size: 12px;
   line-height: 1.35;
   font-weight: 700;
@@ -228,8 +223,6 @@
 
 .statusError {
   border-color: rgba(232, 142, 142, 0.85);
-  background: rgba(255, 240, 240, 0.94);
-  color: #892f2f;
 }
 
 .previewCard {
@@ -347,7 +340,7 @@
 @media (max-width: 768px) {
   .page {
     padding-inline: 8px;
-    padding-top: 8px;
+    padding-top: 14px;
   }
 
   .layout {
@@ -355,8 +348,6 @@
   }
 
   .hero {
-    padding: 10px;
-    border-radius: 16px;
     gap: 10px;
   }
 
@@ -375,7 +366,7 @@
   }
 
   .chatBar {
-    border-radius: 16px;
+    border-radius: 18px;
     min-height: 58px;
     gap: 6px;
     padding: 7px;
@@ -409,12 +400,10 @@
   }
 
   .advancedGrid,
-  .presetsRow,
   .previewActions {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .presetChip,
   .primaryAction,
   .secondaryAction {
     min-height: 44px;
