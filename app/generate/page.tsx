@@ -255,10 +255,9 @@ export default function GeneratePage() {
       <div className={styles.layout}>
         <header className={styles.hero}>
           <div className={styles.heroTop}>
-            <span className={styles.kicker}>AI CAROUSEL EDITOR</span>
-            <h1 className={styles.heroTitle}>Давай соберём крутую карусель</h1>
+            <h1 className={styles.heroTitle}>Соберём карусель</h1>
             <p className={styles.heroSubtitle}>
-              Напиши мысль, тему или контекст. Всё лишнее убрали, уточнения открываются по «+».
+              Опиши тему одним сообщением. Уточнения — по кнопке «+».
             </p>
           </div>
 
@@ -305,7 +304,7 @@ export default function GeneratePage() {
 
             {isAdvancedOpen ? (
               <section className={styles.advancedPopover} aria-label="Уточнение генерации">
-                <div className={styles.advancedHead}>Уточнить генерацию</div>
+                <div className={styles.advancedHead}>Уточнения генерации</div>
                 <div className={styles.advancedGrid}>
                   <label className={styles.fieldLabel}>
                     Ниша
