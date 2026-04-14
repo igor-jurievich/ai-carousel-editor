@@ -1,13 +1,24 @@
 .page {
-  padding-top: 56px;
-  padding-bottom: 32px;
+  min-height: 100svh;
+  padding-top: 28px;
+  padding-bottom: 28px;
+  background: radial-gradient(circle at 20% 0%, #f5fbff 0%, #f8fbff 35%, #ffffff 100%);
 }
 
 .layout {
-  width: min(920px, 100%);
+  width: min(720px, 100%);
   margin: 0 auto;
   display: grid;
   gap: 20px;
+}
+
+.layoutStart {
+  min-height: calc(100svh - 56px);
+  align-content: center;
+}
+
+.layoutWithPreview {
+  align-content: start;
 }
 
 .hero {
@@ -25,19 +36,20 @@
 
 .heroTitle {
   margin: 0;
-  font-size: clamp(2.1rem, 5vw, 3.2rem);
-  line-height: 1.02;
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  line-height: 0.98;
   letter-spacing: -0.03em;
   color: #1f2937;
+  font-weight: 900;
 }
 
 .heroSubtitle {
   margin: 0;
-  color: #6b7280;
-  font-size: 15px;
+  color: #64748b;
+  font-size: 16px;
   line-height: 1.4;
-  font-weight: 500;
-  max-width: 720px;
+  font-weight: 600;
+  max-width: 660px;
 }
 
 .chatComposer {
@@ -51,12 +63,12 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
   gap: 8px;
-  min-height: 66px;
+  min-height: 80px;
   padding: 8px;
   border-radius: 22px;
   border: 1px solid #d1d5db;
   background: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 22px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 12px 30px rgba(30, 64, 175, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
 }
 
 .plusButton {
@@ -85,7 +97,7 @@
 
 .chatInput {
   width: 100%;
-  min-height: 50px;
+  min-height: 80px;
   max-height: 220px;
   resize: none;
   border: none;
@@ -110,8 +122,8 @@
   font-size: 22px;
   font-weight: 800;
   line-height: 0;
-  background: #111827;
-  box-shadow: 0 8px 16px rgba(17, 24, 39, 0.2);
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  box-shadow: 0 10px 18px rgba(79, 70, 229, 0.28);
 }
 
 .sendButton:disabled {
@@ -126,9 +138,9 @@
   right: 0;
   z-index: 20;
   border-radius: 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #dbe5f3;
   background: #ffffff;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 18px 36px rgba(30, 64, 175, 0.14);
   overflow: hidden;
 }
 
@@ -138,9 +150,9 @@
   align-items: center;
   padding: 0 14px;
   border-bottom: 1px solid #e5e7eb;
-  color: #1f2937;
+  color: #1e293b;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .advancedGrid {
@@ -153,25 +165,29 @@
 .fieldLabel {
   display: grid;
   gap: 5px;
-  color: #4b5563;
+  color: #334155;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .field {
-  min-height: 40px;
+  min-height: 48px;
   border-radius: 10px;
   border: 1px solid #d1d5db;
   background: #ffffff;
   color: #111827;
   font-size: 14px;
-  padding: 0 12px;
+  padding: 0 14px;
   outline: none;
 }
 
 .field:focus {
   border-color: #9ca3af;
   box-shadow: 0 0 0 3px rgba(156, 163, 175, 0.18);
+}
+
+.field::placeholder {
+  color: #94a3b8;
 }
 
 .status {
@@ -191,9 +207,9 @@
 
 .previewCard {
   border-radius: 20px;
-  border: 1px solid rgba(187, 208, 204, 0.92);
-  background: rgba(251, 253, 253, 0.96);
-  box-shadow: 0 12px 28px rgba(21, 54, 50, 0.07);
+  border: 1px solid rgba(219, 229, 243, 0.92);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 10px 24px rgba(30, 64, 175, 0.08);
   padding: 14px;
   display: grid;
   gap: 12px;
@@ -301,14 +317,27 @@
   font-weight: 600;
 }
 
+.signature {
+  margin: 0;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+}
+
 @media (max-width: 768px) {
   .page {
     padding-inline: 8px;
-    padding-top: 18px;
+    padding-top: 14px;
   }
 
   .layout {
     gap: 12px;
+  }
+
+  .layoutStart {
+    min-height: calc(100svh - 28px);
   }
 
   .hero {
@@ -322,7 +351,7 @@
   }
 
   .heroTitle {
-    font-size: clamp(1.9rem, 8vw, 2.4rem);
+    font-size: clamp(1.9rem, 9vw, 2.65rem);
   }
 
   .heroSubtitle {
@@ -352,7 +381,7 @@
   }
 
   .chatInput {
-    min-height: 48px;
+    min-height: 80px;
     font-size: 15px;
     padding-top: 9px;
   }

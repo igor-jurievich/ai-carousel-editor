@@ -76,7 +76,7 @@ export default function GeneratePage() {
     }
 
     input.style.height = "0px";
-    input.style.height = `${Math.min(220, Math.max(52, input.scrollHeight))}px`;
+    input.style.height = `${Math.min(220, Math.max(80, input.scrollHeight))}px`;
   }, [topic]);
 
   useEffect(() => {
@@ -252,13 +252,11 @@ export default function GeneratePage() {
 
   return (
     <main className={`page-shell ${styles.page}`}>
-      <div className={styles.layout}>
+      <div className={`${styles.layout} ${previewList.length ? styles.layoutWithPreview : styles.layoutStart}`}>
         <header className={styles.hero}>
           <div className={styles.heroTop}>
-            <h1 className={styles.heroTitle}>Соберём карусель</h1>
-            <p className={styles.heroSubtitle}>
-              Опиши тему одним сообщением. Уточнения — по кнопке «+».
-            </p>
+            <h1 className={styles.heroTitle}>Один промпт. Готовая карусель.</h1>
+            <p className={styles.heroSubtitle}>Опиши тему одним сообщением — AI соберёт слайды, хук и структуру.</p>
           </div>
 
           <div className={styles.chatComposer} ref={composerRef}>
@@ -284,7 +282,7 @@ export default function GeneratePage() {
                     void handleGenerate();
                   }
                 }}
-                placeholder="Опиши идею для карусели: тема, контекст, задача, что важно подсветить..."
+                placeholder="Например: 5 ошибок в рекламе недвижимости которые сжигают бюджет..."
                 rows={1}
                 maxLength={MAX_TOPIC_CHARS}
                 className={styles.chatInput}
@@ -304,26 +302,28 @@ export default function GeneratePage() {
 
             {isAdvancedOpen ? (
               <section className={styles.advancedPopover} aria-label="Уточнение генерации">
-                <div className={styles.advancedHead}>Уточнения генерации</div>
+                <div className={styles.advancedHead}>Настройки</div>
                 <div className={styles.advancedGrid}>
                   <label className={styles.fieldLabel}>
-                    Ниша
+                    🎯 Ниша
                     <input
                       className={styles.field}
                       value={niche}
                       onChange={(event) => setNiche(event.target.value)}
+                      placeholder="Например: недвижимость, фитнес, образование"
                     />
                   </label>
                   <label className={styles.fieldLabel}>
-                    Целевая аудитория
+                    👥 Целевая аудитория
                     <input
                       className={styles.field}
                       value={audience}
                       onChange={(event) => setAudience(event.target.value)}
+                      placeholder="Например: собственники 25–40, эксперты, маркетологи"
                     />
                   </label>
                   <label className={styles.fieldLabel}>
-                    Тон
+                    🎨 Тон
                     <select
                       className={styles.field}
                       value={tone}
@@ -335,7 +335,7 @@ export default function GeneratePage() {
                     </select>
                   </label>
                   <label className={styles.fieldLabel}>
-                    Цель
+                    🚀 Цель
                     <select
                       className={styles.field}
                       value={goal}
@@ -347,7 +347,7 @@ export default function GeneratePage() {
                     </select>
                   </label>
                   <label className={styles.fieldLabel}>
-                    Формат
+                    📐 Формат
                     <select
                       className={styles.field}
                       value={format}
@@ -359,7 +359,7 @@ export default function GeneratePage() {
                     </select>
                   </label>
                   <label className={styles.fieldLabel}>
-                    Тема
+                    🌗 Тема
                     <select
                       className={styles.field}
                       value={theme}
@@ -371,7 +371,7 @@ export default function GeneratePage() {
                     </select>
                   </label>
                   <label className={styles.fieldLabel}>
-                    Количество карточек
+                    🧩 Количество карточек
                     <select
                       className={styles.field}
                       value={slidesCount}
@@ -430,6 +430,8 @@ export default function GeneratePage() {
             </div>
           </section>
         ) : null}
+
+        <p className={styles.signature}>pastello.io — AI carousel generator</p>
       </div>
     </main>
   );
