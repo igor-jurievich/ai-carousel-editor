@@ -212,11 +212,11 @@
 }
 
 .previewCard {
-  border-radius: 20px;
-  border: 1px solid rgba(219, 229, 243, 0.92);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 10px 24px rgba(30, 64, 175, 0.08);
-  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  padding: 24px;
   display: grid;
   gap: 12px;
 }
@@ -231,17 +231,20 @@
 .previewHead h3 {
   margin: 0;
   font-size: 18px;
-  color: #1f262f;
+  font-weight: 600;
+  color: #1a1a2e;
+  font-family: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
 }
 
 .previewCount {
-  border-radius: 999px;
-  border: 1px solid rgba(189, 208, 204, 0.95);
-  background: rgba(243, 249, 248, 0.95);
-  color: #446067;
+  border-radius: 20px;
+  border: none;
+  background: #f0f4ff;
+  color: #6366f1;
   font-size: 12px;
-  font-weight: 800;
-  padding: 6px 10px;
+  font-weight: 600;
+  padding: 4px 12px;
 }
 
 .previewList {
@@ -251,25 +254,26 @@
 
 .previewItem {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: start;
   gap: 10px;
-  padding: 9px 10px;
+  padding: 12px 16px;
   border-radius: 12px;
-  border: 1px solid rgba(197, 214, 210, 0.86);
-  background: rgba(245, 249, 249, 0.94);
+  border: 1px solid #f0f0f0;
+  background: #fafafe;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
 .previewIndex {
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: rgba(203, 239, 232, 0.9);
-  color: #2f6661;
+  background: #6366f1;
+  color: #ffffff;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .previewCopy {
@@ -278,14 +282,14 @@
 }
 
 .previewCopy strong {
-  color: #1f262e;
-  font-size: 13px;
+  color: #1a1a2e;
+  font-size: 14px;
   line-height: 1.35;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .previewCopy span {
-  color: #60707a;
+  color: #9ca3af;
   font-size: 12px;
   text-transform: lowercase;
 }
@@ -306,21 +310,21 @@
 
 .primaryAction {
   border: none;
-  color: #f4fffd;
-  background: linear-gradient(135deg, #52c8bb 0%, #38b1a4 100%);
+  color: #ffffff;
+  background: #6366f1;
 }
 
 .secondaryAction {
-  border: 1px solid rgba(188, 205, 202, 0.95);
+  border: 1px solid #e5e7eb;
   background: #ffffff;
-  color: #365056;
+  color: #1a1a2e;
 }
 
 .previewHint {
-  color: #5f6d77;
+  color: #9ca3af;
   font-size: 12px;
   line-height: 1.4;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .signature {
@@ -411,6 +415,6 @@
 
   .previewCard {
     border-radius: 16px;
-    padding: 10px;
+    padding: 16px;
   }
 }
