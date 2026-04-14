@@ -338,8 +338,7 @@
 
 @media (max-width: 768px) {
   .page {
-    padding-inline: 8px;
-    padding-top: 14px;
+    padding: 0 20px;
   }
 
   .layout {
@@ -347,7 +346,8 @@
   }
 
   .layoutStart {
-    min-height: calc(100svh - 28px);
+    min-height: 100svh;
+    align-content: center;
   }
 
   .hero {
@@ -361,19 +361,24 @@
   }
 
   .heroTitle {
-    font-size: clamp(1.9rem, 9vw, 2.65rem);
-    white-space: normal;
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 1.08;
+    white-space: nowrap;
   }
 
   .heroSubtitle {
-    font-size: 13px;
+    margin-top: 8px;
+    font-size: 14px;
+    color: #6b7280;
   }
 
   .chatBar {
+    width: 100%;
     border-radius: 18px;
-    min-height: 58px;
+    min-height: 80px;
     gap: 6px;
-    padding: 7px;
+    padding: 16px;
   }
 
   .plusButton,
@@ -394,7 +399,8 @@
   .chatInput {
     min-height: 80px;
     font-size: 15px;
-    padding-top: 9px;
+    width: 100%;
+    padding: 16px 8px 12px;
   }
 
   .advancedPopover {

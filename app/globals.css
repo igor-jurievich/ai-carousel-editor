@@ -10,9 +10,9 @@
   --stroke-strong: #bec2cb;
   --text: #1f2329;
   --text-muted: #676d79;
-  --accent: #56cfc2;
-  --accent-strong: #2caea1;
-  --accent-soft: rgba(86, 207, 194, 0.14);
+  --accent: #6366f1;
+  --accent-strong: #6366f1;
+  --accent-soft: rgba(99, 102, 241, 0.14);
   --danger: #dc566b;
   --danger-soft: rgba(220, 86, 107, 0.12);
   --radius-xs: 8px;
@@ -3139,7 +3139,7 @@ button:disabled {
     align-items: center;
     padding: 0 12px;
     border-radius: 999px;
-    background: #56cfc2;
+    background: var(--primary);
     color: #ffffff;
     font-size: 12px;
     font-weight: 500;
@@ -3225,7 +3225,7 @@ button:disabled {
     min-height: 48px;
     border-radius: 16px;
     border: none;
-    background: #56cfc2;
+    background: var(--primary);
     color: #ffffff;
     font-size: 14px;
     font-weight: 600;
@@ -4325,5 +4325,573 @@ button:disabled {
   .mobile-editor-shell .mobile-tool-sheet-v2 .mobile-tool-sheet-body {
     padding: 0 12px 10px !important;
     gap: 8px !important;
+  }
+}
+
+/* ==========================================================================
+   Unified Indigo Theme (Editor + Mobile Editor + Template Modal)
+   Visual-only pass: no logic changes
+   ========================================================================== */
+
+:root {
+  --primary: #6366f1;
+  --primary-light: #f0f4ff;
+  --text-dark: #1a1a2e;
+  --text-gray: #6b7280;
+  --text-light: #9ca3af;
+  --border: #e5e7eb;
+  --bg-main: #fafafe;
+  --bg-white: #ffffff;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+
+  /* compatibility with legacy editor tokens */
+  --accent: #6366f1;
+  --accent-strong: #6366f1;
+  --accent-soft: rgba(99, 102, 241, 0.16);
+  --stroke: #e5e7eb;
+  --stroke-strong: #d1d5db;
+  --surface: #ffffff;
+  --surface-soft: #fafafe;
+  --surface-muted: #f3f4f8;
+}
+
+/* Top shell */
+.editor-shell .prompt-shell {
+  background: var(--bg-white) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow) !important;
+  gap: 12px !important;
+  padding: 12px !important;
+}
+
+.editor-shell .prompt-brand,
+.editor-shell .prompt-composer,
+.editor-shell .prompt-status {
+  background: var(--bg-white) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+}
+
+.editor-shell .prompt-eyebrow {
+  color: var(--primary) !important;
+  font-size: 11px !important;
+  letter-spacing: 1px !important;
+  font-weight: 700 !important;
+}
+
+.editor-shell .prompt-brand h1 {
+  color: var(--text-dark) !important;
+  font-weight: 600 !important;
+}
+
+.editor-shell .prompt-composer textarea {
+  background: var(--bg-white) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--text-dark) !important;
+}
+
+.editor-shell .prompt-composer textarea::placeholder,
+.editor-shell .field::placeholder,
+.editor-shell .textarea::placeholder {
+  color: var(--text-light) !important;
+}
+
+.editor-shell .prompt-status {
+  color: var(--text-gray) !important;
+}
+
+.editor-shell .btn,
+.editor-shell .prompt-generate-btn,
+.editor-shell .settings-card-export .btn {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--primary) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.editor-shell .btn:hover:not(:disabled),
+.editor-shell .prompt-generate-btn:hover:not(:disabled),
+.editor-shell .settings-card-export .btn:hover:not(:disabled) {
+  filter: brightness(1.03);
+}
+
+.editor-shell .btn.secondary {
+  background: #ffffff !important;
+  color: var(--text-dark) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: none !important;
+}
+
+/* Left rail */
+.editor-shell .action-rail {
+  background: var(--bg-white) !important;
+  border: 1px solid var(--border) !important;
+  border-right: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.editor-shell .rail-button {
+  background: #ffffff !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--text-light) !important;
+  box-shadow: none !important;
+}
+
+.editor-shell .rail-button:hover:not(:disabled) {
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+  background: var(--primary-light) !important;
+  box-shadow: none !important;
+}
+
+/* Canvas area */
+.editor-shell .canvas-panel,
+.editor-shell .canvas-workbench,
+.editor-shell .canvas-stage-wrap,
+.editor-shell .canvas-stage {
+  background: var(--bg-main) !important;
+}
+
+.editor-shell .canvas-stage-meta .panel-title {
+  color: var(--text-dark) !important;
+  font-weight: 600 !important;
+}
+
+.editor-shell .canvas-stage-meta .muted {
+  color: var(--text-light) !important;
+}
+
+.editor-shell .status-pill {
+  background: var(--primary-light) !important;
+  color: var(--primary) !important;
+  border: 1px solid transparent !important;
+  border-radius: 20px !important;
+}
+
+.editor-shell .canvas-stage-center {
+  background: var(--bg-white) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.editor-shell .insert-slide-button {
+  background: #ffffff !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text-gray) !important;
+}
+
+.editor-shell .insert-slide-button:hover:not(:disabled) {
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+  background: var(--primary-light) !important;
+}
+
+/* Right sidebar + cards */
+.editor-shell .right-sidebar {
+  background: #ffffff !important;
+  border-left: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow) !important;
+  padding: 10px !important;
+}
+
+.editor-shell .settings-card {
+  background: #ffffff !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.editor-shell .settings-card h3,
+.editor-shell .settings-title {
+  color: var(--text-dark) !important;
+  font-weight: 600 !important;
+}
+
+.editor-shell .settings-hint,
+.editor-shell .field-label,
+.editor-shell .settings-selected-pill {
+  color: var(--text-gray) !important;
+}
+
+.editor-shell .field,
+.editor-shell .select,
+.editor-shell .textarea,
+.editor-shell .color-input,
+.editor-shell input[type="number"] {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  background: #ffffff !important;
+  color: var(--text-dark) !important;
+}
+
+.editor-shell .field:focus-visible,
+.editor-shell .select:focus-visible,
+.editor-shell .textarea:focus-visible,
+.editor-shell .color-input:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.2) !important;
+  outline-offset: 1px !important;
+  border-color: var(--primary) !important;
+}
+
+.editor-shell .segment-control {
+  background: var(--bg-main) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.editor-shell .segment-item {
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text-gray) !important;
+}
+
+.editor-shell .segment-item.active {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #ffffff !important;
+}
+
+.editor-shell .segment-item:hover:not(:disabled) {
+  border-color: var(--border) !important;
+  background: var(--primary-light) !important;
+  color: var(--primary) !important;
+}
+
+.editor-shell .slides-list-item {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  background: #ffffff !important;
+}
+
+.editor-shell .slides-list-item:hover:not(:disabled) {
+  background: var(--bg-main) !important;
+}
+
+.editor-shell .slides-list-item.active {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.18) !important;
+}
+
+.editor-shell .slides-list-index {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  border-radius: 50% !important;
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  border: 0 !important;
+}
+
+.editor-shell .slides-list-copy strong {
+  color: var(--text-dark) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+.editor-shell .slides-list-copy span {
+  color: var(--text-light) !important;
+  font-size: 12px !important;
+}
+
+.editor-shell .slides-list-delete {
+  border: 1px solid rgba(239, 68, 68, 0.28) !important;
+  color: #ef4444 !important;
+  background: #ffffff !important;
+}
+
+.editor-shell .slides-list-delete:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.45) !important;
+}
+
+.editor-shell .ghost-chip {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  background: #ffffff !important;
+  color: var(--text-dark) !important;
+  box-shadow: none !important;
+}
+
+.editor-shell .ghost-chip:hover:not(:disabled) {
+  background: var(--primary-light) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+}
+
+.editor-shell .ghost-chip-muted {
+  border: 1px solid var(--border) !important;
+  background: #ffffff !important;
+  color: var(--text-gray) !important;
+}
+
+.editor-shell .template-library-trigger {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  background: #ffffff !important;
+  color: var(--text-dark) !important;
+  box-shadow: none !important;
+}
+
+.editor-shell .template-library-trigger:hover:not(:disabled) {
+  background: var(--bg-main) !important;
+  border-color: var(--primary) !important;
+}
+
+.editor-shell .template-library-trigger-icon {
+  border: 1px solid var(--border) !important;
+  background: var(--primary-light) !important;
+  color: var(--primary) !important;
+}
+
+.editor-shell .template-library-trigger-copy small {
+  color: var(--text-light) !important;
+}
+
+/* Slide side action buttons */
+.editor-shell .slide-tool-button,
+.mobile-editor-shell .slide-tool-button {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  background: #ffffff !important;
+  color: var(--text-gray) !important;
+  box-shadow: none !important;
+}
+
+.editor-shell .slide-tool-button:hover:not(.is-disabled),
+.mobile-editor-shell .slide-tool-button:hover:not(.is-disabled) {
+  border-color: var(--primary) !important;
+  background: var(--primary-light) !important;
+  color: var(--primary) !important;
+  box-shadow: none !important;
+}
+
+.editor-shell .slide-tool-button.is-destructive,
+.mobile-editor-shell .slide-tool-button.is-destructive {
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.36) !important;
+  background: #ffffff !important;
+}
+
+/* Modal: templates */
+.editor-modal-overlay {
+  background: rgba(15, 23, 42, 0.28) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.editor-modal.template-library-modal {
+  background: #ffffff !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+}
+
+.editor-modal-header {
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.editor-modal-header h3 {
+  color: var(--text-dark) !important;
+  font-weight: 600 !important;
+}
+
+.editor-modal-close {
+  border: 1px solid var(--border) !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: var(--text-gray) !important;
+}
+
+.editor-modal-close:hover {
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+  background: var(--primary-light) !important;
+}
+
+.template-library-category-tab {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  background: #ffffff !important;
+  color: var(--text-gray) !important;
+}
+
+.template-library-category-tab.active {
+  border-color: var(--primary) !important;
+  background: #ffffff !important;
+  color: var(--primary) !important;
+}
+
+.template-library-card {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+
+.template-library-card.active {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.18) !important;
+}
+
+.template-library-card-meta strong {
+  color: var(--text-dark) !important;
+}
+
+.template-library-card-meta span {
+  color: var(--text-light) !important;
+}
+
+/* Mobile editor parity */
+@media (max-width: 768px) {
+  .mobile-editor-shell {
+    background: var(--bg-main) !important;
+  }
+
+  .mobile-topbar {
+    background: #ffffff !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-lg) !important;
+    box-shadow: var(--shadow) !important;
+  }
+
+  .mobile-icon-button,
+  .mobile-compact-select {
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    background: #ffffff !important;
+    color: var(--text-gray) !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-export-button {
+    background: var(--primary) !important;
+    border: 1px solid var(--primary) !important;
+    border-radius: var(--radius-md) !important;
+    color: #ffffff !important;
+    box-shadow: var(--shadow) !important;
+  }
+
+  .mobile-status-pill {
+    background: var(--primary-light) !important;
+    color: var(--primary) !important;
+    border: 1px solid transparent !important;
+    border-radius: 999px !important;
+  }
+
+  .mobile-editor-shell .mobile-bottom-toolbar-v2 {
+    background: #ffffff !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: var(--shadow) !important;
+  }
+
+  .mobile-editor-shell .mobile-bottom-tool {
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-gray) !important;
+    background: #ffffff !important;
+  }
+
+  .mobile-editor-shell .mobile-bottom-tool.active {
+    border-color: var(--primary) !important;
+    background: var(--primary-light) !important;
+    color: var(--primary) !important;
+  }
+
+  .mobile-editor-shell .mobile-tool-sheet.mobile-tool-sheet-v2 {
+    background: #ffffff !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-lg) !important;
+    box-shadow: var(--shadow) !important;
+  }
+
+  .mobile-tool-sheet-v2 .mobile-tool-sheet-header {
+    border-bottom: 1px solid var(--border) !important;
+  }
+
+  .mobile-tool-sheet-v2 .mobile-tool-sheet-header h3 {
+    color: var(--text-dark) !important;
+    font-weight: 600 !important;
+  }
+
+  .mobile-tool-sheet-v2 .mobile-tool-close {
+    border: 1px solid var(--border) !important;
+    border-radius: 999px !important;
+    color: var(--text-gray) !important;
+    background: #ffffff !important;
+  }
+
+  .mobile-sheet-badge {
+    background: var(--primary-light) !important;
+    color: var(--primary) !important;
+  }
+
+  .mobile-tool-sheet-v2 .settings-selected-pill,
+  .mobile-tool-sheet-v2 .settings-block {
+    border: 1px solid var(--border) !important;
+    background: #ffffff !important;
+    color: var(--text-gray) !important;
+  }
+
+  .mobile-tool-sheet-v2 .field,
+  .mobile-tool-sheet-v2 .textarea,
+  .mobile-tool-sheet-v2 .select,
+  .mobile-tool-sheet-v2 .color-input {
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    background: #ffffff !important;
+    color: var(--text-dark) !important;
+  }
+
+  .mobile-tool-sheet-v2 .segment-control {
+    border: 1px solid var(--border) !important;
+    background: var(--bg-main) !important;
+  }
+
+  .mobile-tool-sheet-v2 .segment-item.active {
+    border-color: var(--primary) !important;
+    background: var(--primary) !important;
+    color: #ffffff !important;
+  }
+
+  .mobile-style-chip,
+  .mobile-font-item,
+  .mobile-case-btn {
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    background: #ffffff !important;
+    color: var(--text-gray) !important;
+  }
+
+  .mobile-style-chip.active,
+  .mobile-font-item.active,
+  .mobile-case-btn.active {
+    border-color: var(--primary) !important;
+    background: var(--primary-light) !important;
+    color: var(--primary) !important;
+  }
+
+  .mobile-tool-sheet-v2 .ghost-chip {
+    border: 1px solid var(--primary) !important;
+    border-radius: var(--radius-sm) !important;
+    background: var(--primary) !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-tool-sheet-v2 .ghost-chip.ghost-chip-muted {
+    border: 1px solid var(--border) !important;
+    background: #ffffff !important;
+    color: var(--text-gray) !important;
   }
 }
