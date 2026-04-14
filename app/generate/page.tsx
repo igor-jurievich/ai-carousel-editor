@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSlidesFromOutline, projectTitleFromTopic } from "@/lib/carousel";
 import { clampSlidesCount, DEFAULT_SLIDES_COUNT, SLIDES_COUNT_OPTIONS } from "@/lib/slides";
@@ -45,6 +45,10 @@ export default function GeneratePage() {
   const [error, setError] = useState<string | null>(null);
   const [previewSlides, setPreviewSlides] = useState<CarouselOutlineSlide[] | null>(null);
   const [generatedProjectMeta, setGeneratedProjectMeta] = useState<GenerateResponse["project"] | null>(null);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+
+  const composerRef = useRef<HTMLDivElement | null>(null);
+  const topicInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const normalizedTopic = topic.trim();
   const canGenerate = normalizedTopic.length >= 3 && !isGenerating;
@@ -70,6 +74,45 @@ export default function GeneratePage() {
       return { type: slide.type, title: "Слайд без заголовка" };
     });
   }, [previewSlides]);
+
+  useEffect(() => {
+    const input = topicInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.style.height = "0px";
+    input.style.height = `${Math.min(220, Math.max(52, input.scrollHeight))}px`;
+  }, [topic]);
+
+  useEffect(() => {
+    if (!isAdvancedOpen) {
+      return;
+    }
+
+    const handleOutsidePointer = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) {
+        return;
+      }
+      if (!composerRef.current?.contains(event.target)) {
+        setIsAdvancedOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsAdvancedOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsidePointer);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointer);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isAdvancedOpen]);
 
   const handleGenerate = async () => {
     if (!canGenerate) {
@@ -217,130 +260,154 @@ export default function GeneratePage() {
     <main className={`page-shell ${styles.page}`}>
       <div className={styles.layout}>
         <header className={styles.hero}>
-          <div className={styles.heroHeader}>
+          <div className={styles.heroTop}>
             <span className={styles.kicker}>AI CAROUSEL EDITOR</span>
-            <h1>Сгенерируйте карусель за 30–90 секунд</h1>
-            <p>
-              Введите тему, выберите параметры и сразу переходите в редактор без лишних шагов.
+            <h1 className={styles.heroTitle}>Давай соберём крутую карусель</h1>
+            <p className={styles.heroSubtitle}>
+              Напиши мысль, тему или контекст. Уточнения можно открыть кнопкой «+».
             </p>
           </div>
 
-          <div className={styles.composer}>
-            <textarea
-              value={topic}
-              onChange={(event) => setTopic(event.target.value)}
-              placeholder="Напиши тему или опиши свою идею..."
-              rows={4}
-              maxLength={MAX_TOPIC_CHARS}
-              className={styles.topicInput}
-            />
+          <div className={styles.chatComposer} ref={composerRef}>
+            <div className={styles.chatBar}>
+              <button
+                type="button"
+                className={`${styles.plusButton} ${isAdvancedOpen ? styles.plusButtonActive : ""}`}
+                onClick={() => setIsAdvancedOpen((current) => !current)}
+                aria-expanded={isAdvancedOpen}
+                aria-label="Уточнить генерацию"
+                title="Уточнить генерацию"
+              >
+                +
+              </button>
 
-            <div className={styles.presetsRow}>
-              {PRESET_TOPICS.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  className={styles.presetChip}
-                  onClick={() => setTopic(preset)}
-                  disabled={isGenerating}
-                >
-                  {preset}
-                </button>
-              ))}
+              <textarea
+                ref={topicInputRef}
+                value={topic}
+                onChange={(event) => setTopic(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void handleGenerate();
+                  }
+                }}
+                placeholder="Опиши идею для карусели: тема, контекст, задача, что важно подсветить..."
+                rows={1}
+                maxLength={MAX_TOPIC_CHARS}
+                className={styles.chatInput}
+              />
+
+              <button
+                className={styles.sendButton}
+                type="button"
+                onClick={() => void handleGenerate()}
+                disabled={!canGenerate}
+                aria-label={isGenerating ? "Генерируем" : "Сгенерировать карусель"}
+                title={isGenerating ? "Генерируем..." : "Сгенерировать карусель"}
+              >
+                {isGenerating ? "…" : "→"}
+              </button>
             </div>
 
-            <details className={styles.advanced}>
-              <summary>Уточнить генерацию</summary>
-              <div className={styles.advancedGrid}>
-                <label className={styles.fieldLabel}>
-                  Ниша
-                  <input
-                    className={styles.field}
-                    value={niche}
-                    onChange={(event) => setNiche(event.target.value)}
-                  />
-                </label>
-                <label className={styles.fieldLabel}>
-                  Целевая аудитория
-                  <input
-                    className={styles.field}
-                    value={audience}
-                    onChange={(event) => setAudience(event.target.value)}
-                  />
-                </label>
-                <label className={styles.fieldLabel}>
-                  Тон
-                  <select
-                    className={styles.field}
-                    value={tone}
-                    onChange={(event) => setTone(event.target.value)}
-                  >
-                    <option value="soft">Мягкий</option>
-                    <option value="balanced">Сбалансированный</option>
-                    <option value="sharp">Острый</option>
-                  </select>
-                </label>
-                <label className={styles.fieldLabel}>
-                  Цель
-                  <select
-                    className={styles.field}
-                    value={goal}
-                    onChange={(event) => setGoal(event.target.value)}
-                  >
-                    <option value="engagement">Вовлечение</option>
-                    <option value="leads">Заявки</option>
-                    <option value="warming">Прогрев</option>
-                  </select>
-                </label>
-                <label className={styles.fieldLabel}>
-                  Формат
-                  <select
-                    className={styles.field}
-                    value={format}
-                    onChange={(event) => setFormat(event.target.value as SlideFormat)}
-                  >
-                    <option value="1:1">1:1</option>
-                    <option value="4:5">4:5</option>
-                    <option value="9:16">9:16</option>
-                  </select>
-                </label>
-                <label className={styles.fieldLabel}>
-                  Тема
-                  <select
-                    className={styles.field}
-                    value={theme}
-                    onChange={(event) => setTheme(event.target.value as CarouselTemplateId)}
-                  >
-                    <option value="light">Светлая</option>
-                    <option value="dark">Тёмная</option>
-                    <option value="color">Цветная</option>
-                  </select>
-                </label>
-                <label className={styles.fieldLabel}>
-                  Количество карточек
-                  <select
-                    className={styles.field}
-                    value={slidesCount}
-                    onChange={(event) => setSlidesCount(clampSlidesCount(Number(event.target.value)))}
-                  >
-                    {SLIDES_COUNT_OPTIONS.map((count) => (
-                      <option key={count} value={count}>
-                        {count}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </details>
+            {isAdvancedOpen ? (
+              <section className={styles.advancedPopover} aria-label="Уточнение генерации">
+                <div className={styles.advancedHead}>Уточнить генерацию</div>
+                <div className={styles.advancedGrid}>
+                  <label className={styles.fieldLabel}>
+                    Ниша
+                    <input
+                      className={styles.field}
+                      value={niche}
+                      onChange={(event) => setNiche(event.target.value)}
+                    />
+                  </label>
+                  <label className={styles.fieldLabel}>
+                    Целевая аудитория
+                    <input
+                      className={styles.field}
+                      value={audience}
+                      onChange={(event) => setAudience(event.target.value)}
+                    />
+                  </label>
+                  <label className={styles.fieldLabel}>
+                    Тон
+                    <select
+                      className={styles.field}
+                      value={tone}
+                      onChange={(event) => setTone(event.target.value)}
+                    >
+                      <option value="soft">Мягкий</option>
+                      <option value="balanced">Сбалансированный</option>
+                      <option value="sharp">Острый</option>
+                    </select>
+                  </label>
+                  <label className={styles.fieldLabel}>
+                    Цель
+                    <select
+                      className={styles.field}
+                      value={goal}
+                      onChange={(event) => setGoal(event.target.value)}
+                    >
+                      <option value="engagement">Вовлечение</option>
+                      <option value="leads">Заявки</option>
+                      <option value="warming">Прогрев</option>
+                    </select>
+                  </label>
+                  <label className={styles.fieldLabel}>
+                    Формат
+                    <select
+                      className={styles.field}
+                      value={format}
+                      onChange={(event) => setFormat(event.target.value as SlideFormat)}
+                    >
+                      <option value="1:1">1:1</option>
+                      <option value="4:5">4:5</option>
+                      <option value="9:16">9:16</option>
+                    </select>
+                  </label>
+                  <label className={styles.fieldLabel}>
+                    Тема
+                    <select
+                      className={styles.field}
+                      value={theme}
+                      onChange={(event) => setTheme(event.target.value as CarouselTemplateId)}
+                    >
+                      <option value="light">Светлая</option>
+                      <option value="dark">Тёмная</option>
+                      <option value="color">Цветная</option>
+                    </select>
+                  </label>
+                  <label className={styles.fieldLabel}>
+                    Количество карточек
+                    <select
+                      className={styles.field}
+                      value={slidesCount}
+                      onChange={(event) => setSlidesCount(clampSlidesCount(Number(event.target.value)))}
+                    >
+                      {SLIDES_COUNT_OPTIONS.map((count) => (
+                        <option key={count} value={count}>
+                          {count}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </section>
+            ) : null}
+          </div>
 
-            <button
-              className={styles.generateButton}
-              type="button"
-              onClick={handleGenerate}
-              disabled={!canGenerate}
-            >
-              {isGenerating ? "Генерируем..." : "Сгенерировать карусель"}
-            </button>
+          <div className={styles.presetsRow}>
+            {PRESET_TOPICS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                className={styles.presetChip}
+                onClick={() => setTopic(preset)}
+                disabled={isGenerating}
+              >
+                {preset}
+              </button>
+            ))}
           </div>
 
           <div className={`${styles.status} ${error ? styles.statusError : ""}`}>
