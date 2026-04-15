@@ -1204,7 +1204,7 @@ export function SlideStage({
     if (typeof window === "undefined") {
       return 1;
     }
-    return Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    return Math.max(1, Math.min(3, window.devicePixelRatio || 1));
   }, []);
   const stageNodeRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);

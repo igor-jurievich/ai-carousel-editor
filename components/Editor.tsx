@@ -57,6 +57,7 @@ const MAX_TOPIC_CHARS = 4000;
 const MIN_TOPIC_CHARS = 3;
 const EXPORT_LOCK_STATUS = "Дождитесь завершения экспорта и повторите действие.";
 const GENERATE_LOCK_STATUS = "Дождитесь завершения генерации и повторите действие.";
+const GENERATE_TIMEOUT_MS = 30_000;
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
 const HISTORY_LIMIT = 40;
@@ -468,6 +469,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const autosaveSaveErrorNotifiedRef = useRef(false);
   const editorOpenedTrackedRef = useRef(false);
   const initialMobileToolAppliedRef = useRef(false);
+  const generationLockedRef = useRef(false);
+  const handleUndoRef = useRef<() => void>(() => undefined);
+  const handleRedoRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     if (initialMobileToolAppliedRef.current || typeof window === "undefined") {
@@ -830,6 +834,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const canRedo = historyFuture.length > 0;
 
   useEffect(() => {
+    generationLockedRef.current = generationLocked;
+  }, [generationLocked]);
+
+  useEffect(() => {
     if (!initialProjectId) {
       setIsProjectHydrated(true);
       return;
@@ -1032,6 +1040,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   };
 
   useEffect(() => {
+    handleUndoRef.current = handleUndo;
+    handleRedoRef.current = handleRedo;
+  }, [handleUndo, handleRedo]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const isTypingTarget =
         event.target instanceof HTMLElement &&
@@ -1039,7 +1052,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           event.target.tagName === "TEXTAREA" ||
           event.target.isContentEditable);
 
-      if (!(event.metaKey || event.ctrlKey) || isTypingTarget || generationLocked) {
+      if (!(event.metaKey || event.ctrlKey) || isTypingTarget || generationLockedRef.current) {
         return;
       }
 
@@ -1049,15 +1062,15 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
       event.preventDefault();
       if (event.shiftKey) {
-        handleRedo();
+        handleRedoRef.current();
       } else {
-        handleUndo();
+        handleUndoRef.current();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [generationLocked, historyPast, historyFuture, slides, activeSlideId, slideFormat]);
+  }, []);
 
   const updateSlides = (
     updater: (slides: Slide[]) => Slide[],
@@ -1342,7 +1355,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       const activeController = new AbortController();
       controller = activeController;
       generateAbortRef.current = activeController;
-      const timeoutId = window.setTimeout(() => activeController.abort(), 70000);
+      const timeoutId = window.setTimeout(() => activeController.abort(), GENERATE_TIMEOUT_MS);
 
       const response = await fetch("/api/generate", {
         method: "POST",
