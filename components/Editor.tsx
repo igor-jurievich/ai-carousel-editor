@@ -1086,6 +1086,24 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     );
   };
 
+  const updateSlideWithContext = (
+    slideId: string,
+    updater: (slide: Slide, context: { index: number; total: number }) => Slide,
+    options?: { recordHistory?: boolean }
+  ) => {
+    if (options?.recordHistory !== false) {
+      pushHistorySnapshot();
+    }
+    setSlides((current) => {
+      const total = current.length;
+      return current.map((slide, index) =>
+        slide.id === slideId
+          ? stripLegacyAccentArtifactsFromSlide(updater(slide, { index, total }))
+          : stripLegacyAccentArtifactsFromSlide(slide)
+      );
+    });
+  };
+
   const updateActiveSlide = (
     updater: (slide: Slide) => Slide,
     options?: { recordHistory?: boolean }
@@ -1103,12 +1121,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     updater: (element: CanvasElement) => CanvasElement,
     options?: { recordHistory?: boolean }
   ) => {
-    const targetSlideIndex = slides.findIndex((slide) => slide.id === slideId);
-    if (targetSlideIndex === -1) {
-      return;
-    }
-
-    updateSlide(slideId, (slide) => {
+    updateSlideWithContext(slideId, (slide, context) => {
       const previous = slide.elements.find((element) => element.id === elementId);
       const nextElements = slide.elements.map((element) =>
         element.id === elementId ? updater(element) : element
@@ -1185,8 +1198,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             elements: nextElements
           },
           slide.templateId ?? "light",
-          targetSlideIndex,
-          slides.length,
+          context.index,
+          context.total,
           slideFormat
         );
         const rebuiltWithPinnedPosition = rebuiltSlide.elements.map((element) => {
