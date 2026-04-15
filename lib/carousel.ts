@@ -45,10 +45,10 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     accent: "#ff2a2a",
     accentAlt: "#ff5e5e",
     highlightColor: "#FF3B30",
-    background: "#090d16",
-    surface: "#101523",
-    titleColor: "#f6f8ff",
-    bodyColor: "#d7deee",
+    background: "#0d0d0d",
+    surface: "#171717",
+    titleColor: "#ffffff",
+    bodyColor: "#e5e7eb",
     titleFont: "Oswald",
     bodyFont: "Manrope",
     chipStyle: "outline",
@@ -67,10 +67,10 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     accent: "#1f49ff",
     accentAlt: "#5a77ff",
     highlightColor: "#6366f1",
-    background: "#f1f3f7",
+    background: "#ffffff",
     surface: "#ffffff",
-    titleColor: "#181d29",
-    bodyColor: "#2a3342",
+    titleColor: "#111111",
+    bodyColor: "#444444",
     titleFont: "Russo One",
     bodyFont: "Manrope",
     chipStyle: "solid",
@@ -88,11 +88,11 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     description: "Яркая журнальная тема: жёлтый фон, красные плашки и плотная типографика.",
     accent: "#ff2d00",
     accentAlt: "#ff6b3d",
-    highlightColor: "#FF3B30",
-    background: "#ffeb0a",
+    highlightColor: "#111111",
+    background: "#FFE500",
     surface: "#fff06a",
-    titleColor: "#171b24",
-    bodyColor: "#1e2431",
+    titleColor: "#111111",
+    bodyColor: "#2b2b2b",
     titleFont: "Oswald",
     bodyFont: "Manrope",
     chipStyle: "solid",
@@ -178,7 +178,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     description: "Тёплый кремовый стиль",
     accent: "#c4956a",
     accentAlt: "#e8d5b7",
-    highlightColor: "#c4956a",
+    highlightColor: "#2c1810",
     background: "#faf6f0",
     surface: "#fffaf4",
     titleColor: "#2c1810",
@@ -200,7 +200,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     description: "Глубокий синий с белым",
     accent: "#818cf8",
     accentAlt: "#4f46e5",
-    highlightColor: "#818cf8",
+    highlightColor: "#ffffff",
     background: "#3730a3",
     surface: "#4338ca",
     titleColor: "#ffffff",
@@ -224,10 +224,10 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     description: "Градиент заката — оранжевый к розовому",
     accent: "#ffffff",
     accentAlt: "#ffffff",
-    highlightColor: "#ffffff",
+    highlightColor: "#000000",
     highlightOpacity: 0.3,
     background: "#ff6b35",
-    previewBackground: "linear-gradient(135deg, #ff6b35 0%, #f7c59f 50%, #ff6b9d 100%)",
+    previewBackground: "linear-gradient(135deg, #ff6b35 0%, #ff6b9d 100%)",
     surface: "#ffc3a1",
     titleColor: "#ffffff",
     bodyColor: "#fff5f0",
@@ -733,7 +733,6 @@ function createFittedTextElement(
 
 function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBlueprint): SlidePalette {
   const baseGridStep = template.gridStep ?? 74;
-  const baseGridOpacity = template.gridOpacity ?? 0.08;
   const highlightColor = template.highlightColor ?? template.accent;
   const highlightOpacity =
     typeof template.highlightOpacity === "number"
@@ -741,8 +740,10 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       : undefined;
   const baseGridColor =
     template.category === "dark"
-      ? `rgba(255, 255, 255, ${baseGridOpacity})`
-      : `rgba(20, 27, 36, ${baseGridOpacity})`;
+      ? "rgba(255, 255, 255, 0.05)"
+      : template.category === "light"
+        ? "rgba(0, 0, 0, 0.04)"
+        : "rgba(0, 0, 0, 0.06)";
 
   if (template.id === "light" && blueprint.slideType === "big_text") {
     return {
@@ -755,7 +756,7 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       accentMode: "none",
       gridMode: "full",
       gridStep: baseGridStep,
-      gridColor: "rgba(255, 255, 255, 0.12)"
+      gridColor: baseGridColor
     };
   }
 
@@ -785,7 +786,7 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       accentMode: "chip",
       gridMode: "dots",
       gridStep: baseGridStep,
-      gridColor: "rgba(20, 24, 32, 0.12)"
+      gridColor: baseGridColor
     };
   }
 
@@ -1006,6 +1007,165 @@ function resolveReadableAccentTextColor(fill: string) {
   const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
   return luma > 0.6 ? "#101621" : "#ffffff";
+}
+
+type ParsedColor = {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+};
+
+function parseAnyColor(value: string): ParsedColor | null {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const hexMatch = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/u);
+  if (hexMatch) {
+    const token = hexMatch[1];
+    const full =
+      token.length === 3
+        ? token
+            .split("")
+            .map((char) => `${char}${char}`)
+            .join("")
+        : token;
+    return {
+      r: Number.parseInt(full.slice(0, 2), 16),
+      g: Number.parseInt(full.slice(2, 4), 16),
+      b: Number.parseInt(full.slice(4, 6), 16),
+      a: 1
+    };
+  }
+
+  const rgbaMatch = normalized.match(/^rgba?\(([^)]+)\)$/u);
+  if (!rgbaMatch) {
+    return null;
+  }
+
+  const parts = rgbaMatch[1]
+    .split(",")
+    .map((chunk) => Number.parseFloat(chunk.trim()))
+    .filter((chunk) => Number.isFinite(chunk));
+  if (parts.length < 3) {
+    return null;
+  }
+
+  return {
+    r: Math.max(0, Math.min(255, parts[0])),
+    g: Math.max(0, Math.min(255, parts[1])),
+    b: Math.max(0, Math.min(255, parts[2])),
+    a: Math.max(0, Math.min(1, parts[3] ?? 1))
+  };
+}
+
+function getColorLuma(color: ParsedColor) {
+  return 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+}
+
+function getColorSaturation(color: ParsedColor) {
+  const max = Math.max(color.r, color.g, color.b) / 255;
+  const min = Math.min(color.r, color.g, color.b) / 255;
+  if (max <= 0) {
+    return 0;
+  }
+  return (max - min) / max;
+}
+
+function resolveColorToken(value: string, parsed: ParsedColor | null, fallback: string) {
+  const normalized = value.trim();
+  if (normalized) {
+    return normalized;
+  }
+  if (!parsed) {
+    return fallback;
+  }
+  return `rgb(${Math.round(parsed.r)}, ${Math.round(parsed.g)}, ${Math.round(parsed.b)})`;
+}
+
+export function getLegibleHighlight(
+  backgroundColor: string,
+  highlightColor: string,
+  highlightOpacity?: number
+) {
+  const parsedBackground = parseAnyColor(backgroundColor);
+  const parsedHighlight = parseAnyColor(highlightColor);
+  const safeHighlight = resolveColorToken(highlightColor, parsedHighlight, "#111111");
+  const safeBackground = resolveColorToken(backgroundColor, parsedBackground, "#ffffff");
+
+  if (!parsedHighlight) {
+    return {
+      background: safeHighlight,
+      color: "#ffffff"
+    };
+  }
+
+  const highlightLuma = getColorLuma(parsedHighlight);
+  const highlightSaturation = getColorSaturation(parsedHighlight);
+  const highlightAlpha = Number.isFinite(highlightOpacity)
+    ? Math.max(0, Math.min(1, highlightOpacity as number))
+    : parsedHighlight.a;
+
+  // Semi-transparent overlays stay neutral and readable.
+  if (highlightAlpha < 0.55) {
+    return {
+      background: safeHighlight,
+      color: "#ffffff"
+    };
+  }
+
+  if (!parsedBackground) {
+    return {
+      background: safeHighlight,
+      color: highlightLuma < 128 ? "#ffffff" : "#111111"
+    };
+  }
+
+  const backgroundLuma = getColorLuma(parsedBackground);
+  const isBackgroundLight = backgroundLuma > 128;
+
+  // Light canvas: either dark highlight with light text, or force dark chip if highlight is too bright.
+  if (isBackgroundLight) {
+    if (highlightLuma < 96) {
+      return {
+        background: safeHighlight,
+        color: safeBackground
+      };
+    }
+    if (highlightLuma <= 168) {
+      return {
+        background: safeHighlight,
+        color: "#ffffff"
+      };
+    }
+    return {
+      background: "#111111",
+      color: safeBackground
+    };
+  }
+
+  // Dark canvas: white-like highlights become light chips with dark text (e.g. Indigo),
+  // bright accent highlights become black chips with accent text (e.g. Cinema).
+  const isNearWhiteHighlight = highlightLuma > 238 && highlightSaturation < 0.16;
+  if (isNearWhiteHighlight) {
+    return {
+      background: "#ffffff",
+      color: safeBackground
+    };
+  }
+  if (highlightLuma > 184) {
+    return {
+      background: "#000000",
+      color: safeHighlight
+    };
+  }
+
+  return {
+    background: safeHighlight,
+    color: "#ffffff"
+  };
 }
 
 function normalizeTextHighlights(ranges: TextHighlightRange[] | undefined, textLength: number): TextHighlightRange[] {
@@ -1661,6 +1821,50 @@ function buildGridDecoration(format: SlideFormat, palette: SlidePalette) {
   return lines;
 }
 
+function toAlphaColor(value: string, alpha: number, fallback: string) {
+  const parsed = parseAnyColor(value);
+  if (!parsed) {
+    return fallback;
+  }
+  const safeAlpha = Math.max(0, Math.min(1, alpha));
+  return `rgba(${Math.round(parsed.r)}, ${Math.round(parsed.g)}, ${Math.round(parsed.b)}, ${safeAlpha})`;
+}
+
+function resolveFooterPalette(template: CarouselTemplate, palette: SlidePalette) {
+  if (template.id === "indigo") {
+    return {
+      captionColor: "rgba(199, 210, 254, 0.72)",
+      arrowColor: "#c7d2fe"
+    };
+  }
+
+  if (template.id === "sunset") {
+    return {
+      captionColor: "rgba(255, 255, 255, 0.74)",
+      arrowColor: "#ffffff"
+    };
+  }
+
+  if (template.category === "dark") {
+    return {
+      captionColor: "rgba(255, 255, 255, 0.5)",
+      arrowColor: "#ffffff"
+    };
+  }
+
+  if (template.category === "light") {
+    return {
+      captionColor: "rgba(0, 0, 0, 0.4)",
+      arrowColor: "#111111"
+    };
+  }
+
+  return {
+    captionColor: toAlphaColor(palette.bodyColor, 0.52, "rgba(17, 17, 17, 0.52)"),
+    arrowColor: "#111111"
+  };
+}
+
 function buildHeaderAndFooter(
   template: CarouselTemplate,
   palette: SlidePalette,
@@ -1672,7 +1876,7 @@ function buildHeaderAndFooter(
 ): TextElement[] {
   const metrics = resolveTextMetrics(format);
   const { width } = metrics;
-  const bodyColor = palette.bodyColor;
+  const { captionColor, arrowColor } = resolveFooterPalette(template, palette);
   const handleText = profileHandle.trim() || DEFAULT_PROFILE_HANDLE;
   const subtitleText = normalizeProfileSubtitle(profileSubtitle);
   const captionFontSize = format === "9:16" ? 40 : 38;
@@ -1695,7 +1899,7 @@ function buildHeaderAndFooter(
       minFontSize: 24,
       fontFamily: template.bodyFont,
       fontStyle: bodyFontStyle,
-      fill: bodyColor,
+      fill: captionColor,
       align: "left",
       lineHeight: 1.1
     }),
@@ -1711,7 +1915,7 @@ function buildHeaderAndFooter(
       minFontSize: 24,
       fontFamily: template.bodyFont,
       fontStyle: bodyFontStyle,
-      fill: bodyColor,
+      fill: captionColor,
       align: "right",
       lineHeight: 1.1
     })
@@ -1731,7 +1935,7 @@ function buildHeaderAndFooter(
         minFontSize: 24,
         fontFamily: template.bodyFont,
         fontStyle: bodyFontStyle,
-        fill: bodyColor,
+        fill: captionColor,
         align: "left",
         lineHeight: 1.1
       })
@@ -1750,7 +1954,7 @@ function buildHeaderAndFooter(
       fontSize: arrowFontSize,
       fontFamily: template.titleFont,
       fontStyle: titleFontStyle,
-      fill: bodyColor,
+      fill: arrowColor,
       align: "right",
       lineHeight: 1
     })

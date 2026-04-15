@@ -145,19 +145,23 @@ function TemplatePreview({ template }: { template: CarouselTemplate }) {
   const hasDecoration = template.decoration !== "none" && template.gridMode !== "none";
   const previewBackground = template.previewBackground ?? template.background;
   const previewHighlightColor = template.highlightColor ?? template.accent;
-  const backgroundImage =
+  const previewBaseImage = previewBackground.includes("gradient(") ? previewBackground : "none";
+  const decorationImage =
     !hasDecoration
       ? "none"
       : isDarkCategory
-      ? "repeating-linear-gradient(90deg, rgba(255,255,255,0.11) 0 1px, transparent 1px 62px)"
-      : "repeating-linear-gradient(90deg, rgba(23,28,36,0.08) 0 1px, transparent 1px 62px), repeating-linear-gradient(180deg, rgba(23,28,36,0.08) 0 1px, transparent 1px 62px)";
+        ? "repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0 1px, transparent 1px 62px)"
+        : "repeating-linear-gradient(90deg, rgba(0,0,0,0.05) 0 1px, transparent 1px 62px), repeating-linear-gradient(180deg, rgba(0,0,0,0.05) 0 1px, transparent 1px 62px)";
+  const composedBackgroundImage = [previewBaseImage, decorationImage]
+    .filter((layer) => layer && layer !== "none")
+    .join(", ");
 
   return (
     <div
       className={`template-library-preview template-library-preview-${template.id}`}
       style={{
-        background: previewBackground,
-        backgroundImage,
+        backgroundColor: template.background,
+        backgroundImage: composedBackgroundImage || "none",
         color: template.bodyColor,
         borderColor: template.surface
       }}

@@ -12,6 +12,7 @@ import {
   Text,
   Transformer
 } from "react-konva";
+import { getLegibleHighlight } from "@/lib/carousel";
 import type { CanvasElement, ImageElement, ShapeElement, Slide, TextElement } from "@/types/editor";
 
 type SlideStageProps = {
@@ -428,13 +429,13 @@ function normalizeTextHighlights(element: TextElement) {
       const source = item && typeof item === "object" ? item : null;
       const startSource = source && Number.isFinite(source.start) ? source.start : 0;
       const endSource = source && Number.isFinite(source.end) ? source.end : 0;
-      const colorSource = source && typeof source.color === "string" ? source.color : "#1f49ff";
+      const colorSource = source && typeof source.color === "string" ? source.color : "#6366f1";
       const opacitySource =
         source && Number.isFinite(source.opacity) ? (source.opacity as number) : 0.94;
       return {
         start: Math.max(0, Math.min(textLength, Math.floor(startSource))),
         end: Math.max(0, Math.min(textLength, Math.floor(endSource))),
-        color: colorSource || "#1f49ff",
+        color: colorSource || "#6366f1",
         opacity: Math.max(0.08, Math.min(1, opacitySource))
       };
     })
@@ -603,10 +604,11 @@ type TextHighlightRect = {
   width: number;
   height: number;
   color: string;
+  textColor: string;
   opacity: number;
 };
 
-function resolveHighlightRects(element: TextElement): TextHighlightRect[] {
+function resolveHighlightRects(element: TextElement, slideBackground: string): TextHighlightRect[] {
   const ranges = normalizeTextHighlights(element);
   if (!ranges.length || !element.text.trim()) {
     return [];
@@ -674,13 +676,19 @@ function resolveHighlightRects(element: TextElement): TextHighlightRect[] {
       if (clippedWidth <= 1 || clippedHeight <= 1) {
         continue;
       }
+      const legibleHighlight = getLegibleHighlight(
+        slideBackground,
+        range.color,
+        range.opacity
+      );
 
       rects.push({
         x: Math.round(clippedX),
         y: Math.round(clippedY),
         width: Math.round(clippedWidth),
         height: Math.round(clippedHeight),
-        color: range.color,
+        color: legibleHighlight.background,
+        textColor: legibleHighlight.color,
         opacity: Math.max(0.08, Math.min(1, range.opacity ?? 0.94))
       });
     }
@@ -1087,6 +1095,7 @@ function SlideShapeNode({
 
 function SlideTextNode({
   element,
+  slideBackground,
   interactive = false,
   selected,
   onSelect,
@@ -1097,6 +1106,7 @@ function SlideTextNode({
   dragBoundFunc
 }: {
   element: TextElement;
+  slideBackground: string;
   interactive?: boolean;
   selected: boolean;
   onSelect?: () => void;
@@ -1106,7 +1116,10 @@ function SlideTextNode({
   nodeRef: (node: Konva.Node | null) => void;
   dragBoundFunc?: (position: { x: number; y: number }) => { x: number; y: number };
 }) {
-  const highlightRects = useMemo(() => resolveHighlightRects(element), [element]);
+  const highlightRects = useMemo(
+    () => resolveHighlightRects(element, slideBackground),
+    [element, slideBackground]
+  );
 
   return (
     <Group
@@ -1191,6 +1204,36 @@ function SlideTextNode({
         strokeEnabled={false}
         shadowEnabled={false}
       />
+      {highlightRects.map((rect, index) => (
+        <Group
+          key={`${element.id}-hl-text-${index}`}
+          listening={false}
+          clipX={rect.x}
+          clipY={rect.y}
+          clipWidth={rect.width}
+          clipHeight={rect.height}
+        >
+          <Text
+            text={element.text}
+            x={0}
+            y={0}
+            width={element.width}
+            fontSize={element.fontSize}
+            fontFamily={element.fontFamily}
+            fontStyle={element.fontStyle}
+            fill={rect.textColor}
+            align={element.align}
+            lineHeight={element.lineHeight ?? 1.1}
+            wrap="word"
+            ellipsis={false}
+            letterSpacing={element.letterSpacing}
+            textDecoration={element.textDecoration}
+            strokeEnabled={false}
+            shadowEnabled={false}
+            listening={false}
+          />
+        </Group>
+      ))}
     </Group>
   );
 }
@@ -1581,6 +1624,7 @@ export function SlideStage({
                 <SlideTextNode
                   key={element.id}
                   element={element}
+                  slideBackground={slide.background}
                   selected={selected && !isLockedTextLayer && !isImagePlaceholderText}
                   interactive={interactiveText}
                   nodeRef={nodeRef}
