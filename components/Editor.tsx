@@ -71,7 +71,7 @@ const MOBILE_PREVIEW_MAX_WIDTH: Record<SlideFormat, number> = {
 const MANAGED_TEXT_META_KEYS = new Set(["managed-title", "managed-body"]);
 const MANAGED_TITLE_META_KEY = "managed-title";
 const MANAGED_BODY_META_KEY = "managed-body";
-const DEFAULT_HIGHLIGHT_COLOR = "#1f49ff";
+const DEFAULT_HIGHLIGHT_COLOR = "#6366f1";
 const NON_CONTENT_TEXT_META_KEYS = new Set([
   "slide-chip-text",
   "managed-title-accent-text",
@@ -773,10 +773,25 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     selectedTextSelectionRef.current = null;
   }, [effectiveSelectedTextElement?.id]);
   useEffect(() => {
+    const effectiveTemplateIdForHighlight =
+      activeSlide?.templateId ?? slides[0]?.templateId ?? "light";
+    const activeTemplate = getTemplate(effectiveTemplateIdForHighlight);
+    const templateHighlightColor = normalizeColorForInput(
+      activeTemplate.highlightColor ?? activeTemplate.accent,
+      DEFAULT_HIGHLIGHT_COLOR
+    );
+    const templateHighlightOpacity =
+      typeof activeTemplate.highlightOpacity === "number"
+        ? Math.max(0.08, Math.min(1, activeTemplate.highlightOpacity))
+        : undefined;
     const firstRange = effectiveSelectedTextElement?.highlights?.find(
       (range) => range.end > range.start
     );
     if (!firstRange) {
+      setSelectedTextHighlightColorOverride(templateHighlightColor);
+      if (templateHighlightOpacity !== undefined) {
+        setSelectedTextHighlightOpacityOverride(templateHighlightOpacity);
+      }
       return;
     }
     if (firstRange.color) {
@@ -787,7 +802,12 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         Math.max(0.08, Math.min(1, firstRange.opacity as number))
       );
     }
-  }, [effectiveSelectedTextElement?.id, effectiveSelectedTextElement?.highlights]);
+  }, [
+    activeSlide?.templateId,
+    effectiveSelectedTextElement?.id,
+    effectiveSelectedTextElement?.highlights,
+    slides[0]?.templateId
+  ]);
   const activeHasBackgroundImage = Boolean(activeSlide?.backgroundImage);
   const activePhotoSlotEnabled = Boolean(
     activeSlide?.slideType === "image_text" && activeSlide.photoSlotEnabled !== false
@@ -1821,15 +1841,29 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         setSlides((current) =>
           current.map((slide, index) =>
             index === slideIndex
-              ? applyTemplateToSlide(slide, templateId, index, current.length, slideFormat)
+              ? applyTemplateToSlide(slide, templateId, index, current.length, slideFormat, {
+                  syncHighlightColor: true
+                })
               : slide
           )
         );
         setStatus(`Шаблон «${templateName}» применён к текущему слайду.`);
       }
     } else {
-      setSlides((current) => applyTemplateToSlides(current, templateId, slideFormat));
+      setSlides((current) =>
+        applyTemplateToSlides(current, templateId, slideFormat, { syncHighlightColor: true })
+      );
       setStatus(`Шаблон «${templateName}» применён ко всей карусели.`);
+    }
+
+    const nextTemplate = getTemplate(templateId);
+    setSelectedTextHighlightColorOverride(
+      normalizeColorForInput(nextTemplate.highlightColor ?? nextTemplate.accent, DEFAULT_HIGHLIGHT_COLOR)
+    );
+    if (typeof nextTemplate.highlightOpacity === "number") {
+      setSelectedTextHighlightOpacityOverride(
+        Math.max(0.08, Math.min(1, nextTemplate.highlightOpacity))
+      );
     }
 
     setSelectedElementId(null);

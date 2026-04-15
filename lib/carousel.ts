@@ -44,7 +44,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     description: "Контрастная тёмная тема в стиле editorial: глубокий фон и резкий акцент.",
     accent: "#ff2a2a",
     accentAlt: "#ff5e5e",
-    highlightColor: "#ff5e5e",
+    highlightColor: "#FF3B30",
     background: "#090d16",
     surface: "#101523",
     titleColor: "#f6f8ff",
@@ -66,7 +66,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     description: "Чистая светлая тема с сеткой и холодным синим акцентом.",
     accent: "#1f49ff",
     accentAlt: "#5a77ff",
-    highlightColor: "#5a77ff",
+    highlightColor: "#6366f1",
     background: "#f1f3f7",
     surface: "#ffffff",
     titleColor: "#181d29",
@@ -88,7 +88,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     description: "Яркая журнальная тема: жёлтый фон, красные плашки и плотная типографика.",
     accent: "#ff2d00",
     accentAlt: "#ff6b3d",
-    highlightColor: "#ff6b3d",
+    highlightColor: "#FF3B30",
     background: "#ffeb0a",
     surface: "#fff06a",
     titleColor: "#171b24",
@@ -156,7 +156,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     description: "Ультра-чистый минималистичный стиль",
     accent: "#111111",
     accentAlt: "#f0f0f0",
-    highlightColor: "#f0f0f0",
+    highlightColor: "#111111",
     background: "#ffffff",
     surface: "#f8f8f8",
     titleColor: "#111111",
@@ -178,7 +178,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     description: "Тёплый кремовый стиль",
     accent: "#c4956a",
     accentAlt: "#e8d5b7",
-    highlightColor: "#e8d5b7",
+    highlightColor: "#c4956a",
     background: "#faf6f0",
     surface: "#fffaf4",
     titleColor: "#2c1810",
@@ -200,7 +200,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     description: "Глубокий синий с белым",
     accent: "#818cf8",
     accentAlt: "#4f46e5",
-    highlightColor: "#4f46e5",
+    highlightColor: "#818cf8",
     background: "#3730a3",
     surface: "#4338ca",
     titleColor: "#ffffff",
@@ -266,6 +266,8 @@ type SlidePalette = {
   titleColor: string;
   bodyColor: string;
   accent: string;
+  highlightColor: string;
+  highlightOpacity?: number;
   accentMode: "none" | "text" | "chip";
   gridMode: "full" | "vertical" | "dots" | "none";
   gridStep: number;
@@ -732,6 +734,11 @@ function createFittedTextElement(
 function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBlueprint): SlidePalette {
   const baseGridStep = template.gridStep ?? 74;
   const baseGridOpacity = template.gridOpacity ?? 0.08;
+  const highlightColor = template.highlightColor ?? template.accent;
+  const highlightOpacity =
+    typeof template.highlightOpacity === "number"
+      ? Math.max(0.08, Math.min(1, template.highlightOpacity))
+      : undefined;
   const baseGridColor =
     template.category === "dark"
       ? `rgba(255, 255, 255, ${baseGridOpacity})`
@@ -743,6 +750,8 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       titleColor: "#f5f7ff",
       bodyColor: "#eff3ff",
       accent: "#f5f7ff",
+      highlightColor,
+      highlightOpacity,
       accentMode: "none",
       gridMode: "full",
       gridStep: baseGridStep,
@@ -756,6 +765,8 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       titleColor: template.titleColor,
       bodyColor: template.bodyColor,
       accent: template.accent,
+      highlightColor,
+      highlightOpacity,
       accentMode: "chip",
       gridMode: "full",
       gridStep: baseGridStep,
@@ -769,6 +780,8 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       titleColor: template.titleColor,
       bodyColor: template.bodyColor,
       accent: template.accent,
+      highlightColor,
+      highlightOpacity,
       accentMode: "chip",
       gridMode: "dots",
       gridStep: baseGridStep,
@@ -782,6 +795,8 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
       titleColor: template.titleColor,
       bodyColor: template.bodyColor,
       accent: template.accent,
+      highlightColor,
+      highlightOpacity,
       accentMode: blueprint.slideType === "big_text" ? "none" : "chip",
       gridMode: "vertical",
       gridStep: baseGridStep,
@@ -794,6 +809,8 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
     titleColor: template.titleColor,
     bodyColor: template.bodyColor,
     accent: template.accent,
+    highlightColor,
+    highlightOpacity,
     accentMode: template.accentMode ?? "none",
     gridMode: template.gridMode ?? "full",
     gridStep: baseGridStep,
@@ -1001,13 +1018,13 @@ function normalizeTextHighlights(ranges: TextHighlightRange[] | undefined, textL
       const source = range && typeof range === "object" ? range : null;
       const startSource = source && Number.isFinite(source.start) ? source.start : 0;
       const endSource = source && Number.isFinite(source.end) ? source.end : 0;
-      const colorSource = source && typeof source.color === "string" ? source.color : "#1f49ff";
+      const colorSource = source && typeof source.color === "string" ? source.color : "#6366f1";
       const opacitySource =
         source && Number.isFinite(source.opacity) ? (source.opacity as number) : 0.94;
       return {
         start: Math.max(0, Math.min(textLength, Math.floor(startSource))),
         end: Math.max(0, Math.min(textLength, Math.floor(endSource))),
-        color: colorSource || "#1f49ff",
+        color: colorSource || "#6366f1",
         opacity: Math.max(0.08, Math.min(1, opacitySource))
       };
     })
@@ -1229,7 +1246,8 @@ function composeTitleAndAccentElements(params: {
       {
         start: accent.start,
         end: accent.end,
-        color: palette.accent
+        color: palette.highlightColor,
+        opacity: palette.highlightOpacity
       }
     ],
     titleElement.text.length
@@ -2449,25 +2467,79 @@ export function createSlideFromOutline(
   };
 }
 
+type ApplyTemplateOptions = {
+  syncHighlightColor?: boolean;
+};
+
+function syncSlideHighlightsWithTemplate(slide: Slide, templateId: CarouselTemplateId): Slide {
+  const template = getTemplate(templateId);
+  const highlightColor = template.highlightColor ?? template.accent;
+  const highlightOpacity =
+    typeof template.highlightOpacity === "number"
+      ? Math.max(0.08, Math.min(1, template.highlightOpacity))
+      : undefined;
+
+  return {
+    ...slide,
+    elements: slide.elements.map((element) => {
+      if (element.type !== "text" || !element.highlights?.length) {
+        return element;
+      }
+
+      const normalized = normalizeTextHighlights(element.highlights, element.text.length);
+      if (!normalized.length) {
+        return {
+          ...element,
+          highlights: []
+        };
+      }
+
+      return {
+        ...element,
+        highlights: normalized.map((range) => {
+          const nextRange: TextHighlightRange = {
+            ...range,
+            color: highlightColor
+          };
+
+          if (highlightOpacity === undefined) {
+            return nextRange;
+          }
+
+          return {
+            ...nextRange,
+            opacity: highlightOpacity
+          };
+        })
+      };
+    })
+  };
+}
+
 export function applyTemplateToSlide(
   slide: Slide,
   templateId: CarouselTemplateId,
   index: number,
   totalSlides: number,
-  format: SlideFormat
+  format: SlideFormat,
+  options?: ApplyTemplateOptions
 ): Slide {
   const customElements = slide.elements.filter(
     (element) => !isManagedElement(element) && !isLegacyAccentArtifact(element)
   );
-  return rebuildSlide(slide, index, totalSlides, templateId, format, customElements);
+  const rebuilt = rebuildSlide(slide, index, totalSlides, templateId, format, customElements);
+  return options?.syncHighlightColor ? syncSlideHighlightsWithTemplate(rebuilt, templateId) : rebuilt;
 }
 
 export function applyTemplateToSlides(
   slides: Slide[],
   templateId: CarouselTemplateId,
-  format: SlideFormat
+  format: SlideFormat,
+  options?: ApplyTemplateOptions
 ) {
-  return slides.map((slide, index) => applyTemplateToSlide(slide, templateId, index, slides.length, format));
+  return slides.map((slide, index) =>
+    applyTemplateToSlide(slide, templateId, index, slides.length, format, options)
+  );
 }
 
 function resolveRoleFlow(targetCount: number) {

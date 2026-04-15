@@ -144,6 +144,7 @@ function TemplatePreview({ template }: { template: CarouselTemplate }) {
   const isDarkCategory = template.category === "dark";
   const hasDecoration = template.decoration !== "none" && template.gridMode !== "none";
   const previewBackground = template.previewBackground ?? template.background;
+  const previewHighlightColor = template.highlightColor ?? template.accent;
   const backgroundImage =
     !hasDecoration
       ? "none"
@@ -162,7 +163,7 @@ function TemplatePreview({ template }: { template: CarouselTemplate }) {
       }}
     >
       {template.accentMode !== "none" ? (
-        <div className="template-library-preview-chip" style={{ backgroundColor: template.accent }} />
+        <div className="template-library-preview-chip" style={{ backgroundColor: previewHighlightColor }} />
       ) : null}
       {template.id === "cinema" ? (
         <div
@@ -171,7 +172,7 @@ function TemplatePreview({ template }: { template: CarouselTemplate }) {
             height: 3,
             borderRadius: 999,
             marginTop: 7,
-            backgroundColor: template.accent
+            backgroundColor: previewHighlightColor
           }}
         />
       ) : null}
