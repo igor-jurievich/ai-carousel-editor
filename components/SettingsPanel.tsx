@@ -66,7 +66,16 @@ type SettingsPanelProps = {
   previewMode?: boolean;
 };
 
-const FONT_OPTIONS = ["Inter", "Manrope", "Advent Pro", "Fira Code", "Russo One", "Oswald"];
+const FONT_OPTIONS = [
+  "Inter",
+  "Manrope",
+  "Advent Pro",
+  "Fira Code",
+  "Russo One",
+  "Oswald",
+  "Space Grotesk",
+  "Playfair Display"
+];
 const NON_CONTENT_TEXT_META_KEYS = new Set([
   "slide-chip-text",
   "managed-title-accent-text",
@@ -323,7 +332,7 @@ export function SettingsPanel({
               className={`mobile-style-chip ${
                 slideBackground.toLowerCase() === preset.background.toLowerCase() ? "active" : ""
               }`}
-              onClick={() => onApplyStylePreset(preset.id, { applyAll: false })}
+              onClick={() => onApplyStylePreset(preset.id, { applyAll: true })}
               disabled={disabled}
             >
               {preset.label}

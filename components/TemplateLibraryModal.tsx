@@ -2,8 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "@/components/icons";
-import { getPrimaryTemplates } from "@/lib/carousel";
-import type { CarouselTemplate, CarouselTemplateId } from "@/types/editor";
+import { getTemplate, getTemplatesByCategory } from "@/lib/carousel";
+import type {
+  CarouselTemplate,
+  CarouselTemplateCategory,
+  CarouselTemplateId
+} from "@/types/editor";
 
 type TemplateLibraryModalProps = {
   isOpen: boolean;
@@ -13,7 +17,7 @@ type TemplateLibraryModalProps = {
 };
 
 type TemplateCategory = {
-  id: CarouselTemplateId;
+  id: CarouselTemplateCategory;
   title: string;
 };
 
@@ -29,16 +33,21 @@ export function TemplateLibraryModal({
   onApplyTemplate,
   onClose
 }: TemplateLibraryModalProps) {
-  const templates = useMemo(() => getPrimaryTemplates(), []);
-  const [activeCategory, setActiveCategory] = useState<CarouselTemplateId>(activeTemplateId);
+  const [activeCategory, setActiveCategory] = useState<CarouselTemplateCategory>(
+    getTemplate(activeTemplateId).category
+  );
   const [applyScope, setApplyScope] = useState<"all" | "current">("all");
+  const visibleTemplates = useMemo(
+    () => getTemplatesByCategory(activeCategory),
+    [activeCategory]
+  );
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    setActiveCategory(activeTemplateId);
+    setActiveCategory(getTemplate(activeTemplateId).category);
     setApplyScope("all");
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -51,8 +60,6 @@ export function TemplateLibraryModal({
   if (!isOpen) {
     return null;
   }
-
-  const visibleTemplates = templates.filter((template) => template.id === activeCategory);
 
   return (
     <div className="editor-modal-overlay" onClick={onClose} role="presentation">
@@ -134,8 +141,13 @@ export function TemplateLibraryModal({
 }
 
 function TemplatePreview({ template }: { template: CarouselTemplate }) {
+  const isDarkCategory = template.category === "dark";
+  const hasDecoration = template.decoration !== "none" && template.gridMode !== "none";
+  const previewBackground = template.previewBackground ?? template.background;
   const backgroundImage =
-    template.id === "dark"
+    !hasDecoration
+      ? "none"
+      : isDarkCategory
       ? "repeating-linear-gradient(90deg, rgba(255,255,255,0.11) 0 1px, transparent 1px 62px)"
       : "repeating-linear-gradient(90deg, rgba(23,28,36,0.08) 0 1px, transparent 1px 62px), repeating-linear-gradient(180deg, rgba(23,28,36,0.08) 0 1px, transparent 1px 62px)";
 
@@ -143,16 +155,33 @@ function TemplatePreview({ template }: { template: CarouselTemplate }) {
     <div
       className={`template-library-preview template-library-preview-${template.id}`}
       style={{
-        backgroundColor: template.background,
+        background: previewBackground,
         backgroundImage,
         color: template.bodyColor,
         borderColor: template.surface
       }}
     >
-      <div className="template-library-preview-chip" style={{ backgroundColor: template.accent }} />
+      {template.accentMode !== "none" ? (
+        <div className="template-library-preview-chip" style={{ backgroundColor: template.accent }} />
+      ) : null}
+      {template.id === "cinema" ? (
+        <div
+          style={{
+            width: "58%",
+            height: 3,
+            borderRadius: 999,
+            marginTop: 7,
+            backgroundColor: template.accent
+          }}
+        />
+      ) : null}
       <strong
         className="template-library-preview-title"
-        style={{ color: template.titleColor, fontFamily: template.titleFont }}
+        style={{
+          color: template.titleColor,
+          fontFamily: template.titleFont,
+          fontWeight: template.titleWeight ?? 700
+        }}
       >
         Заголовок
       </strong>
@@ -163,7 +192,11 @@ function TemplatePreview({ template }: { template: CarouselTemplate }) {
       </div>
       <div className="template-library-preview-footer" style={{ color: template.bodyColor }}>
         <span>@username</span>
-        <strong style={{ color: template.accent }}>→</strong>
+        {template.accentMode !== "none" ? (
+          <strong style={{ color: template.accent }}>→</strong>
+        ) : (
+          <strong style={{ color: template.bodyColor }}>→</strong>
+        )}
       </div>
     </div>
   );

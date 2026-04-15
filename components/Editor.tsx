@@ -418,6 +418,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [displaySize, setDisplaySize] = useState(596);
   const [status, setStatus] = useState(DEFAULT_STATUS);
+  const [isGeneratePanelVisible, setIsGeneratePanelVisible] = useState(!initialProjectId);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingTextElementId, setEditingTextElementId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
@@ -847,6 +848,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     if (!existing) {
       setStatus("Проект не найден. Открыта стартовая серия.");
       setProjectId(null);
+      setIsGeneratePanelVisible(true);
       setIsProjectHydrated(true);
       return;
     }
@@ -870,6 +872,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     editingDirtyRef.current = false;
     editingValueRef.current = "";
     setStatus("Проект загружен.");
+    setIsGeneratePanelVisible(false);
     setIsProjectHydrated(true);
   }, [initialProjectId]);
 
@@ -1163,6 +1166,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           previous.fill !== next.fill);
 
       if (shouldReflowManagedText) {
+        const preservedBackground = slide.background;
+        const preservedGridElements = nextElements.filter(
+          (element) => element.type === "shape" && element.metaKey === "decor-grid-line"
+        );
         const managedTextSnapshot = new Map<
           string,
           Pick<
@@ -1243,9 +1250,16 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             highlights: snapshot.highlights
           };
         });
+        const rebuiltWithoutGrid = rebuiltWithPinnedPosition.filter(
+          (element) => !(element.type === "shape" && element.metaKey === "decor-grid-line")
+        );
+        const rebuiltWithPreservedStyle = [
+          ...preservedGridElements,
+          ...rebuiltWithoutGrid
+        ];
 
         if (next.metaKey) {
-          const replacement = rebuiltWithPinnedPosition.find(
+          const replacement = rebuiltWithPreservedStyle.find(
             (element) => element.type === next.type && element.metaKey === next.metaKey
           );
 
@@ -1261,7 +1275,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
         return {
           ...rebuiltSlide,
-          elements: rebuiltWithPinnedPosition
+          background: preservedBackground,
+          elements: rebuiltWithPreservedStyle
         };
       }
 
@@ -1418,6 +1433,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       setEditingTextElementId(null);
       setCaptionResult(null);
       setPromptVariant(data.project?.promptVariant === "A" ? "A" : "B");
+      setIsGeneratePanelVisible(false);
       trackEvent({
         name: "generate_succeeded",
         payload: {
@@ -2396,9 +2412,18 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         editableTextElements.find((element) => element.id !== preferredTitle?.id) ??
         preferredTitle;
       const palette = getTemplate(slide.templateId ?? activeTemplateId);
-      const singleToneColor = selectedHighlightColor || palette.accent || DEFAULT_HIGHLIGHT_COLOR;
+      const templateHighlightColor = normalizeColorForInput(
+        palette.highlightColor ?? palette.accent,
+        DEFAULT_HIGHLIGHT_COLOR
+      );
+      const templateHighlightOpacity =
+        typeof palette.highlightOpacity === "number"
+          ? Math.max(0.08, Math.min(1, palette.highlightOpacity))
+          : undefined;
+      const singleToneColor = selectedHighlightColor || templateHighlightColor;
       const nextHighlightColor =
-        mode === "single" ? singleToneColor : palette.accent || DEFAULT_HIGHLIGHT_COLOR;
+        mode === "single" ? singleToneColor : templateHighlightColor;
+      const nextHighlightOpacity = mode === "single" ? undefined : templateHighlightOpacity;
 
       return {
         ...slide,
@@ -2416,10 +2441,21 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                 : isTitle
                   ? palette.titleColor
                   : palette.bodyColor,
-            highlights: baselineHighlights.map((range) => ({
-              ...range,
-              color: nextHighlightColor
-            }))
+            highlights: baselineHighlights.map((range) => {
+              const nextRange = {
+                ...range,
+                color: nextHighlightColor
+              };
+
+              if (nextHighlightOpacity === undefined) {
+                return nextRange;
+              }
+
+              return {
+                ...nextRange,
+                opacity: nextHighlightOpacity
+              };
+            })
           };
         })
       };
@@ -2431,10 +2467,15 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       updateSlide(currentSlide.id, applyOnSlide, { recordHistory: false });
     }
 
+    const currentTemplate = getTemplate(currentSlide.templateId ?? activeTemplateId);
+    const currentTemplateHighlightColor = normalizeColorForInput(
+      currentTemplate.highlightColor ?? currentTemplate.accent,
+      DEFAULT_HIGHLIGHT_COLOR
+    );
     setSelectedTextHighlightColorOverride(
       mode === "single"
         ? selectedHighlightColor || DEFAULT_HIGHLIGHT_COLOR
-        : getTemplate(currentSlide.templateId ?? activeTemplateId).accent || DEFAULT_HIGHLIGHT_COLOR
+        : currentTemplateHighlightColor
     );
     setStatus(
       mode === "single"
@@ -2797,6 +2838,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setEditingValue("");
     setMobileToolTab(null);
     setExportMode("zip");
+    setIsGeneratePanelVisible(true);
     setStatus(DEFAULT_STATUS);
   };
 
@@ -3094,17 +3136,19 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     >
       <div className="desktop-only">
         <div className="editor-shell editor-shell-redesigned">
-          <Toolbar
-            topic={topic}
-            slidesCount={slidesCount}
-            topicMaxLength={MAX_TOPIC_CHARS}
-            status={status}
-            onTopicChange={setTopic}
-            onSlidesCountChange={(value) => setSlidesCount(clampSlidesCount(value))}
-            onGenerate={handleGenerate}
-            isGenerating={isGenerating}
-            disabled={generationLocked}
-          />
+          {isGeneratePanelVisible ? (
+            <Toolbar
+              topic={topic}
+              slidesCount={slidesCount}
+              topicMaxLength={MAX_TOPIC_CHARS}
+              status={status}
+              onTopicChange={setTopic}
+              onSlidesCountChange={(value) => setSlidesCount(clampSlidesCount(value))}
+              onGenerate={handleGenerate}
+              isGenerating={isGenerating}
+              disabled={generationLocked}
+            />
+          ) : null}
 
           <div className="studio-grid">
             <aside className="action-rail">
@@ -3325,55 +3369,57 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             </button>
           </header>
 
-          <details className="mobile-generate-panel" ref={mobileGeneratePanelRef}>
-            <summary>Создать новую карусель</summary>
-            <div className="mobile-generate-body">
-              <textarea
-                ref={mobileGenerateTopicRef}
-                value={topic}
-                onChange={(event) => setTopic(event.target.value)}
-                placeholder="Например: «Как эксперту получать заявки через Instagram-карусели»"
-                rows={3}
-                maxLength={MAX_TOPIC_CHARS}
-                title={`Максимум ${MAX_TOPIC_CHARS} символов`}
-                disabled={generationLocked}
-              />
-              <div className="mobile-generate-row">
-                <label className="mobile-count-label">
-                  Карточек
-                  <select
-                    value={slidesCount}
-                    onChange={(event) => setSlidesCount(clampSlidesCount(Number(event.target.value)))}
-                    disabled={generationLocked}
-                  >
-                    {SLIDES_COUNT_OPTIONS.map((count) => (
-                      <option key={count} value={count}>
-                        {count}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="mobile-generate-actions">
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => void handleGenerate({ source: "mobile" })}
-                    disabled={generationLocked}
-                  >
-                    {isGenerating ? "Генерирую..." : "Сгенерировать"}
-                  </button>
-                  <button
-                    className="btn secondary"
-                    type="button"
-                    onClick={() => void handleGenerate({ source: "mobile", openPostTool: true })}
-                    disabled={generationLocked}
-                  >
-                    {isGenerating ? "Подождите..." : "Сгенерировать + пост"}
-                  </button>
+          {isGeneratePanelVisible ? (
+            <details className="mobile-generate-panel" ref={mobileGeneratePanelRef}>
+              <summary>Создать новую карусель</summary>
+              <div className="mobile-generate-body">
+                <textarea
+                  ref={mobileGenerateTopicRef}
+                  value={topic}
+                  onChange={(event) => setTopic(event.target.value)}
+                  placeholder="Например: «Как эксперту получать заявки через Instagram-карусели»"
+                  rows={3}
+                  maxLength={MAX_TOPIC_CHARS}
+                  title={`Максимум ${MAX_TOPIC_CHARS} символов`}
+                  disabled={generationLocked}
+                />
+                <div className="mobile-generate-row">
+                  <label className="mobile-count-label">
+                    Карточек
+                    <select
+                      value={slidesCount}
+                      onChange={(event) => setSlidesCount(clampSlidesCount(Number(event.target.value)))}
+                      disabled={generationLocked}
+                    >
+                      {SLIDES_COUNT_OPTIONS.map((count) => (
+                        <option key={count} value={count}>
+                          {count}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="mobile-generate-actions">
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => void handleGenerate({ source: "mobile" })}
+                      disabled={generationLocked}
+                    >
+                      {isGenerating ? "Генерирую..." : "Сгенерировать"}
+                    </button>
+                    <button
+                      className="btn secondary"
+                      type="button"
+                      onClick={() => void handleGenerate({ source: "mobile", openPostTool: true })}
+                      disabled={generationLocked}
+                    >
+                      {isGenerating ? "Подождите..." : "Сгенерировать + пост"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </details>
+            </details>
+          ) : null}
 
           <div className="mobile-status-pill">{status}</div>
 

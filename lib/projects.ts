@@ -1,3 +1,4 @@
+import { CAROUSEL_TEMPLATE_IDS } from "@/types/editor";
 import type {
   CanvasElement,
   CarouselProject,
@@ -8,6 +9,7 @@ import type {
 
 const STORAGE_KEY = "ai-carousel.projects.v1";
 const MAX_PERSISTED_DATA_URL_LENGTH = 420_000;
+const TEMPLATE_ID_SET = new Set<CarouselTemplateId>(CAROUSEL_TEMPLATE_IDS);
 
 type StoredProject = CarouselProject & {
   id: string;
@@ -187,8 +189,9 @@ function cloneSlides(slides: Slide[]): Slide[] {
         : undefined;
 
     const templateId: CarouselTemplateId | undefined =
-      slideSource.templateId === "dark" || slideSource.templateId === "light" || slideSource.templateId === "color"
-        ? slideSource.templateId
+      typeof slideSource.templateId === "string" &&
+      TEMPLATE_ID_SET.has(slideSource.templateId as CarouselTemplateId)
+        ? (slideSource.templateId as CarouselTemplateId)
         : undefined;
 
     const backgroundImage =

@@ -359,12 +359,25 @@ function resolveFontWeight(fontStyle?: string) {
   if (!fontStyle) {
     return "700";
   }
-  const normalized = fontStyle.toLowerCase();
-  if (normalized.includes("bold")) {
-    return "700";
+  const normalized = fontStyle.toLowerCase().trim();
+  const directWeight = normalized.match(/\b([1-9]00)\b/);
+  if (directWeight?.[1]) {
+    return directWeight[1];
   }
-  if (normalized.includes("500")) {
+  if (normalized.includes("thin") || normalized.includes("light") || normalized.includes("300")) {
+    return "300";
+  }
+  if (normalized.includes("medium") || normalized.includes("500")) {
     return "500";
+  }
+  if (normalized.includes("semibold") || normalized.includes("demibold") || normalized.includes("600")) {
+    return "600";
+  }
+  if (normalized.includes("extrabold") || normalized.includes("ultrabold") || normalized.includes("800")) {
+    return "800";
+  }
+  if (normalized.includes("bold") || normalized.includes("700")) {
+    return "700";
   }
   return "400";
 }

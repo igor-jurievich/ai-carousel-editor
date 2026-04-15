@@ -1,5 +1,18 @@
 export type TextRole = "title" | "body" | "caption";
-export type CarouselTemplateId = "dark" | "light" | "color";
+export const CAROUSEL_TEMPLATE_CATEGORIES = ["dark", "light", "color"] as const;
+export type CarouselTemplateCategory = (typeof CAROUSEL_TEMPLATE_CATEGORIES)[number];
+export const CAROUSEL_TEMPLATE_IDS = [
+  "dark",
+  "light",
+  "color",
+  "neon",
+  "cinema",
+  "minimal",
+  "beige",
+  "indigo",
+  "sunset"
+] as const;
+export type CarouselTemplateId = (typeof CAROUSEL_TEMPLATE_IDS)[number];
 export type SlideFormat = "1:1" | "4:5" | "9:16";
 export type ElementMetaKey = string;
 export type ImageFitMode = "cover" | "contain" | "original";
@@ -201,16 +214,22 @@ export type CarouselPostCaption = {
 
 export type CarouselTemplate = {
   id: CarouselTemplateId;
+  category: CarouselTemplateCategory;
   name: string;
   description: string;
   accent: string;
   accentAlt?: string;
+  highlightColor?: string;
+  highlightOpacity?: number;
   background: string;
+  previewBackground?: string;
   surface: string;
   titleColor: string;
   bodyColor: string;
   titleFont: string;
   bodyFont: string;
+  titleWeight?: number;
+  bodyWeight?: number;
   titleOffsetY?: number;
   bodyOffsetY?: number;
   titleWidth?: number;
@@ -219,7 +238,7 @@ export type CarouselTemplate = {
   chipStyle?: "solid" | "outline";
   decoration?: "grid" | "none";
   accentMode?: "none" | "text" | "chip";
-  gridMode?: "full" | "vertical" | "dots";
+  gridMode?: "full" | "vertical" | "dots" | "none";
   gridStep?: number;
   gridOpacity?: number;
   preview?: string;

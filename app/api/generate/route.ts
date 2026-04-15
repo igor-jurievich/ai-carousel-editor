@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { clampSlidesCount } from "@/lib/slides";
 import { generateCarouselFromTopic, type PromptVariant } from "@/lib/openai";
-import type {
-  CarouselOutlineSlide,
-  CarouselTemplateId,
-  SlideFormat
+import {
+  CAROUSEL_TEMPLATE_IDS,
+  type CarouselOutlineSlide,
+  type CarouselTemplateId,
+  type SlideFormat
 } from "@/types/editor";
 
 export const runtime = "nodejs";
@@ -15,6 +16,7 @@ const DEFAULT_GENERATE_TIMEOUT_MS = 30_000;
 const DEFAULT_RATE_LIMIT_MAX = 12;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_SWEEP_THRESHOLD = 5000;
+const TEMPLATE_ID_SET = new Set<CarouselTemplateId>(CAROUSEL_TEMPLATE_IDS);
 
 type RateLimitBucket = {
   count: number;
@@ -318,7 +320,9 @@ function resolveFormat(value: unknown): SlideFormat {
 }
 
 function resolveTheme(value: unknown): CarouselTemplateId {
-  return value === "light" || value === "dark" || value === "color" ? value : "light";
+  return typeof value === "string" && TEMPLATE_ID_SET.has(value as CarouselTemplateId)
+    ? (value as CarouselTemplateId)
+    : "light";
 }
 
 function resolvePromptVariant(value: unknown): PromptVariant {

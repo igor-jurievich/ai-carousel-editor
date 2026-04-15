@@ -3,6 +3,7 @@ import type {
   CanvasSlideType,
   CarouselOutlineSlide,
   CarouselSlideRole,
+  CarouselTemplateCategory,
   CarouselTemplate,
   CarouselTemplateId,
   ImageElement,
@@ -38,10 +39,12 @@ export const PRIMARY_TEMPLATE_IDS = ["dark", "light", "color"] as const satisfie
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   {
     id: "dark",
+    category: "dark",
     name: "Тёмный",
     description: "Контрастная тёмная тема в стиле editorial: глубокий фон и резкий акцент.",
     accent: "#ff2a2a",
     accentAlt: "#ff5e5e",
+    highlightColor: "#ff5e5e",
     background: "#090d16",
     surface: "#101523",
     titleColor: "#f6f8ff",
@@ -58,10 +61,12 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   },
   {
     id: "light",
+    category: "light",
     name: "Светлый",
     description: "Чистая светлая тема с сеткой и холодным синим акцентом.",
     accent: "#1f49ff",
     accentAlt: "#5a77ff",
+    highlightColor: "#5a77ff",
     background: "#f1f3f7",
     surface: "#ffffff",
     titleColor: "#181d29",
@@ -78,10 +83,12 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   },
   {
     id: "color",
+    category: "color",
     name: "Цветной",
     description: "Яркая журнальная тема: жёлтый фон, красные плашки и плотная типографика.",
     accent: "#ff2d00",
     accentAlt: "#ff6b3d",
+    highlightColor: "#ff6b3d",
     background: "#ffeb0a",
     surface: "#fff06a",
     titleColor: "#171b24",
@@ -95,6 +102,144 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     gridStep: 72,
     gridOpacity: 0.12,
     preview: "Яркая журнальная подача"
+  },
+  {
+    id: "neon",
+    category: "dark",
+    name: "Неон",
+    description: "Тёмный фон с неоновыми акцентами",
+    accent: "#00ff88",
+    accentAlt: "#ff0080",
+    highlightColor: "#ff0080",
+    background: "#0a0a0a",
+    surface: "#151515",
+    titleColor: "#00ff88",
+    bodyColor: "#ffffff",
+    titleFont: "Space Grotesk",
+    bodyFont: "Space Grotesk",
+    titleWeight: 700,
+    bodyWeight: 500,
+    chipStyle: "outline",
+    decoration: "grid",
+    accentMode: "text",
+    gridMode: "vertical",
+    gridStep: 92,
+    gridOpacity: 0.12,
+    preview: "Футуристичный неоновый стиль"
+  },
+  {
+    id: "cinema",
+    category: "dark",
+    name: "Кино",
+    description: "Кинематографичный тёмный стиль",
+    accent: "#f5e642",
+    accentAlt: "#f5e642",
+    highlightColor: "#f5e642",
+    background: "#111111",
+    surface: "#1b1b1b",
+    titleColor: "#f5e642",
+    bodyColor: "#e0e0e0",
+    titleFont: "Oswald",
+    bodyFont: "Oswald",
+    titleWeight: 600,
+    bodyWeight: 500,
+    chipStyle: "outline",
+    decoration: "none",
+    accentMode: "none",
+    gridMode: "none",
+    preview: "Кинематографичный акцент на типографике"
+  },
+  {
+    id: "minimal",
+    category: "light",
+    name: "Минимал",
+    description: "Ультра-чистый минималистичный стиль",
+    accent: "#111111",
+    accentAlt: "#f0f0f0",
+    highlightColor: "#f0f0f0",
+    background: "#ffffff",
+    surface: "#f8f8f8",
+    titleColor: "#111111",
+    bodyColor: "#444444",
+    titleFont: "Inter",
+    bodyFont: "Inter",
+    titleWeight: 300,
+    bodyWeight: 300,
+    chipStyle: "solid",
+    decoration: "none",
+    accentMode: "none",
+    gridMode: "none",
+    preview: "Чистая типографика без декора"
+  },
+  {
+    id: "beige",
+    category: "light",
+    name: "Бежевый",
+    description: "Тёплый кремовый стиль",
+    accent: "#c4956a",
+    accentAlt: "#e8d5b7",
+    highlightColor: "#e8d5b7",
+    background: "#faf6f0",
+    surface: "#fffaf4",
+    titleColor: "#2c1810",
+    bodyColor: "#5c4033",
+    titleFont: "Playfair Display",
+    bodyFont: "Playfair Display",
+    titleWeight: 700,
+    bodyWeight: 700,
+    chipStyle: "solid",
+    decoration: "none",
+    accentMode: "chip",
+    gridMode: "none",
+    preview: "Тёплый lifestyle-стиль"
+  },
+  {
+    id: "indigo",
+    category: "color",
+    name: "Индиго",
+    description: "Глубокий синий с белым",
+    accent: "#818cf8",
+    accentAlt: "#4f46e5",
+    highlightColor: "#4f46e5",
+    background: "#3730a3",
+    surface: "#4338ca",
+    titleColor: "#ffffff",
+    bodyColor: "#c7d2fe",
+    titleFont: "Inter",
+    bodyFont: "Inter",
+    titleWeight: 700,
+    bodyWeight: 500,
+    chipStyle: "solid",
+    decoration: "grid",
+    accentMode: "chip",
+    gridMode: "dots",
+    gridStep: 74,
+    gridOpacity: 0.1,
+    preview: "Профессиональный бизнес-стиль"
+  },
+  {
+    id: "sunset",
+    category: "color",
+    name: "Закат",
+    description: "Градиент заката — оранжевый к розовому",
+    accent: "#ffffff",
+    accentAlt: "#ffffff",
+    highlightColor: "#ffffff",
+    highlightOpacity: 0.3,
+    background: "#ff6b35",
+    previewBackground: "linear-gradient(135deg, #ff6b35 0%, #f7c59f 50%, #ff6b9d 100%)",
+    surface: "#ffc3a1",
+    titleColor: "#ffffff",
+    bodyColor: "#fff5f0",
+    titleFont: "Inter",
+    bodyFont: "Inter",
+    titleWeight: 800,
+    bodyWeight: 600,
+    chipStyle: "solid",
+    decoration: "none",
+    accentMode: "chip",
+    gridMode: "none",
+    preview: "Тёплый градиентный стиль"
   }
 ];
 
@@ -122,7 +267,7 @@ type SlidePalette = {
   bodyColor: string;
   accent: string;
   accentMode: "none" | "text" | "chip";
-  gridMode: "full" | "vertical" | "dots";
+  gridMode: "full" | "vertical" | "dots" | "none";
   gridStep: number;
   gridColor: string;
 };
@@ -143,6 +288,7 @@ const MANAGED_META_KEYS = new Set([
   "managed-title",
   "managed-title-accent-chip",
   "managed-title-accent-text",
+  "managed-title-top-bar",
   "managed-body",
   "image-placeholder",
   "image-placeholder-text",
@@ -230,6 +376,10 @@ function resolveTemplateId(candidate: CarouselTemplateId | undefined, fallback: 
 
 export function getPrimaryTemplates() {
   return PRIMARY_TEMPLATE_IDS.map((id) => getTemplate(id));
+}
+
+export function getTemplatesByCategory(category: CarouselTemplateCategory) {
+  return CAROUSEL_TEMPLATES.filter((template) => template.category === category);
 }
 
 function clampValue(value: number, min: number, max: number) {
@@ -583,7 +733,7 @@ function resolveSlidePalette(template: CarouselTemplate, blueprint: SlideBluepri
   const baseGridStep = template.gridStep ?? 74;
   const baseGridOpacity = template.gridOpacity ?? 0.08;
   const baseGridColor =
-    template.id === "dark"
+    template.category === "dark"
       ? `rgba(255, 255, 255, ${baseGridOpacity})`
       : `rgba(20, 27, 36, ${baseGridOpacity})`;
 
@@ -906,12 +1056,25 @@ function resolveFontWeight(fontStyle?: string) {
     return "700";
   }
 
-  const normalized = fontStyle.toLowerCase();
-  if (normalized.includes("bold")) {
-    return "700";
+  const normalized = fontStyle.toLowerCase().trim();
+  const directWeight = normalized.match(/\b([1-9]00)\b/);
+  if (directWeight?.[1]) {
+    return directWeight[1];
   }
-  if (normalized.includes("500")) {
+  if (normalized.includes("thin") || normalized.includes("light") || normalized.includes("300")) {
+    return "300";
+  }
+  if (normalized.includes("medium") || normalized.includes("500")) {
     return "500";
+  }
+  if (normalized.includes("semibold") || normalized.includes("demibold") || normalized.includes("600")) {
+    return "600";
+  }
+  if (normalized.includes("extrabold") || normalized.includes("ultrabold") || normalized.includes("800")) {
+    return "800";
+  }
+  if (normalized.includes("bold") || normalized.includes("700")) {
+    return "700";
   }
 
   return "400";
@@ -1021,13 +1184,28 @@ function composeTitleAndAccentElements(params: {
   palette: SlidePalette;
   template: CarouselTemplate;
 }) {
-  const { titleElement, palette } = params;
+  const { titleElement, palette, template } = params;
+  const topBar =
+    template.id === "cinema"
+      ? createShapeElement({
+          metaKey: "managed-title-top-bar",
+          x: titleElement.x,
+          y: Math.max(0, titleElement.y - 26),
+          width: Math.max(140, Math.round(titleElement.width * 0.62)),
+          height: 3,
+          fill: palette.accent,
+          opacity: 1,
+          cornerRadius: 999
+        })
+      : null;
+  const withTopBar = (elements: CanvasElement[]) => (topBar ? [topBar, ...elements] : elements);
+
   if (palette.accentMode === "none") {
-    return [titleElement];
+    return withTopBar([titleElement]);
   }
 
   if (titleElement.wasAutoTruncated || normalizeMultilineText(titleElement.text).length > 110) {
-    return [titleElement];
+    return withTopBar([titleElement]);
   }
 
   const lineHeight = titleElement.lineHeight ?? 1.05;
@@ -1038,12 +1216,12 @@ function composeTitleAndAccentElements(params: {
     lineHeight
   );
   if (visualLines > 3) {
-    return [titleElement];
+    return withTopBar([titleElement]);
   }
 
   const accent = resolveLeadingTitleAccent(titleElement.text) ?? resolveFirstRenderedWordAccent(titleElement.text);
   if (!accent?.text || accent.end <= accent.start) {
-    return [titleElement];
+    return withTopBar([titleElement]);
   }
 
   const highlights = normalizeTextHighlights(
@@ -1058,15 +1236,15 @@ function composeTitleAndAccentElements(params: {
   );
 
   if (!highlights.length) {
-    return [titleElement];
+    return withTopBar([titleElement]);
   }
 
-  return [
+  return withTopBar([
     {
       ...titleElement,
       highlights
     }
-  ];
+  ]);
 }
 
 export function createTextElement(
@@ -1403,6 +1581,10 @@ function buildGridDecoration(format: SlideFormat, palette: SlidePalette) {
   const step = Math.max(58, Math.round(palette.gridStep));
   const lines: ShapeElement[] = [];
 
+  if (palette.gridMode === "none") {
+    return lines;
+  }
+
   if (palette.gridMode === "dots") {
     const dotSize = format === "9:16" ? 6 : 5;
     const offset = Math.round(step * 0.45);
@@ -1479,6 +1661,8 @@ function buildHeaderAndFooter(
   const counterFontSize = format === "9:16" ? 39 : 37;
   const subtitleFontSize = format === "9:16" ? 42 : 40;
   const arrowFontSize = format === "9:16" ? 64 : 58;
+  const bodyFontStyle = `${template.bodyWeight ?? 400}`;
+  const titleFontStyle = `${template.titleWeight ?? 700}`;
 
   const items: TextElement[] = [
     createFittedTextElement({
@@ -1492,7 +1676,7 @@ function buildHeaderAndFooter(
       preferredFontSize: captionFontSize,
       minFontSize: 24,
       fontFamily: template.bodyFont,
-      fontStyle: "normal",
+      fontStyle: bodyFontStyle,
       fill: bodyColor,
       align: "left",
       lineHeight: 1.1
@@ -1508,7 +1692,7 @@ function buildHeaderAndFooter(
       preferredFontSize: counterFontSize,
       minFontSize: 24,
       fontFamily: template.bodyFont,
-      fontStyle: "normal",
+      fontStyle: bodyFontStyle,
       fill: bodyColor,
       align: "right",
       lineHeight: 1.1
@@ -1528,7 +1712,7 @@ function buildHeaderAndFooter(
         preferredFontSize: subtitleFontSize,
         minFontSize: 24,
         fontFamily: template.bodyFont,
-        fontStyle: "normal",
+        fontStyle: bodyFontStyle,
         fill: bodyColor,
         align: "left",
         lineHeight: 1.1
@@ -1547,7 +1731,7 @@ function buildHeaderAndFooter(
       height: 56,
       fontSize: arrowFontSize,
       fontFamily: template.titleFont,
-      fontStyle: "bold",
+      fontStyle: titleFontStyle,
       fill: bodyColor,
       align: "right",
       lineHeight: 1
@@ -1573,6 +1757,8 @@ function buildMainContent(
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
+  const titleFontStyle = `${template.titleWeight ?? 700}`;
+  const bodyFontStyle = `${template.bodyWeight ?? 400}`;
   const bodyGap = format === "9:16" ? 58 : format === "4:5" ? 50 : 42;
   const resolveBodyStartY = (title: TextElement, preferredY: number) => {
     const lineHeight = title.lineHeight ?? 1.04;
@@ -1605,7 +1791,7 @@ function buildMainContent(
       preferredFontSize: overrides.preferredFontSize,
       minFontSize: overrides.minFontSize,
       fontFamily: template.titleFont,
-      fontStyle: "bold",
+      fontStyle: titleFontStyle,
       fill: titleFill,
       align: "left",
       lineHeight: overrides.lineHeight
@@ -1648,7 +1834,7 @@ function buildMainContent(
           y: imageArea.y,
           width: imageArea.width,
           height: imageArea.height,
-          fill: template.id === "dark" ? "#2c2f36" : "#d2d3d6",
+          fill: template.category === "dark" ? "#2c2f36" : "#d2d3d6",
           opacity: 1,
           cornerRadius: 0
         }),
@@ -1663,8 +1849,8 @@ function buildMainContent(
           preferredFontSize: format === "9:16" ? 62 : 54,
           minFontSize: 30,
           fontFamily: template.bodyFont,
-          fontStyle: "normal",
-          fill: template.id === "dark" ? "#8a8f99" : "#8d8f93",
+          fontStyle: bodyFontStyle,
+          fill: template.category === "dark" ? "#8a8f99" : "#8d8f93",
           align: "center",
           lineHeight: 1.02
         })
@@ -1699,7 +1885,7 @@ function buildMainContent(
         preferredFontSize: format === "9:16" ? 43 : 39,
         minFontSize: 22,
         fontFamily: template.bodyFont,
-        fontStyle: "normal",
+        fontStyle: bodyFontStyle,
         fill: bodyFill,
         align: "left",
         lineHeight: 1.18
@@ -1735,7 +1921,7 @@ function buildMainContent(
         preferredFontSize: format === "9:16" ? 42 : 39,
         minFontSize: 22,
         fontFamily: template.bodyFont,
-        fontStyle: "normal",
+        fontStyle: bodyFontStyle,
         fill: bodyFill,
         align: "left",
         lineHeight: 1.18
@@ -1768,7 +1954,7 @@ function buildMainContent(
       preferredFontSize: format === "9:16" ? 44 : 40,
       minFontSize: 22,
       fontFamily: template.bodyFont,
-      fontStyle: "normal",
+      fontStyle: bodyFontStyle,
       fill: bodyFill,
       align: "left",
       lineHeight: 1.18

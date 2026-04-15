@@ -108,18 +108,13 @@ export default function GeneratePage() {
     };
   }, [isAdvancedOpen]);
 
-  useEffect(() => {
-    if (previewSlides?.length && isAdvancedOpen) {
-      setIsAdvancedOpen(false);
-    }
-  }, [previewSlides, isAdvancedOpen]);
-
   const handleGenerate = async () => {
     if (!canGenerate) {
       return;
     }
 
     try {
+      setIsAdvancedOpen(false);
       setIsGenerating(true);
       setError(null);
       trackEvent({

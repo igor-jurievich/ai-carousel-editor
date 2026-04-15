@@ -78,7 +78,16 @@ const TOOLBAR_ITEMS: Array<{ id: MobileToolTab; icon: AppIconName; label: string
   { id: "size", icon: "size", label: "Размер" }
 ];
 
-const FONT_OPTIONS = ["Inter", "Manrope", "Advent Pro", "Fira Code", "Russo One", "Oswald"];
+const FONT_OPTIONS = [
+  "Inter",
+  "Manrope",
+  "Advent Pro",
+  "Fira Code",
+  "Russo One",
+  "Oswald",
+  "Space Grotesk",
+  "Playfair Display"
+];
 const HEX_COLOR_INPUT_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 const STYLE_PRESETS = [
