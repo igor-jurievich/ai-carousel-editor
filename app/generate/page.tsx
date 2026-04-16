@@ -136,7 +136,9 @@ export default function GeneratePage() {
       const fallbackName =
         typeof user.user_metadata?.name === "string" && user.user_metadata.name.trim()
           ? user.user_metadata.name.trim()
-          : (user.email ?? "").split("@")[0] || "Пользователь";
+          : typeof user.user_metadata?.login === "string" && user.user_metadata.login.trim()
+            ? user.user_metadata.login.trim()
+            : "Пользователь";
       setAccountName(fallbackName);
 
       const { data: profile } = await supabase

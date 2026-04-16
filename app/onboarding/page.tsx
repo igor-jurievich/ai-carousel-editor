@@ -18,7 +18,6 @@ type OnboardingDraft = {
   role: string;
   topic: string;
   login: string;
-  email: string;
   password: string;
 };
 
@@ -39,22 +38,21 @@ function createMessageId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function isEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
+function normalizeLogin(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  const localPart = trimmed.split("@")[0] ?? "";
+  return localPart
+    .replace(/\s+/gu, "")
+    .replace(/[^a-z0-9._-]/giu, "");
 }
 
-function resolveEmailFromLogin(value: string) {
-  const trimmed = value.trim().toLowerCase();
-  if (isEmail(trimmed)) {
-    return trimmed;
-  }
-
-  const username = trimmed.replace(/\s+/gu, "").replace(/[^a-z0-9._-]/giu, "");
-  if (!username) {
+function resolveAuthEmailFromLogin(value: string) {
+  const login = normalizeLogin(value);
+  if (!login) {
     return null;
   }
 
-  return `${username}@pastello.io`;
+  return `${login}@pastello.io`;
 }
 
 function getErrorMessage(error: unknown) {
@@ -71,7 +69,7 @@ function getErrorMessage(error: unknown) {
     message.includes("already been registered") ||
     message.includes("already exists")
   ) {
-    return "Этот email уже используется. Попробуй другой или войди в аккаунт";
+    return "Этот логин уже используется. Попробуй другой или войди в аккаунт";
   }
 
   if (message.includes("password") && message.includes("least 6")) {
@@ -99,7 +97,6 @@ export default function OnboardingPage() {
     role: "",
     topic: "",
     login: "",
-    email: "",
     password: ""
   });
 
@@ -118,7 +115,7 @@ export default function OnboardingPage() {
       return "Например: личный бренд для экспертов";
     }
     if (step === "login") {
-      return "email или никнейм";
+      return "Придумай логин";
     }
     if (step === "password") {
       return "Введите пароль";
@@ -186,14 +183,20 @@ export default function OnboardingPage() {
     }
 
     try {
+      const authEmail = resolveAuthEmailFromLogin(finalDraft.login);
+      if (!authEmail) {
+        throw new Error("invalid_login");
+      }
+
       const { data, error } = await supabase.auth.signUp({
-        email: finalDraft.email,
+        email: authEmail,
         password: finalDraft.password,
         options: {
           data: {
             name: finalDraft.name,
             role: finalDraft.role,
-            topic: finalDraft.topic
+            topic: finalDraft.topic,
+            login: finalDraft.login
           }
         }
       });
@@ -226,7 +229,7 @@ export default function OnboardingPage() {
 
       if (!data.session) {
         const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: finalDraft.email,
+          email: authEmail,
           password: finalDraft.password
         });
 
@@ -242,7 +245,7 @@ export default function OnboardingPage() {
       const message = getErrorMessage(error);
       addBotMessage(message);
 
-      if (message.includes("email уже используется")) {
+      if (message.includes("логин уже используется")) {
         setStep("login");
       } else if (message.includes("серверу авторизации")) {
         setStep("login");
@@ -296,24 +299,23 @@ export default function OnboardingPage() {
         ...current,
         topic: value
       }));
-      addBotMessage("Почти готово! Придумай себе логин\n(email или никнейм):");
+      addBotMessage("Почти готово! Придумай себе логин\n(латиница, цифры, . _ -):");
       setInput("");
       setStep("login");
       return;
     }
 
     if (step === "login") {
-      const email = resolveEmailFromLogin(value);
-      if (!email) {
-        addBotMessage("Не удалось распознать логин. Введи email или никнейм без пробелов.");
+      const normalizedLogin = normalizeLogin(value);
+      if (!normalizedLogin) {
+        addBotMessage("Не удалось распознать логин. Используй латиницу, цифры, . _ -");
         return;
       }
 
-      addUserMessage(value);
+      addUserMessage(normalizedLogin);
       setDraft((current) => ({
         ...current,
-        login: value,
-        email
+        login: normalizedLogin
       }));
       addBotMessage("И последнее — придумай пароль\n(минимум 6 символов):");
       setInput("");

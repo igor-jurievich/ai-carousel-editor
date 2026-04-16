@@ -8,7 +8,7 @@ import styles from "./login.module.css";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -30,8 +30,13 @@ export default function LoginPage() {
     setErrorMessage("");
 
     try {
+      const authEmail = resolveAuthEmailFromLogin(login);
+      if (!authEmail) {
+        throw new Error("invalid_login");
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: authEmail,
         password
       });
 
@@ -42,7 +47,7 @@ export default function LoginPage() {
       router.replace("/generate");
       router.refresh();
     } catch {
-      setErrorMessage("Неверный email или пароль");
+      setErrorMessage("Неверный логин или пароль");
     } finally {
       setIsLoading(false);
     }
@@ -58,16 +63,17 @@ export default function LoginPage() {
           <p className={styles.subtitle}>Войди в свой аккаунт</p>
 
           <form className={styles.form} onSubmit={handleSubmit}>
-            <label className={styles.fieldLabel} htmlFor="login-email">
-              Email
+            <label className={styles.fieldLabel} htmlFor="login-username">
+              Логин
             </label>
             <input
-              id="login-email"
-              type="email"
+              id="login-username"
+              type="text"
               className={styles.input}
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="email"
+              value={login}
+              onChange={(event) => setLogin(event.target.value)}
+              autoComplete="username"
+              placeholder="например: igor.jurievich"
               required
             />
 
@@ -111,4 +117,18 @@ export default function LoginPage() {
       </section>
     </main>
   );
+}
+
+function resolveAuthEmailFromLogin(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  const localPart = trimmed.split("@")[0] ?? "";
+  const normalized = localPart
+    .replace(/\s+/gu, "")
+    .replace(/[^a-z0-9._-]/giu, "");
+
+  if (!normalized) {
+    return null;
+  }
+
+  return `${normalized}@pastello.io`;
 }
