@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 import { clampSlidesCount } from "@/lib/slides";
 import { generateCarouselFromTopic, type PromptVariant } from "@/lib/openai";
+import { getSupabasePublicConfig } from "@/lib/supabase";
 import {
   CAROUSEL_TEMPLATE_IDS,
   type CarouselOutlineSlide,
@@ -26,6 +29,48 @@ type RateLimitBucket = {
 const generateRateLimit = new Map<string, RateLimitBucket>();
 
 export async function POST(request: Request) {
+  const supabase = createGenerateRouteClient();
+  if (!supabase) {
+    return NextResponse.json(
+      { error: "Сервис недоступен: не настроен Supabase." },
+      { status: 500 }
+    );
+  }
+
+  const {
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json(
+      { error: "Необходимо войти в аккаунт, чтобы генерировать карусели." },
+      { status: 401 }
+    );
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("credits")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    console.error("Failed to load profile credits:", profileError);
+    return NextResponse.json(
+      { error: "Не удалось проверить баланс баллов. Попробуйте чуть позже." },
+      { status: 500 }
+    );
+  }
+
+  const initialCredits = Number(profile?.credits ?? 0);
+  if (!Number.isFinite(initialCredits) || initialCredits <= 0) {
+    return NextResponse.json(
+      { error: "no_credits", message: "У тебя закончились баллы" },
+      { status: 403 }
+    );
+  }
+
   const now = Date.now();
   const ip = getClientIp(request);
   const rateLimit = consumeGenerateSlot(ip, now);
@@ -134,6 +179,28 @@ export async function POST(request: Request) {
       );
     }
 
+    const { data: remainingCredits, error: consumeCreditError } = await supabase.rpc(
+      "consume_generation_credit",
+      {
+        p_user_id: user.id
+      }
+    );
+
+    if (consumeCreditError) {
+      console.error("Failed to consume generation credit:", consumeCreditError);
+      return NextResponse.json(
+        { error: "Не удалось списать балл за генерацию. Попробуйте снова." },
+        { status: 500 }
+      );
+    }
+
+    if (typeof remainingCredits !== "number") {
+      return NextResponse.json(
+        { error: "no_credits", message: "У тебя закончились баллы" },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json({
       slides,
       project: {
@@ -144,7 +211,8 @@ export async function POST(request: Request) {
         promptVariant: generationResult.promptVariant,
         language: "ru",
         version: 1
-      }
+      },
+      remainingCredits: Math.max(0, Math.trunc(remainingCredits))
     });
   } catch (error) {
     if (error instanceof Error && error.name === "GenerateTimeoutError") {
@@ -351,5 +419,20 @@ function isStringArray(value: unknown, minLength = 0) {
     Array.isArray(value) &&
     value.length >= minLength &&
     value.every((item) => typeof item === "string" && item.trim().length > 0)
+  );
+}
+
+function createGenerateRouteClient() {
+  const config = getSupabasePublicConfig();
+  if (!config) {
+    return null;
+  }
+
+  return createRouteHandlerClient(
+    { cookies },
+    {
+      supabaseUrl: config.supabaseUrl,
+      supabaseKey: config.supabaseKey
+    }
   );
 }

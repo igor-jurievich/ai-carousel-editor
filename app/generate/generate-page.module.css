@@ -36,13 +36,34 @@
   gap: 8px;
   justify-items: center;
   text-align: center;
-  padding-right: 48px;
+  padding-right: 120px;
 }
 
-.accountMenu {
+.accountControls {
   position: absolute;
   top: 0;
   right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.creditsBadge {
+  border-radius: 20px;
+  background: #f0f4ff;
+  color: #6366f1;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.creditsBadgeZero {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.accountMenu {
+  position: relative;
 }
 
 .accountAvatar {
@@ -399,6 +420,46 @@
   font-weight: 600;
 }
 
+.noticeOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 24, 39, 0.42);
+  padding: 16px;
+}
+
+.noticeCard {
+  width: min(420px, 100%);
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  padding: 18px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+  display: grid;
+  gap: 14px;
+}
+
+.noticeText {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #111827;
+  white-space: pre-line;
+}
+
+.noticeButton {
+  justify-self: end;
+  border: none;
+  border-radius: 10px;
+  background: #6366f1;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 8px 14px;
+}
+
 @media (max-width: 768px) {
   .page {
     padding: 0 20px;
@@ -422,7 +483,7 @@
     justify-items: center;
     text-align: center;
     gap: 5px;
-    padding-right: 44px;
+    padding-right: 112px;
   }
 
   .heroTitle {

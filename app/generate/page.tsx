@@ -21,6 +21,8 @@ type GenerateResponse = {
     language?: "ru";
     version?: number;
   };
+  message?: string;
+  remainingCredits?: number;
   error?: string;
 };
 
@@ -43,6 +45,8 @@ export default function GeneratePage() {
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [accountName, setAccountName] = useState("Пользователь");
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [credits, setCredits] = useState<number | null>(null);
+  const [isNoCreditsNoticeOpen, setIsNoCreditsNoticeOpen] = useState(false);
 
   const composerRef = useRef<HTMLDivElement | null>(null);
   const topicInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -137,7 +141,7 @@ export default function GeneratePage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("name")
+        .select("name,credits")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -147,6 +151,10 @@ export default function GeneratePage() {
 
       if (typeof profile?.name === "string" && profile.name.trim()) {
         setAccountName(profile.name.trim());
+      }
+
+      if (typeof profile?.credits === "number" && Number.isFinite(profile.credits)) {
+        setCredits(Math.max(0, Math.trunc(profile.credits)));
       }
     };
 
@@ -223,12 +231,30 @@ export default function GeneratePage() {
       });
 
       const data = (await response.json()) as GenerateResponse;
-      if (!response.ok || !data.slides?.length) {
+      if (!response.ok) {
+        if (response.status === 403 && data.error === "no_credits") {
+          setCredits(0);
+          setIsNoCreditsNoticeOpen(true);
+          setError(null);
+          return;
+        }
+
+        throw new Error(data.error || "Не удалось сгенерировать карусель.");
+      }
+
+      if (!data.slides?.length) {
         throw new Error(data.error || "Не удалось сгенерировать карусель.");
       }
 
       setPreviewSlides(data.slides);
       setGeneratedProjectMeta(data.project ?? null);
+      if (typeof data.remainingCredits === "number" && Number.isFinite(data.remainingCredits)) {
+        setCredits(Math.max(0, Math.trunc(data.remainingCredits)));
+      } else {
+        setCredits((current) =>
+          typeof current === "number" ? Math.max(0, current - 1) : current
+        );
+      }
       trackEvent({
         name: "generate_succeeded",
         payload: {
@@ -344,37 +370,45 @@ export default function GeneratePage() {
   };
 
   const accountInitial = (accountName.trim().charAt(0) || "P").toUpperCase();
+  const hasNoCredits = typeof credits === "number" && credits <= 0;
+  const creditsLabel = typeof credits === "number" ? credits : "...";
 
   return (
     <main className={`page-shell ${styles.page}`}>
       <div className={`${styles.layout} ${previewList.length ? styles.layoutWithPreview : styles.layoutStart}`}>
         <header className={styles.hero}>
           <div className={styles.heroTop}>
-            <div className={styles.accountMenu} ref={accountMenuRef}>
-              <button
-                className={styles.accountAvatar}
-                type="button"
-                onClick={() => setIsAccountMenuOpen((current) => !current)}
-                aria-expanded={isAccountMenuOpen}
-                aria-haspopup="menu"
-                aria-label="Меню аккаунта"
-              >
-                {accountInitial}
-              </button>
+            <div className={styles.accountControls}>
+              <span className={`${styles.creditsBadge} ${hasNoCredits ? styles.creditsBadgeZero : ""}`}>
+                ⚡ {creditsLabel}
+              </span>
 
-              {isAccountMenuOpen ? (
-                <div className={styles.accountDropdown} role="menu">
-                  <p className={styles.accountGreeting}>Привет, {accountName}!</p>
-                  <div className={styles.accountDivider} />
-                  <button
-                    type="button"
-                    className={styles.accountSignOut}
-                    onClick={() => void handleSignOut()}
-                  >
-                    Выйти
-                  </button>
-                </div>
-              ) : null}
+              <div className={styles.accountMenu} ref={accountMenuRef}>
+                <button
+                  className={styles.accountAvatar}
+                  type="button"
+                  onClick={() => setIsAccountMenuOpen((current) => !current)}
+                  aria-expanded={isAccountMenuOpen}
+                  aria-haspopup="menu"
+                  aria-label="Меню аккаунта"
+                >
+                  {accountInitial}
+                </button>
+
+                {isAccountMenuOpen ? (
+                  <div className={styles.accountDropdown} role="menu">
+                    <p className={styles.accountGreeting}>Привет, {accountName}!</p>
+                    <div className={styles.accountDivider} />
+                    <button
+                      type="button"
+                      className={styles.accountSignOut}
+                      onClick={() => void handleSignOut()}
+                    >
+                      Выйти
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
             <h1 className={styles.heroTitle}>Один промпт. Готовая карусель.</h1>
             <p className={styles.heroSubtitle}>Опиши тему одним сообщением — AI соберёт слайды, хук и структуру.</p>
@@ -554,6 +588,27 @@ export default function GeneratePage() {
 
         <p className={styles.signature}>pastello.io — AI carousel generator</p>
       </div>
+
+      {isNoCreditsNoticeOpen ? (
+        <div className={styles.noticeOverlay} role="dialog" aria-modal="true" aria-label="Закончились баллы">
+          <div className={styles.noticeCard}>
+            <p className={styles.noticeText}>
+              У тебя закончились баллы ⚡
+              <br />
+              Скоро здесь появится возможность пополнить.
+              <br />
+              А пока — напиши нам: @igor_jurievich_01
+            </p>
+            <button
+              type="button"
+              className={styles.noticeButton}
+              onClick={() => setIsNoCreditsNoticeOpen(false)}
+            >
+              Понятно
+            </button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
