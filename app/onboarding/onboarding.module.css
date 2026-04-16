@@ -92,6 +92,29 @@
   color: #9ca3af;
 }
 
+.loginShortcutRow {
+  padding: 0 16px 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.loginShortcut {
+  border: 1px solid #d9def7;
+  background: #f8f9ff;
+  color: #5058d9;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.loginShortcut:hover {
+  border-color: #c4cdfc;
+  background: #eef1ff;
+}
+
 .inputRow {
   position: sticky;
   bottom: 0;

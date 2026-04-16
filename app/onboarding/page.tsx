@@ -381,6 +381,15 @@ export default function OnboardingPage() {
         ) : null}
 
         {step === "topic" ? <p className={styles.topicHint}>{TOPIC_HINT}</p> : null}
+        <div className={styles.loginShortcutRow}>
+          <button
+            type="button"
+            className={styles.loginShortcut}
+            onClick={() => router.push("/login")}
+          >
+            Уже есть аккаунт? Войти
+          </button>
+        </div>
 
         <form
           className={styles.inputRow}
