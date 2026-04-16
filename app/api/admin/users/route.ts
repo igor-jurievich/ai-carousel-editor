@@ -32,7 +32,7 @@ export async function GET() {
     );
   }
 
-  const adminCheck = await requireAdmin(sessionClient);
+  const adminCheck = await requireAdmin(sessionClient, serviceClient);
   if (adminCheck) {
     return adminCheck;
   }
@@ -73,7 +73,7 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const adminCheck = await requireAdmin(sessionClient);
+  const adminCheck = await requireAdmin(sessionClient, serviceClient);
   if (adminCheck) {
     return adminCheck;
   }
@@ -189,7 +189,7 @@ function createServiceRoleClient() {
   });
 }
 
-async function requireAdmin(sessionClient: any) {
+async function requireAdmin(sessionClient: any, serviceClient: any) {
   const {
     data: { user },
     error: userError
@@ -199,7 +199,7 @@ async function requireAdmin(sessionClient: any) {
     return NextResponse.json({ error: "Требуется авторизация." }, { status: 401 });
   }
 
-  const { data: profile, error: profileError } = await sessionClient
+  const { data: profile, error: profileError } = await serviceClient
     .from("profiles")
     .select("is_admin")
     .eq("id", user.id)

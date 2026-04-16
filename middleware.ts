@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@supabase/supabase-js";
 import { getSupabasePublicConfig } from "@/lib/supabase";
 
 export async function middleware(request: NextRequest) {
@@ -49,13 +50,13 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("is_admin")
-      .eq("id", session.user.id)
-      .maybeSingle();
+    const isAdmin = await checkIsAdmin({
+      userId: session.user.id,
+      supabaseUrl: config.supabaseUrl,
+      supabase
+    });
 
-    if (profileError || !profile?.is_admin) {
+    if (!isAdmin) {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/generate";
       redirectUrl.search = "";
@@ -71,6 +72,49 @@ export async function middleware(request: NextRequest) {
   }
 
   return response;
+}
+
+async function checkIsAdmin(params: {
+  userId: string;
+  supabaseUrl: string;
+  supabase: ReturnType<typeof createMiddlewareClient>;
+}) {
+  const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
+
+  if (serviceRoleKey) {
+    const serviceClient = createClient(params.supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+
+    const { data: profile, error: profileError } = await serviceClient
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", params.userId)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Failed to check is_admin in middleware (service role):", profileError);
+      return false;
+    }
+
+    return Boolean(profile?.is_admin);
+  }
+
+  const { data: profile, error: profileError } = await params.supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", params.userId)
+    .maybeSingle();
+
+  if (profileError) {
+    console.error("Failed to check is_admin in middleware:", profileError);
+    return false;
+  }
+
+  return Boolean(profile?.is_admin);
 }
 
 export const config = {
