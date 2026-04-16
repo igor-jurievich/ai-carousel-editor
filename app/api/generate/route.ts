@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { clampSlidesCount } from "@/lib/slides";
 import { generateCarouselFromTopic, type PromptVariant } from "@/lib/openai";
@@ -28,9 +29,9 @@ type RateLimitBucket = {
 
 const generateRateLimit = new Map<string, RateLimitBucket>();
 
-export async function POST(request: Request) {
-  const supabase = createGenerateRouteClient();
-  if (!supabase) {
+export async function GET() {
+  const clients = createGenerateRouteClients();
+  if (!clients) {
     return NextResponse.json(
       { error: "Сервис недоступен: не настроен Supabase." },
       { status: 500 }
@@ -40,7 +41,50 @@ export async function POST(request: Request) {
   const {
     data: { user },
     error: userError
-  } = await supabase.auth.getUser();
+  } = await clients.sessionClient.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json({ error: "Требуется авторизация." }, { status: 401 });
+  }
+
+  const { data: profile, error: profileError } = await clients.serviceClient
+    .from("profiles")
+    .select("name,credits")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    console.error("Failed to load profile in generate GET route:", profileError);
+    return NextResponse.json(
+      { error: "Не удалось загрузить профиль пользователя." },
+      { status: 500 }
+    );
+  }
+
+  const credits =
+    typeof profile?.credits === "number" && Number.isFinite(profile.credits)
+      ? Math.max(0, Math.trunc(profile.credits))
+      : 0;
+
+  return NextResponse.json({
+    name: typeof profile?.name === "string" ? profile.name : null,
+    credits
+  });
+}
+
+export async function POST(request: Request) {
+  const clients = createGenerateRouteClients();
+  if (!clients) {
+    return NextResponse.json(
+      { error: "Сервис недоступен: не настроен Supabase." },
+      { status: 500 }
+    );
+  }
+
+  const {
+    data: { user },
+    error: userError
+  } = await clients.sessionClient.auth.getUser();
 
   if (userError || !user) {
     return NextResponse.json(
@@ -49,7 +93,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile, error: profileError } = await clients.serviceClient
     .from("profiles")
     .select("credits")
     .eq("id", user.id)
@@ -179,7 +223,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: remainingCredits, error: consumeCreditError } = await supabase.rpc(
+    const { data: remainingCredits, error: consumeCreditError } = await clients.serviceClient.rpc(
       "consume_generation_credit",
       {
         p_user_id: user.id
@@ -422,17 +466,30 @@ function isStringArray(value: unknown, minLength = 0) {
   );
 }
 
-function createGenerateRouteClient() {
+function createGenerateRouteClients() {
   const config = getSupabasePublicConfig();
-  if (!config) {
+  const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
+
+  if (!config || !serviceRoleKey) {
     return null;
   }
 
-  return createRouteHandlerClient(
+  const sessionClient = createRouteHandlerClient(
     { cookies },
     {
       supabaseUrl: config.supabaseUrl,
       supabaseKey: config.supabaseKey
     }
   );
+  const serviceClient = createClient(config.supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+
+  return {
+    sessionClient,
+    serviceClient
+  };
 }

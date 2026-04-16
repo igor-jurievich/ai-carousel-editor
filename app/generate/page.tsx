@@ -26,6 +26,12 @@ type GenerateResponse = {
   error?: string;
 };
 
+type ProfileCreditsResponse = {
+  name?: string | null;
+  credits?: number;
+  error?: string;
+};
+
 const MAX_TOPIC_CHARS = 4000;
 
 export default function GeneratePage() {
@@ -141,22 +147,23 @@ export default function GeneratePage() {
             : "Пользователь";
       setAccountName(fallbackName);
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("name,credits")
-        .eq("id", user.id)
-        .maybeSingle();
+      const profileResponse = await fetch("/api/generate", {
+        method: "GET",
+        cache: "no-store"
+      });
+
+      const profileData = (await profileResponse.json()) as ProfileCreditsResponse;
 
       if (!isActive) {
         return;
       }
 
-      if (typeof profile?.name === "string" && profile.name.trim()) {
-        setAccountName(profile.name.trim());
+      if (profileResponse.ok && typeof profileData.name === "string" && profileData.name.trim()) {
+        setAccountName(profileData.name.trim());
       }
 
-      if (typeof profile?.credits === "number" && Number.isFinite(profile.credits)) {
-        setCredits(Math.max(0, Math.trunc(profile.credits)));
+      if (profileResponse.ok && typeof profileData.credits === "number" && Number.isFinite(profileData.credits)) {
+        setCredits(Math.max(0, Math.trunc(profileData.credits)));
       }
     };
 
