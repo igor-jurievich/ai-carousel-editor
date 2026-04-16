@@ -9,6 +9,7 @@ import type {
   ImageElement,
   ShapeElement,
   Slide,
+  SlidePhotoSettings,
   SlideFormat,
   TextElement,
   TextHighlightRange
@@ -23,7 +24,23 @@ import {
 export const SLIDE_SIZE = 1080;
 export const DEFAULT_PROFILE_HANDLE = "@username";
 export const DEFAULT_PROFILE_SUBTITLE = "";
+const DEFAULT_SLIDE_PHOTO_SETTINGS: SlidePhotoSettings = {
+  zoom: 100,
+  offsetX: 0,
+  offsetY: 0,
+  overlay: 0
+};
 export { clampSlidesCount, DEFAULT_SLIDES_COUNT, MAX_SLIDES_COUNT, MIN_SLIDES_COUNT };
+
+function normalizeSlidePhotoSettings(settings: Slide["photoSettings"]): SlidePhotoSettings {
+  const source = settings ?? DEFAULT_SLIDE_PHOTO_SETTINGS;
+  return {
+    zoom: Math.max(100, Math.min(200, Number.isFinite(source.zoom) ? source.zoom : 100)),
+    offsetX: Math.max(-50, Math.min(50, Number.isFinite(source.offsetX) ? source.offsetX : 0)),
+    offsetY: Math.max(-50, Math.min(50, Number.isFinite(source.offsetY) ? source.offsetY : 0)),
+    overlay: Math.max(0, Math.min(80, Number.isFinite(source.overlay) ? source.overlay : 0))
+  };
+}
 
 export const SLIDE_FORMAT_DIMENSIONS: Record<
   SlideFormat,
@@ -1477,7 +1494,7 @@ export function createShapeElement(overrides: Partial<ShapeElement> = {}): Shape
 export function createImageElement(src: string, overrides: Partial<ImageElement> = {}): ImageElement {
   return {
     id: crypto.randomUUID(),
-    type: "image",
+    type: overrides.type ?? "image_element",
     metaKey: overrides.metaKey,
     src,
     x: overrides.x ?? 72,
@@ -2036,16 +2053,22 @@ function buildMainContent(
   if (effectiveSlideType === "image_text") {
     const imageArea = resolveImageArea(format);
     const elements: CanvasElement[] = [];
+    const photoSettings = normalizeSlidePhotoSettings(slide.photoSettings);
 
     if (slide.backgroundImage) {
       elements.push(
         createImageElement(slide.backgroundImage, {
+          type: "image",
           metaKey: "image-top",
           x: imageArea.x,
           y: imageArea.y,
           width: imageArea.width,
           height: imageArea.height,
-          cornerRadius: 0
+          cornerRadius: 0,
+          zoom: photoSettings.zoom / 100,
+          offsetX: (imageArea.width * photoSettings.offsetX) / 100,
+          offsetY: (imageArea.height * photoSettings.offsetY) / 100,
+          darken: photoSettings.overlay / 100
         })
       );
     } else {
@@ -2581,6 +2604,7 @@ function rebuildSlide(
     slideType: blueprint.slideType,
     photoSlotEnabled:
       slide.photoSlotEnabled ?? (blueprint.slideType === "image_text" ? Boolean(slide.backgroundImage) : false),
+    photoSettings: normalizeSlidePhotoSettings(slide.photoSettings),
     elements: []
   };
 
@@ -2658,6 +2682,7 @@ export function createSlideFromOutline(
     profileHandle: DEFAULT_PROFILE_HANDLE,
     profileSubtitle: DEFAULT_PROFILE_SUBTITLE,
     backgroundImage: null,
+    photoSettings: { ...DEFAULT_SLIDE_PHOTO_SETTINGS },
     generationRole: blueprint.role,
     generationCoreIdea: blueprint.body,
     slideType: blueprint.slideType,
@@ -3048,7 +3073,10 @@ export function setSlideBackgroundImage(
   return rebuildSlide(
     {
       ...slide,
-      backgroundImage: src
+      backgroundImage: src,
+      photoSettings: src
+        ? normalizeSlidePhotoSettings(slide.photoSettings)
+        : { ...DEFAULT_SLIDE_PHOTO_SETTINGS }
     },
     index,
     totalSlides,

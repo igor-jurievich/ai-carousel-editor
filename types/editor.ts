@@ -16,6 +16,12 @@ export type CarouselTemplateId = (typeof CAROUSEL_TEMPLATE_IDS)[number];
 export type SlideFormat = "1:1" | "4:5" | "9:16";
 export type ElementMetaKey = string;
 export type ImageFitMode = "cover" | "contain" | "original";
+export type SlidePhotoSettings = {
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+  overlay: number;
+};
 export type TextHighlightRange = {
   start: number;
   end: number;
@@ -79,7 +85,7 @@ export type ShapeElement = {
 
 export type ImageElement = {
   id: string;
-  type: "image";
+  type: "image" | "image_element";
   metaKey?: ElementMetaKey;
   src: string;
   x: number;
@@ -112,6 +118,7 @@ export type Slide = {
   profileSubtitle?: string;
   backgroundImage?: string | null;
   photoSlotEnabled?: boolean;
+  photoSettings?: SlidePhotoSettings;
   generationRole?: CarouselSlideRole;
   slideType?: CanvasSlideType;
   generationCoreIdea?: string;

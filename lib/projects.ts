@@ -4,7 +4,8 @@ import type {
   CarouselProject,
   CarouselProjectSummary,
   CarouselTemplateId,
-  Slide
+  Slide,
+  SlidePhotoSettings
 } from "@/types/editor";
 
 const STORAGE_KEY = "ai-carousel.projects.v1";
@@ -27,6 +28,20 @@ function toFiniteNumber(value: unknown, fallback: number) {
 
 function toStringValue(value: unknown, fallback = "") {
   return typeof value === "string" ? value : fallback;
+}
+
+function normalizePhotoSettings(value: unknown): SlidePhotoSettings {
+  const source =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+  return {
+    zoom: Math.max(100, Math.min(200, toFiniteNumber(source.zoom, 100))),
+    offsetX: Math.max(-50, Math.min(50, toFiniteNumber(source.offsetX, 0))),
+    offsetY: Math.max(-50, Math.min(50, toFiniteNumber(source.offsetY, 0))),
+    overlay: Math.max(0, Math.min(80, toFiniteNumber(source.overlay, 0)))
+  };
 }
 
 function normalizeTextHighlights(value: unknown, textLength: number) {
@@ -115,7 +130,7 @@ function normalizeElement(element: unknown): CanvasElement | null {
     };
   }
 
-  if (type === "image") {
+  if (type === "image" || type === "image_element") {
     const src = toStringValue(source.src, "");
     if (!src) {
       return null;
@@ -123,7 +138,7 @@ function normalizeElement(element: unknown): CanvasElement | null {
 
     return {
       id: toStringValue(source.id, crypto.randomUUID()),
-      type: "image",
+      type: type === "image" ? "image" : "image_element",
       metaKey: typeof source.metaKey === "string" ? source.metaKey : undefined,
       src,
       x: toFiniteNumber(source.x, 72),
@@ -211,6 +226,7 @@ function cloneSlides(slides: Slide[]): Slide[] {
       profileSubtitle: toStringValue(slideSource.profileSubtitle, ""),
       backgroundImage,
       photoSlotEnabled: Boolean(slideSource.photoSlotEnabled),
+      photoSettings: normalizePhotoSettings(slideSource.photoSettings),
       generationRole,
       slideType,
       generationCoreIdea: toStringValue(slideSource.generationCoreIdea, "")
@@ -278,7 +294,7 @@ function compactSlideForStorage(slide: Slide) {
   }
 
   const elements = slide.elements.filter((element) => {
-    if (element.type !== "image") {
+    if (element.type !== "image" && element.type !== "image_element") {
       return true;
     }
 
