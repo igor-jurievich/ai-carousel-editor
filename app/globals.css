@@ -938,6 +938,11 @@ button:disabled {
   line-height: 1.38;
 }
 
+.field-invalid {
+  border-color: rgba(220, 86, 107, 0.96) !important;
+  background: rgba(255, 245, 247, 0.98) !important;
+}
+
 .textarea {
   resize: vertical;
   min-height: 98px;

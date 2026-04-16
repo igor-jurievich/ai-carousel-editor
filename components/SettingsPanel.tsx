@@ -1,7 +1,14 @@
 "use client";
 
 import { AppIcon } from "@/components/icons";
-import type { CarouselPostCaption, Slide, SlideFormat, TextElement } from "@/types/editor";
+import { HexColorField } from "@/components/HexColorField";
+import type {
+  CarouselPostCaption,
+  Slide,
+  SlideFormat,
+  SlidePhotoSettings,
+  TextElement
+} from "@/types/editor";
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
 type StylePresetId = "mono" | "grid" | "gradient" | "notes" | "dots" | "flash";
@@ -20,6 +27,7 @@ type SettingsPanelProps = {
   profileSubtitle: string;
   subtitlesVisibleAcrossSlides: boolean;
   photoSlotEnabled: boolean;
+  photoSettings: SlidePhotoSettings;
   canUsePhotoSlot: boolean;
   hasBackgroundImage: boolean;
   captionResult: CarouselPostCaption | null;
@@ -36,6 +44,7 @@ type SettingsPanelProps = {
   onUploadBackgroundImage: () => void;
   onRemoveBackgroundImage: () => void;
   onSlideBackgroundChange: (value: string) => void;
+  onSlidePhotoSettingsChange: (updates: Partial<SlidePhotoSettings>) => void;
   onApplyStylePreset: (presetId: StylePresetId, options?: { applyAll?: boolean }) => void;
   onGridVisibilityChange: (visible: boolean) => void;
   onFormatChange: (format: SlideFormat) => void;
@@ -56,10 +65,12 @@ type SettingsPanelProps = {
   onSelectedTextFontChange: (value: string) => void;
   onSelectedTextSizeChange: (value: number) => void;
   onSelectedTextCaseChange: (mode: "normal" | "uppercase" | "lowercase" | "capitalize") => void;
+  onCenterSelectedTextHorizontally: () => void;
   onSelectedTextTargetRoleChange: (role: "title" | "body") => void;
   onApplyHighlightToSelection: () => void;
   onClearHighlightFromSelection: () => void;
   onClearAllHighlights: () => void;
+  onApplyHighlightColorToAllSlides: () => void;
   selectedTextHighlightColor: string;
   selectedTextHighlightOpacity: number;
   disabled?: boolean;
@@ -75,6 +86,14 @@ const FONT_OPTIONS = [
   "Oswald",
   "Space Grotesk",
   "Playfair Display"
+];
+const BACKGROUND_COLOR_PRESETS: Array<{ label: string; value: string }> = [
+  { label: "Белый", value: "#ffffff" },
+  { label: "Черный", value: "#000000" },
+  { label: "Светло-серый", value: "#f2f2f2" },
+  { label: "Теплый", value: "#f6f2ed" },
+  { label: "Холодный", value: "#edf3f6" },
+  { label: "Графит", value: "#1f2428" }
 ];
 const NON_CONTENT_TEXT_META_KEYS = new Set([
   "slide-chip-text",
@@ -111,6 +130,7 @@ export function SettingsPanel({
   profileSubtitle,
   subtitlesVisibleAcrossSlides,
   photoSlotEnabled,
+  photoSettings,
   canUsePhotoSlot,
   hasBackgroundImage,
   captionResult,
@@ -127,6 +147,7 @@ export function SettingsPanel({
   onUploadBackgroundImage,
   onRemoveBackgroundImage,
   onSlideBackgroundChange,
+  onSlidePhotoSettingsChange,
   onApplyStylePreset,
   onGridVisibilityChange,
   onFormatChange,
@@ -147,10 +168,12 @@ export function SettingsPanel({
   onSelectedTextFontChange,
   onSelectedTextSizeChange,
   onSelectedTextCaseChange,
+  onCenterSelectedTextHorizontally,
   onSelectedTextTargetRoleChange,
   onApplyHighlightToSelection,
   onClearHighlightFromSelection,
   onClearAllHighlights,
+  onApplyHighlightColorToAllSlides,
   selectedTextHighlightColor,
   selectedTextHighlightOpacity,
   disabled = false,
@@ -196,6 +219,9 @@ export function SettingsPanel({
       ? fallbackBodyTextElement ?? fallbackTitleTextElement
       : fallbackTitleTextElement ?? fallbackBodyTextElement);
   const isAutoSelectedText = !selectedTextElement && Boolean(activeTextElement);
+  const normalizedTextColor = normalizeColorForInput(activeTextElement?.fill, "#1b1e24");
+  const normalizedHighlightColor = normalizeColorForInput(selectedTextHighlightColor, "#1f49ff");
+  const normalizedBackgroundColor = normalizeColorForInput(slideBackground, "#ffffff");
 
   if (previewMode) {
     return (
@@ -280,6 +306,14 @@ export function SettingsPanel({
           >
             + Большой текст
           </button>
+          <button
+            type="button"
+            className="ghost-chip"
+            onClick={onAddSlidePhoto}
+            disabled={disabled}
+          >
+            + Фото
+          </button>
         </div>
       </section>
 
@@ -340,19 +374,40 @@ export function SettingsPanel({
           ))}
         </div>
         <label className="field-label">
-          Цвет фона
-          <select
-            className="select"
-            value={slideBackground}
-            onChange={(event) => onSlideBackgroundChange(event.target.value)}
-            disabled={disabled}
-          >
-            <option value="#ffffff">Белый</option>
-            <option value="#f2f2f2">Светло-серый</option>
-            <option value="#f6f2ed">Теплый</option>
-            <option value="#edf3f6">Холодный</option>
-            <option value="#1f2428">Графит</option>
-          </select>
+          Цвет фона (HEX)
+          <div className="color-row">
+            <input
+              className="field"
+              type="color"
+              value={normalizedBackgroundColor}
+              onChange={(event) => onSlideBackgroundChange(event.target.value)}
+              disabled={disabled}
+            />
+            <HexColorField
+              value={normalizedBackgroundColor}
+              onValidChange={onSlideBackgroundChange}
+              disabled={disabled}
+              className="field"
+            />
+          </div>
+        </label>
+        <label className="field-label">
+          Быстрые пресеты
+          <div className="mobile-style-grid desktop-style-grid">
+            {BACKGROUND_COLOR_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                className={`mobile-style-chip ${
+                  normalizedBackgroundColor.toLowerCase() === preset.value.toLowerCase() ? "active" : ""
+                }`}
+                onClick={() => onSlideBackgroundChange(preset.value)}
+                disabled={disabled}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
         </label>
         <label className="mobile-switch-row">
           <span>Показывать сетку</span>
@@ -383,7 +438,7 @@ export function SettingsPanel({
             onClick={onAddSlidePhoto}
             disabled={disabled}
           >
-            Добавить на слайд
+            + Фото
           </button>
           <button
             type="button"
@@ -402,6 +457,70 @@ export function SettingsPanel({
             Удалить
           </button>
         </div>
+        {hasBackgroundImage ? (
+          <div className="field-grid">
+            <label className="field-label">
+              Зум ({photoSettings.zoom}%)
+              <input
+                className="range"
+                type="range"
+                min={100}
+                max={200}
+                step={1}
+                value={photoSettings.zoom}
+                onChange={(event) =>
+                  onSlidePhotoSettingsChange({ zoom: Number(event.target.value) })
+                }
+                disabled={disabled}
+              />
+            </label>
+            <label className="field-label">
+              Позиция X ({photoSettings.offsetX}%)
+              <input
+                className="range"
+                type="range"
+                min={-50}
+                max={50}
+                step={1}
+                value={photoSettings.offsetX}
+                onChange={(event) =>
+                  onSlidePhotoSettingsChange({ offsetX: Number(event.target.value) })
+                }
+                disabled={disabled}
+              />
+            </label>
+            <label className="field-label">
+              Позиция Y ({photoSettings.offsetY}%)
+              <input
+                className="range"
+                type="range"
+                min={-50}
+                max={50}
+                step={1}
+                value={photoSettings.offsetY}
+                onChange={(event) =>
+                  onSlidePhotoSettingsChange({ offsetY: Number(event.target.value) })
+                }
+                disabled={disabled}
+              />
+            </label>
+            <label className="field-label">
+              Затемнение ({photoSettings.overlay}%)
+              <input
+                className="range"
+                type="range"
+                min={0}
+                max={80}
+                step={1}
+                value={photoSettings.overlay}
+                onChange={(event) =>
+                  onSlidePhotoSettingsChange({ overlay: Number(event.target.value) })
+                }
+                disabled={disabled}
+              />
+            </label>
+          </div>
+        ) : null}
         <div className="settings-hint">
           Если фото-блок выключен, контентный блок автоматически расширится.
         </div>
@@ -510,10 +629,25 @@ export function SettingsPanel({
                 <input
                   className="field"
                   type="color"
-                  value={normalizeColorForInput(selectedTextHighlightColor, "#1f49ff")}
+                  value={normalizedHighlightColor}
                   onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
                   disabled={disabled}
                 />
+                <HexColorField
+                  value={normalizedHighlightColor}
+                  onValidChange={onSelectedTextHighlightColorChange}
+                  disabled={disabled}
+                  className="field"
+                />
+                <button
+                  type="button"
+                  className="ghost-chip ghost-chip-muted ghost-chip-small"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={onApplyHighlightColorToAllSlides}
+                  disabled={disabled}
+                >
+                  → Все слайды
+                </button>
               </label>
               <div className="field-row field-row-actions" style={{ flex: 1 }}>
                 <button
@@ -599,7 +733,7 @@ export function SettingsPanel({
                 onClick={() => onSelectedTextCaseChange("normal")}
                 disabled={disabled}
               >
-                Норм
+                аА
               </button>
               <button
                 type="button"
@@ -627,14 +761,31 @@ export function SettingsPanel({
               </button>
             </div>
 
+            <div className="field-row">
+              <button
+                type="button"
+                className="ghost-chip ghost-chip-muted"
+                onClick={onCenterSelectedTextHorizontally}
+                disabled={disabled}
+              >
+                —|— По центру
+              </button>
+            </div>
+
             <label className="field-label">
               Цвет текста
               <input
                 className="field"
                 type="color"
-                value={normalizeColorForInput(activeTextElement.fill, "#1b1e24")}
+                value={normalizedTextColor}
                 onChange={(event) => onSelectedTextColorChange(event.target.value)}
                 disabled={disabled}
+              />
+              <HexColorField
+                value={normalizedTextColor}
+                onValidChange={onSelectedTextColorChange}
+                disabled={disabled}
+                className="field"
               />
             </label>
           </>
