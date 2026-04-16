@@ -88,11 +88,23 @@ function assert(condition, message, failures) {
 
 async function testGeneratePageLayout(page, failures) {
   await page.goto(`${BASE_URL}/generate`, { waitUntil: "networkidle" });
-  await page.locator("details.generate-advanced summary").click();
+  const legacyAdvancedToggle = page.locator("details.generate-advanced summary").first();
+  const advancedToggle = page.getByRole("button", { name: "Уточнить генерацию" }).first();
+
+  if ((await legacyAdvancedToggle.count()) > 0) {
+    await legacyAdvancedToggle.click();
+  } else if ((await advancedToggle.count()) > 0) {
+    await advancedToggle.click();
+  } else {
+    failures.push(`generate page: advanced controls toggle not found (url: ${page.url()})`);
+    return;
+  }
   await page.waitForTimeout(250);
 
   const nicheField = page.locator('label:has-text("Ниша") input').first();
   const audienceField = page.locator('label:has-text("Целевая аудитория") input').first();
+  await nicheField.waitFor({ state: "visible", timeout: 12000 }).catch(() => undefined);
+  await audienceField.waitFor({ state: "visible", timeout: 12000 }).catch(() => undefined);
   const nicheBox = await nicheField.boundingBox();
   const audienceBox = await audienceField.boundingBox();
 

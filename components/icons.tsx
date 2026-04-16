@@ -6,6 +6,7 @@ export type AppIconName =
   | "undo"
   | "reset"
   | "plus"
+  | "copy"
   | "image"
   | "text"
   | "trash"
@@ -90,6 +91,13 @@ function renderIcon(name: AppIconName) {
         <>
           <path d="M12 5v14" />
           <path d="M5 12h14" />
+        </>
+      );
+    case "copy":
+      return (
+        <>
+          <rect x="8" y="8" width="11" height="11" rx="2" />
+          <rect x="5" y="5" width="11" height="11" rx="2" />
         </>
       );
     case "image":

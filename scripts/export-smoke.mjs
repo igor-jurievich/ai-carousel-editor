@@ -145,7 +145,15 @@ async function main() {
   try {
     const page = await context.newPage();
     await page.goto(`${BASE_URL}/editor`, { waitUntil: "networkidle" });
-    await page.locator('.prompt-composer textarea').first().fill("Тестовая тема для проверки экспорта");
+    const currentUrl = page.url();
+    if (currentUrl.includes("/login") || currentUrl.includes("/onboarding")) {
+      throw new Error(`editor is protected by auth in smoke environment (url: ${currentUrl})`);
+    }
+
+    const promptComposerInput = page.locator(".prompt-composer textarea").first();
+    if ((await promptComposerInput.count()) > 0) {
+      await promptComposerInput.fill("Тестовая тема для проверки экспорта");
+    }
     await page.locator(".settings-card-export .select").first().waitFor({ state: "visible", timeout: 15000 });
     await page.waitForTimeout(200);
 

@@ -165,9 +165,10 @@ async function createSessionClient() {
   }
 
   const cookieStore = await cookies();
+  const cookieAccessor: any = () => cookieStore;
 
   return createRouteHandlerClient(
-    { cookies: (() => cookieStore) as any },
+    { cookies: cookieAccessor },
     {
       supabaseUrl: config.supabaseUrl,
       supabaseKey: config.supabaseKey

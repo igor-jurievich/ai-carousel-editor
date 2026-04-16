@@ -38,6 +38,7 @@ type CanvasEditorProps = {
   onAddImageToSlide: (slideId: string) => void;
   onAddBackgroundImageToSlide?: (slideId: string) => void;
   onDeleteSelectedElement: () => void;
+  onDuplicateSlide: (slideId: string) => void;
   onMoveSlide: (slideId: string, direction: "up" | "down") => void;
   onDeleteSlide: (slideId: string) => void;
   onOpenTemplateModal: () => void;
@@ -79,6 +80,7 @@ export function CanvasEditor({
   onAddImageToSlide,
   onAddBackgroundImageToSlide,
   onDeleteSelectedElement,
+  onDuplicateSlide,
   onMoveSlide,
   onDeleteSlide,
   onOpenTemplateModal,
@@ -506,9 +508,9 @@ export function CanvasEditor({
                       <div className="slide-tools-shell">
                         <div className="slide-tools-rail">
                           <ToolButton
-                            icon="select"
-                            title="Выбрать слайд"
-                            onClick={() => onSelectSlide(slide.id)}
+                            icon="copy"
+                            title="Копировать"
+                            onClick={() => onDuplicateSlide(slide.id)}
                             disabled={disabled}
                           />
                           <ToolButton

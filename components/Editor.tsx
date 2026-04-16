@@ -1537,6 +1537,56 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setStatus("Новый слайд вставлен в поток.");
   };
 
+  const handleDuplicateSlide = (slideId: string) => {
+    if (generationLocked) {
+      setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
+      return;
+    }
+
+    const sourceIndex = slides.findIndex((slide) => slide.id === slideId);
+    if (sourceIndex === -1) {
+      return;
+    }
+
+    let duplicatedSlideId: string | null = null;
+
+    pushHistorySnapshot(true);
+    setSlides((current) => {
+      const liveIndex = current.findIndex((slide) => slide.id === slideId);
+      if (liveIndex === -1) {
+        return current;
+      }
+
+      const source = current[liveIndex];
+      duplicatedSlideId = makeEditorElementId("slide");
+
+      const duplicatedElements = source.elements.map((element) => ({
+        ...element,
+        id: makeEditorElementId(
+          element.type === "image_element" ? "image" : element.type
+        )
+      }));
+
+      const duplicatedSlide: Slide = {
+        ...source,
+        id: duplicatedSlideId,
+        name: `${source.name} (копия)`,
+        elements: duplicatedElements
+      };
+
+      const next = [...current];
+      next.splice(liveIndex + 1, 0, duplicatedSlide);
+      return syncSlideOrderMeta(next);
+    });
+
+    if (duplicatedSlideId) {
+      setActiveSlideId(duplicatedSlideId);
+    }
+    setSelectedElementId(null);
+    setEditingTextElementId(null);
+    setStatus(`Слайд ${sourceIndex + 1} скопирован.`);
+  };
+
   const handleDeleteSlide = (slideId = activeSlideId ?? "") => {
     if (generationLocked) {
       setStatus(isGenerating ? GENERATE_LOCK_STATUS : EXPORT_LOCK_STATUS);
@@ -3336,6 +3386,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                 onAddImageToSlide={handleAddImage}
                 onAddBackgroundImageToSlide={handleAddBackgroundImage}
                 onDeleteSelectedElement={handleDeleteElement}
+                onDuplicateSlide={handleDuplicateSlide}
                 onMoveSlide={handleMoveSlide}
                 onDeleteSlide={handleDeleteSlide}
                 onOpenTemplateModal={handleOpenTemplateModal}
@@ -3569,6 +3620,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onAddImageToSlide={handleAddImage}
               onAddBackgroundImageToSlide={handleAddBackgroundImage}
               onDeleteSelectedElement={handleDeleteElement}
+              onDuplicateSlide={handleDuplicateSlide}
               onMoveSlide={handleMoveSlide}
               onDeleteSlide={handleDeleteSlide}
               onOpenTemplateModal={handleOpenTemplateModal}
