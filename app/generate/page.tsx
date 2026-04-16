@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createSlidesFromOutline, projectTitleFromTopic } from "@/lib/carousel";
 import { clampSlidesCount, DEFAULT_SLIDES_COUNT, SLIDES_COUNT_OPTIONS } from "@/lib/slides";
 import { saveLocalProject } from "@/lib/projects";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { trackEvent } from "@/lib/telemetry";
 import type { CarouselOutlineSlide, CarouselTemplateId, SlideFormat } from "@/types/editor";
 import styles from "./generate-page.module.css";
@@ -40,9 +41,12 @@ export default function GeneratePage() {
   const [previewSlides, setPreviewSlides] = useState<CarouselOutlineSlide[] | null>(null);
   const [generatedProjectMeta, setGeneratedProjectMeta] = useState<GenerateResponse["project"] | null>(null);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [accountName, setAccountName] = useState("Пользователь");
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
 
   const composerRef = useRef<HTMLDivElement | null>(null);
   const topicInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
 
   const normalizedTopic = topic.trim();
   const canGenerate = normalizedTopic.length >= 3 && !isGenerating;
@@ -107,6 +111,80 @@ export default function GeneratePage() {
       document.removeEventListener("keydown", handleEscape);
     };
   }, [isAdvancedOpen]);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+
+    let isActive = true;
+
+    const loadAccount = async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!isActive || !user) {
+        return;
+      }
+
+      const fallbackName =
+        typeof user.user_metadata?.name === "string" && user.user_metadata.name.trim()
+          ? user.user_metadata.name.trim()
+          : (user.email ?? "").split("@")[0] || "Пользователь";
+      setAccountName(fallbackName);
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!isActive) {
+        return;
+      }
+
+      if (typeof profile?.name === "string" && profile.name.trim()) {
+        setAccountName(profile.name.trim());
+      }
+    };
+
+    void loadAccount();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAccountMenuOpen) {
+      return;
+    }
+
+    const handleOutsidePointer = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) {
+        return;
+      }
+      if (!accountMenuRef.current?.contains(event.target)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsidePointer);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointer);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isAccountMenuOpen]);
 
   const handleGenerate = async () => {
     if (!canGenerate) {
@@ -251,11 +329,53 @@ export default function GeneratePage() {
     }
   };
 
+  const handleSignOut = async () => {
+    setIsAccountMenuOpen(false);
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      await supabase?.auth.signOut();
+    } catch {
+      // Ignore sign-out API failures and still route to login.
+    }
+
+    router.replace("/login");
+    router.refresh();
+  };
+
+  const accountInitial = (accountName.trim().charAt(0) || "P").toUpperCase();
+
   return (
     <main className={`page-shell ${styles.page}`}>
       <div className={`${styles.layout} ${previewList.length ? styles.layoutWithPreview : styles.layoutStart}`}>
         <header className={styles.hero}>
           <div className={styles.heroTop}>
+            <div className={styles.accountMenu} ref={accountMenuRef}>
+              <button
+                className={styles.accountAvatar}
+                type="button"
+                onClick={() => setIsAccountMenuOpen((current) => !current)}
+                aria-expanded={isAccountMenuOpen}
+                aria-haspopup="menu"
+                aria-label="Меню аккаунта"
+              >
+                {accountInitial}
+              </button>
+
+              {isAccountMenuOpen ? (
+                <div className={styles.accountDropdown} role="menu">
+                  <p className={styles.accountGreeting}>Привет, {accountName}!</p>
+                  <div className={styles.accountDivider} />
+                  <button
+                    type="button"
+                    className={styles.accountSignOut}
+                    onClick={() => void handleSignOut()}
+                  >
+                    Выйти
+                  </button>
+                </div>
+              ) : null}
+            </div>
             <h1 className={styles.heroTitle}>Один промпт. Готовая карусель.</h1>
             <p className={styles.heroSubtitle}>Опиши тему одним сообщением — AI соберёт слайды, хук и структуру.</p>
           </div>

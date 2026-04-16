@@ -31,10 +31,72 @@
 }
 
 .heroTop {
+  position: relative;
   display: grid;
   gap: 8px;
   justify-items: center;
   text-align: center;
+  padding-right: 48px;
+}
+
+.accountMenu {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.accountAvatar {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 999px;
+  background: #6366f1;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.accountDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 190px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  padding: 10px;
+  z-index: 25;
+  text-align: left;
+}
+
+.accountGreeting {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.accountDivider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 8px 0;
+}
+
+.accountSignOut {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 14px;
+  color: #111827;
+  padding: 6px 2px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.accountSignOut:hover {
+  background: #f3f4f6;
 }
 
 .heroTitle {
@@ -360,6 +422,7 @@
     justify-items: center;
     text-align: center;
     gap: 5px;
+    padding-right: 44px;
   }
 
   .heroTitle {
