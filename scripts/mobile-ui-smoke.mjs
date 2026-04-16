@@ -181,20 +181,34 @@ async function testGenerateAndOpenPostFlow(page, failures) {
 
   await page.goto(`${BASE_URL}/editor`, { waitUntil: "networkidle" });
   await page.waitForTimeout(500);
-  await page
-    .locator("details")
-    .filter({ hasText: "Создать новую карусель" })
-    .first()
-    .evaluate((node) => {
-      node.open = true;
-    });
-  await page
-    .locator("details")
-    .filter({ hasText: "Создать новую карусель" })
-    .first()
-    .locator("textarea")
-    .first()
-    .fill("Тестовая тема для мобильного прогона");
+  const generatePanel = page.locator("details").filter({ hasText: "Создать новую карусель" }).first();
+  const hasGeneratePanel = (await generatePanel.count()) > 0;
+
+  if (!hasGeneratePanel) {
+    const postTabButton = page
+      .locator(".mobile-editor-shell .mobile-bottom-toolbar-v2 .mobile-bottom-tool")
+      .filter({ hasText: "Пост" })
+      .first();
+    if ((await postTabButton.count()) === 0) {
+      failures.push("editor flow: cannot find generate panel or mobile 'Пост' tab");
+      return;
+    }
+
+    await postTabButton.click({ timeout: 12000 });
+    await page.locator(".mobile-tool-sheet-v2 h3").first().waitFor({ state: "visible", timeout: 12000 });
+    const sheetTitle = await page.locator(".mobile-tool-sheet-v2 h3").first().textContent();
+    assert(
+      normalize(sheetTitle) === "Подпись к посту",
+      "editor flow: post tool sheet did not open from toolbar fallback",
+      failures
+    );
+    return;
+  }
+
+  await generatePanel.evaluate((node) => {
+    node.open = true;
+  });
+  await generatePanel.locator("textarea").first().fill("Тестовая тема для мобильного прогона");
   const generateRequest = page.waitForRequest(
     (request) => request.url().includes("/api/generate") && request.method() === "POST",
     { timeout: 12000 }
