@@ -23,6 +23,7 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isRootRoute = pathname === "/";
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
   const isProtectedRoute = pathname === "/generate" || pathname.startsWith("/editor");
   const isAuthRoute = pathname === "/login" || pathname === "/onboarding";
 
@@ -38,6 +39,28 @@ export async function middleware(request: NextRequest) {
     redirectUrl.pathname = "/login";
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
+  }
+
+  if (isAdminRoute) {
+    if (!session) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/generate";
+      redirectUrl.search = "";
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    if (profileError || !profile?.is_admin) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/generate";
+      redirectUrl.search = "";
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   if (session && isAuthRoute) {
@@ -57,6 +80,8 @@ export const config = {
     "/generate/:path*",
     "/editor",
     "/editor/:path*",
+    "/admin",
+    "/admin/:path*",
     "/login",
     "/onboarding"
   ]
