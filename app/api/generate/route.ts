@@ -30,7 +30,7 @@ type RateLimitBucket = {
 const generateRateLimit = new Map<string, RateLimitBucket>();
 
 export async function GET() {
-  const clients = createGenerateRouteClients();
+  const clients = await createGenerateRouteClients();
   if (!clients) {
     return NextResponse.json(
       { error: "Сервис недоступен: не настроен Supabase." },
@@ -73,7 +73,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const clients = createGenerateRouteClients();
+  const clients = await createGenerateRouteClients();
   if (!clients) {
     return NextResponse.json(
       { error: "Сервис недоступен: не настроен Supabase." },
@@ -468,7 +468,7 @@ function isStringArray(value: unknown, minLength = 0) {
   );
 }
 
-function createGenerateRouteClients() {
+async function createGenerateRouteClients() {
   const config = getSupabasePublicConfig();
   const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
 
@@ -476,8 +476,9 @@ function createGenerateRouteClients() {
     return null;
   }
 
+  const cookieStore = await cookies();
   const sessionClient = createRouteHandlerClient(
-    { cookies },
+    { cookies: (() => cookieStore) as any },
     {
       supabaseUrl: config.supabaseUrl,
       supabaseKey: config.supabaseKey

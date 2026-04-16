@@ -22,7 +22,7 @@ type UserPatchBody = {
 };
 
 export async function GET() {
-  const sessionClient = createSessionClient();
+  const sessionClient = await createSessionClient();
   const serviceClient = createServiceRoleClient();
 
   if (!sessionClient || !serviceClient) {
@@ -63,7 +63,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const sessionClient = createSessionClient();
+  const sessionClient = await createSessionClient();
   const serviceClient = createServiceRoleClient();
 
   if (!sessionClient || !serviceClient) {
@@ -158,14 +158,16 @@ export async function PATCH(request: Request) {
   });
 }
 
-function createSessionClient() {
+async function createSessionClient() {
   const config = getSupabasePublicConfig();
   if (!config) {
     return null;
   }
 
+  const cookieStore = await cookies();
+
   return createRouteHandlerClient(
-    { cookies },
+    { cookies: (() => cookieStore) as any },
     {
       supabaseUrl: config.supabaseUrl,
       supabaseKey: config.supabaseKey
