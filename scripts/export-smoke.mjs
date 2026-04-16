@@ -72,7 +72,7 @@ async function openModal(page) {
 
   await withRetry(async () => {
     const openButton = page
-      .locator('.settings-card-export .btn:has-text("Выбрать слайды"):visible')
+      .locator('.settings-card-export button:has-text("Выбрать слайды"):visible')
       .first();
     await openButton.waitFor({ state: "visible", timeout: 10000 });
     await openButton.scrollIntoViewIfNeeded();
@@ -85,7 +85,7 @@ async function openModal(page) {
 }
 
 async function waitExportReady(page) {
-  await page.locator('.settings-card-export .btn:has-text("Выбрать слайды")').first().waitFor({
+  await page.locator('.settings-card-export button:has-text("Выбрать слайды")').first().waitFor({
     state: "visible",
     timeout: EXPORT_TIMEOUT_MS
   });
