@@ -7,6 +7,8 @@ import type {
 } from "@/types/editor";
 
 export type PromptVariant = "A" | "B";
+export type CarouselGenerationSource = "model" | "fallback";
+export type CarouselFallbackReason = "quota" | "error" | "timeout";
 type TopicDomain =
   | "sales"
   | "education"
@@ -38,6 +40,8 @@ type CaptionGenerationInput = {
 type CarouselGenerationResult = {
   slides: CarouselOutlineSlide[];
   promptVariant: PromptVariant;
+  generationSource: CarouselGenerationSource;
+  fallbackReason?: CarouselFallbackReason;
 };
 
 const CANONICAL_FLOW: CarouselSlideRole[] = [
@@ -84,8 +88,26 @@ const DEFAULT_MODEL_CANDIDATE_LIMIT = 2;
 
 const BANNED_TEMPLATE_PATTERNS: RegExp[] = [
   /(?:^|[^\p{L}])в\s+современном\s+мире(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])как\s+известно(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])не\s+секрет\s+что(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])многие\s+задаются\s+вопросом(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])сегодня\s+как\s+никогда(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])в\s+эпоху\s+цифровизац(?:ии|и)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])как\s+показывает\s+практика(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])важно\s+понимать(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])на\s+самом\s+деле(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])стоит\s+отметить(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])следует\s+учитывать(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])необходимо\s+помнить(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])ключ\s+к\s+успеху(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])почему\s+это\s+важно(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])что\s+нужно\s+знать(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])главный\s+секрет(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])простой\s+способ(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])эффективный\s+метод(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])ключевые\s+моменты(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])обратите\s+внимание(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(топ|лучших|способов)(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])где\s+ломается\s+поток(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])по\s+теме(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])в\s+теме(?=$|[^\p{L}])/iu,
@@ -102,6 +124,14 @@ const WEAK_SHIFT_PATTERNS: RegExp[] = [
 ];
 
 const WEAK_ROLE_TITLE_PATTERNS: RegExp[] = [
+  /^почему\s+это\s+важно\??$/iu,
+  /^что\s+нужно\s+знать\??$/iu,
+  /^главный\s+секрет\??$/iu,
+  /^простой\s+способ\??$/iu,
+  /^эффективный\s+метод\??$/iu,
+  /^ключевые\s+моменты\??$/iu,
+  /^обратите\s+внимание\??$/iu,
+  /(?:^|[^\p{L}])(топ|лучших|способов)(?=$|[^\p{L}])/iu,
   /^что\s+это\s+значит(\s+для\s+вас)?\??$/iu,
   /^что\s+делать\s+по\s+шагам\??$/iu,
   /^что\s+изменится,\s*если\s+оставить\s+как\s+есть\??$/iu,
@@ -120,7 +150,8 @@ const WEAK_ROLE_TITLE_PATTERNS: RegExp[] = [
 ];
 
 const WEAK_BULLET_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])(важно\s+понимать|нужно\s+просто|следует\s+помнить|в\s+целом|в\s+общем|как\s+правило)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(важно\s+понимать|нужно\s+просто|следует\s+помнить|в\s+целом|в\s+общем|как\s+правило|на\s+самом\s+деле|стоит\s+отметить|следует\s+учитывать|необходимо\s+помнить)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(как\s+известно|не\s+секрет\s+что|многие\s+задаются\s+вопросом|сегодня\s+как\s+никогда|в\s+эпоху\s+цифровизац(?:ии|и)|как\s+показывает\s+практика)(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])(работайте\s+системно|держите\s+фокус|будьте\s+на\s+связи)(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])(улучшить|усилить|повысить)\s+(процесс|эффективность|результат)(?=$|[^\p{L}])/iu,
   /(?:^|[^\p{L}])(делать\s+контент|вести\s+соцсети|развивать\s+блог)\s*(?:регулярно)?(?=$|[^\p{L}])/iu
@@ -171,7 +202,7 @@ export async function generateCarouselFromTopic(
   requestedSlidesCount?: number,
   options?: GenerationOptions
 ): Promise<CarouselGenerationResult> {
-  const cleanedTopic = normalizeText(topic, 240) || "Новая карусель";
+  const cleanedTopic = normalizeText(topic, 800) || "Новая карусель";
   const targetCount = resolveSlidesCount(requestedSlidesCount);
   const expectedFlow = resolveExpectedFlow(targetCount);
   const promptVariant = resolvePromptVariant(options?.promptVariant);
@@ -212,6 +243,16 @@ export async function generateCarouselFromTopic(
                       "Avoid awkward title constructions like «эксперту повысить: ...» or «психологу объяснять: ...».",
                       "Avoid boilerplate phrases like «в теме ...», «где ломается поток», «что это стоит в теме».",
                       "Do not force the words «кейс», «разбор», «поток», «лиды» unless the topic needs them.",
+                      "Ban stale openers: «В современном мире», «Как известно», «Не секрет что», «Многие задаются вопросом», «Сегодня как никогда», «В эпоху цифровизации», «Как показывает практика».",
+                      "If a stale phrase appears in draft thinking, rewrite with a concrete fact, number, story or paradox.",
+                      "Hook (slide 1) must use exactly one stop-scroll trigger: provocative claim, concrete number with context, self-recognition scenario, or paradox.",
+                      "Hook must be one punch and one core idea, maximum 2 sentences.",
+                      "Hook must not start with question templates like «Хотите узнать как...», must not be a list, and must not use «5 способов...».",
+                      "Role rules: problem = pain through a specific situation; amplify = consequence already happening now; mistake = concrete wrong action; consequence = real price in time, money, relationships or reputation.",
+                      "Role rules: shift = perspective reversal («what you believed is wrong»); solution = concrete mechanism «do X instead of Y»; example = realistic before/after scenario with details; cta = one action only.",
+                      "Ban generic headings: «Почему это важно», «Что нужно знать», «Главный секрет», «Простой способ», «Эффективный метод», «Ключевые моменты», «Обратите внимание», and any heading with «топ», «лучших», «способов».",
+                      "Ban filler phrases: «на самом деле», «стоит отметить», «важно понимать», «следует учитывать», «необходимо помнить».",
+                      "Each slide must include at least one concrete anchor: number/percent, action verb + object, specific who/where/when situation, or comparison X vs Y.",
                       "Avoid repeated words, broken compounds and malformed line fragments.",
                       "For problem/amplify/solution bullets avoid abstract office wording like «работайте системно», «важно понимать», «улучшить процесс».",
                       "No clichés and no mechanical template substitutions.",
@@ -270,7 +311,12 @@ export async function generateCarouselFromTopic(
             cleanedTopic,
             options
           );
-          const quality = evaluateSlideQuality(qualityGuardedSlides, expectedFlow, cleanedTopic);
+          const topicCoveredSlides = repairTopicCoverage(
+            qualityGuardedSlides,
+            expectedFlow,
+            cleanedTopic
+          );
+          const quality = evaluateSlideQuality(topicCoveredSlides, expectedFlow, cleanedTopic);
 
           if (topicRelevantSlides !== polishedSlides) {
             console.warn("Generated outline was strongly off-topic. Using deterministic fallback slides.");
@@ -289,7 +335,8 @@ export async function generateCarouselFromTopic(
             if (repairedQuality.ok) {
               return {
                 slides: locallyRepairedSlides,
-                promptVariant
+                promptVariant,
+                generationSource: "model"
               };
             }
 
@@ -315,18 +362,20 @@ export async function generateCarouselFromTopic(
             }
             return {
               slides: stripBannedTemplateLanguage(
-                qualityGuardedSlides,
+                topicCoveredSlides,
                 expectedFlow,
                 cleanedTopic,
                 options
               ),
-              promptVariant
+              promptVariant,
+              generationSource: "model"
             };
           }
 
           return {
-            slides: qualityGuardedSlides,
-            promptVariant
+            slides: topicCoveredSlides,
+            promptVariant,
+            generationSource: "model"
           };
         } catch (error) {
           lastError = error;
@@ -350,7 +399,9 @@ export async function generateCarouselFromTopic(
 
     return {
       slides: buildFallbackSlides(cleanedTopic, expectedFlow, options),
-      promptVariant
+      promptVariant,
+      generationSource: "fallback",
+      fallbackReason: resolveFallbackReason(error)
     };
   }
 }
@@ -658,7 +709,16 @@ function buildUserPrompt(
     "Each slide should carry a strong standalone idea with natural spoken Russian.",
     "Bullets must be concise but meaningful: 3-4 bullets when natural, each ~10-24 words with concrete detail instead of generic slogans.",
     "For problem/amplify/consequence/solution include at least one concrete symptom, cost, or action in bullets.",
+    "Each slide must include at least one concrete anchor: number/percent, action verb + object, specific who/where/when situation, or comparison X vs Y.",
     "Avoid abstract bullets like «важно понимать», «нужно просто», «улучшить процесс» without a concrete situation.",
+    "Hook rules: one punch, one core idea, max 2 sentences.",
+    "Hook must use one of: provocative claim, concrete number with context, self-recognition scenario («ты когда-нибудь...»), or paradox («чем больше X, тем меньше Y»).",
+    "Hook is forbidden to use list templates («5 способов...») and question templates («Хотите узнать как...»).",
+    "Role rules: problem = pain through a specific situation (not abstraction).",
+    "Role rules: amplify = consequence already happening now (not «может привести к»).",
+    "Role rules: mistake = concrete wrong action (not «люди ошибаются»).",
+    "Role rules: consequence = real price in time, money, relationships or reputation.",
+    "Role rules: shift = perspective reversal, solution = concrete mechanism «делай X вместо Y», example = realistic before/after details, cta = one action only.",
     "No ellipsis («...» or «…») and no unfinished tails. Every line must end as a complete thought.",
     "Avoid ultra-short list items (<5 words) unless it is a metric or a strict action command.",
     "Keep wording topic-specific. Avoid universal sales jargon if topic is not sales-related.",
@@ -666,7 +726,9 @@ function buildUserPrompt(
     ...buildDomainPromptAddendum(topicDomain),
     "Avoid stale templates like «в теме ...», «одна ошибка ...», «где ломается поток ...».",
     "Avoid generic headings like «Что делать по шагам», «Что это значит для вас», «Что изменится, если оставить как есть».",
-    "Ban phrases: «в современном мире», «важно понимать», «ключ к успеху».",
+    "Ban phrases: «в современном мире», «как известно», «не секрет что», «многие задаются вопросом», «сегодня как никогда», «в эпоху цифровизации», «как показывает практика».",
+    "Ban filler wording: «на самом деле», «стоит отметить», «важно понимать», «следует учитывать», «необходимо помнить».",
+    "Ban headings: «Почему это важно», «Что нужно знать», «Главный секрет», «Простой способ», «Эффективный метод», «Ключевые моменты», «Обратите внимание», and headings with «топ», «лучших», «способов».",
     ...variantRules,
     "Avoid title collisions and duplicated words inside one line.",
     "Avoid long clauses and nested lists.",
@@ -939,6 +1001,8 @@ function applyFinalCopyPolish(
         !normalizedTitle ||
         hasDanglingTail(normalizedTitle) ||
         isHookEchoingTopic(normalizedTitle, topic) ||
+        isListLikeHookTitle(normalizedTitle) ||
+        isHookQuestionTemplate(normalizedTitle) ||
         hasAwkwardHookTitle(normalizedTitle) ||
         startsWithGenericMistakeLead(normalizedTitle) ||
         hasLegacyTemplatePhrase(combinedHook) ||
@@ -961,6 +1025,10 @@ function applyFinalCopyPolish(
       } else {
         hook.title = normalizedTitle;
         hook.subtitle = normalizedSubtitle || buildHookFallbackSubtitle(topic);
+      }
+
+      if (countSentenceMarks(`${hook.title} ${hook.subtitle}`) > 2) {
+        hook.subtitle = buildHookFallbackSubtitle(topic);
       }
 
       const anchoredHook = `${hook.title} ${hook.subtitle}`.trim();
@@ -1038,6 +1106,8 @@ function enforceSlideQuality(
         !title ||
         hasDanglingTail(title) ||
         isHookEchoingTopic(title, topic) ||
+        isListLikeHookTitle(title) ||
+        isHookQuestionTemplate(title) ||
         hasAwkwardHookTitle(title) ||
         startsWithGenericMistakeLead(title) ||
         hasLegacyTemplatePhrase(title) ||
@@ -1309,6 +1379,10 @@ function evaluateSlideQuality(
     if (countWords(cta.title) < 2 || !hasActionVerb(cta.subtitle)) {
       reasons.push("weak cta");
     }
+
+    if (role !== "cta" && !hasConcreteAnchorInCopy(collectSlideCopy(slide))) {
+      reasons.push(`low concreteness at ${index + 1}`);
+    }
   }
 
   return {
@@ -1321,8 +1395,32 @@ function countWords(value: string) {
   return normalizeWordTokens(value).length;
 }
 
+function countSentenceMarks(value: string) {
+  return (value.match(/[.!?]+/g) ?? []).length;
+}
+
+function hasConcreteAnchorInCopy(value: string) {
+  const text = normalizeText(value, 600).toLowerCase();
+  if (!text) {
+    return false;
+  }
+
+  const hasNumber = /\b\d+(?:[.,]\d+)?\s*%?\b/u.test(text);
+  const hasAction = /\b(сделай|сделайте|проверь|проверьте|замени|замените|добавь|добавьте|запусти|запустите|опиши|вынеси|попробуй|попробуйте|начни|начните|внедри|внедрите|напиши|напишите|сохраните|ответьте|пришлите|оставьте)\b/iu.test(
+    text
+  );
+  const hasScenario = /\b(когда|если|утром|вечером|на\s+встрече|в\s+переписке|в\s+ленте|в\s+instagram|сегодня|за\s+неделю|за\s+месяц|после\s+первой\s+встречи)\b/iu.test(
+    text
+  );
+  const hasComparison = /\b(vs|против|вместо|чем\s+больше.+тем\s+меньше|не\s+.+,\s+а\s+.+)\b/iu.test(
+    text
+  );
+
+  return hasNumber || hasAction || hasScenario || hasComparison;
+}
+
 function hasActionVerb(value: string) {
-  return /(?:^|[^\p{L}])(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите|подпишитесь|выберите)(?=$|[^\p{L}])/iu.test(
+  return /(?:^|[^\p{L}])(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите|подпишитесь|выберите|проверь|проверьте|сделай|сделайте|попробуй|попробуйте|внедри|внедрите|запусти|запустите|начни|начните)(?=$|[^\p{L}])/iu.test(
     value
   );
 }
@@ -1399,19 +1497,10 @@ function isWeakRoleTitle(value: string) {
 
 function buildHookCandidates(topic: string, options?: GenerationOptions) {
   const normalizedTopic = normalizeText(topic, 220).toLowerCase();
-  const cleanTopic = normalizeText(topic, 96)
-    .replace(/[.?!…]+$/u, "")
-    .trim();
-  const topicAnchor = extractHookAnchor(topic);
   const topicDomain = resolveTopicDomain(topic, options);
   const isAdContext = /\b(реклам|клик|лендинг|заяв|лид|воронк)\b/iu.test(normalizedTopic);
   const isCallContext = /\b(звон|созвон|переговор|клиент\s+пропал)\b/iu.test(normalizedTopic);
   const goalCue = normalizeText(options?.goal ?? "", 30).toLowerCase();
-  const safeQuestionAnchor = removeDanglingTail(trimToWordBoundary(cleanTopic || topicAnchor, 74));
-  const canUseQuestionAnchor =
-    !!safeQuestionAnchor &&
-    countWords(safeQuestionAnchor) >= 4 &&
-    !hasAwkwardHookTitle(safeQuestionAnchor);
   const tensionTitle =
     topicDomain === "education"
       ? "Уроки идут, а прогресса не видно: где узкое место?"
@@ -1433,12 +1522,7 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
     ? "Созвон прошёл. Почему дальше тишина?"
     : isAdContext
       ? "Клики есть. Почему заявок нет?"
-      : canUseQuestionAnchor
-        ? trimToWordBoundary(
-            /[?]$/u.test(safeQuestionAnchor) ? safeQuestionAnchor : `${safeQuestionAnchor}?`,
-            72
-          )
-        : tensionTitle;
+      : tensionTitle;
 
   const firstSubtitle = isCallContext
     ? "Разберём, какая фраза ломает доверие в первые 2 минуты."
@@ -1455,14 +1539,20 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
       subtitle: trimToWordBoundary(firstSubtitle, 132)
     },
     {
-      title: trimToWordBoundary(`Почему «${buildCompactTopicFocus(topic, 30)}» пролистывают слишком быстро?`, 72),
+      title: trimToWordBoundary(
+        `Ты вкладываешь часы в «${buildCompactTopicFocus(topic, 24)}», а отклик уходит за 2 секунды`,
+        72
+      ),
       subtitle: trimToWordBoundary(
         "Разберём, какая формулировка убивает интерес в первых слайдах и чем её заменить.",
         132
       )
     },
     {
-      title: trimToWordBoundary(`Как сделать «${buildCompactTopicFocus(topic, 28)}» понятным и цепляющим?`, 72),
+      title: trimToWordBoundary(
+        `В «${buildCompactTopicFocus(topic, 22)}» досмотры падают из-за воды и повтора мыслей`,
+        72
+      ),
       subtitle: trimToWordBoundary(
         goalCue.includes("заяв")
           ? "Соберём структуру, которая доводит до заявки, а не до пролистывания."
@@ -1492,6 +1582,8 @@ function scoreHookCandidate(title: string, subtitle: string) {
   }
   if (
     startsWithGenericMistakeLead(normalizedTitle) ||
+    isListLikeHookTitle(normalizedTitle) ||
+    isHookQuestionTemplate(normalizedTitle) ||
     hasLegacyTemplatePhrase(combined) ||
     hasAwkwardHookTitle(normalizedTitle)
   ) {
@@ -1825,14 +1917,14 @@ function buildRoleTitleFallback(
       `${focus}: как незаметная мелочь превращается в системный провал`
     ],
     mistake: [
-      `${focus}: привычный ход, который режет результат`,
-      `${focus}: где шаблон подменяет смысл`,
-      `${focus}: тонкая ошибка, из-за которой всё буксует`
+      `${focus}: ты ставишь вывод в конец и теряешь дочитывания`,
+      `${focus}: делаешь 3 общих тезиса подряд и убиваешь внимание`,
+      `${focus}: шаблон звучит правильно, но не двигает к действию`
     ],
     shift: [
-      `${focus}: разворот, после которого появляется отклик`,
-      `${focus}: точка, где меняется сценарий`,
-      `${focus}: как перейти от хаоса к понятному шагу`
+      `${focus}: вместо общего совета — 1 факт и 1 действие`,
+      `${focus}: меняем угол: сначала цифра, потом объяснение`,
+      `${focus}: чем меньше воды, тем выше досмотры`
     ]
   };
 
@@ -1845,9 +1937,12 @@ function buildRoleTitleFallback(
     role === "mistake" ||
     role === "shift"
   ) {
-    const variants = domainByRole[role]?.length
-      ? [...(domainByRole[role] as string[]), ...commonByRole[role]]
-      : commonByRole[role];
+    const variants =
+      role === "mistake" || role === "shift"
+        ? commonByRole[role]
+        : domainByRole[role]?.length
+          ? [...(domainByRole[role] as string[]), ...commonByRole[role]]
+          : commonByRole[role];
     const maxLength = role === "mistake" || role === "shift" ? 92 : 80;
     return trimToWordBoundary(pickVariantByTopic(`${focus}-${role}-${domain}`, variants), maxLength);
   }
@@ -2316,17 +2411,12 @@ function buildHookFallbackTitle(topic: string) {
     return "Идея, которая усиливает ваш контент";
   }
 
-  const safeQuestion = removeDanglingTail(trimToWordBoundary(cleanTopic, 74));
-  if (safeQuestion && countWords(safeQuestion) >= 3) {
-    return /[?]$/u.test(safeQuestion) ? safeQuestion : `${safeQuestion}?`;
-  }
-
-  const topicFocus = buildCompactTopicFocus(cleanTopic, 42);
+  const topicFocus = buildCompactTopicFocus(cleanTopic, 24);
   const variants = [
-    `Где теряется внимание в «${topicFocus}»?`,
-    `Почему в «${topicFocus}» пропадает отклик?`,
-    `Что в «${topicFocus}» мешает дочитыванию?`,
-    `Как в «${topicFocus}» включить интерес?`
+    `Ты говоришь про «${topicFocus}», а читатель уходит на первом экране`,
+    `В «${topicFocus}» внимание теряется в первые 3 секунды`,
+    `Контент про «${topicFocus}» читают, но не запоминают`,
+    `Не тема, а подача «${topicFocus}» режет дочитывания`
   ];
   const picked = trimToWordBoundary(pickVariantByTopic(topicFocus, variants), 72);
   return removeDanglingTail(picked) || "Идея, которая усиливает ваш контент";
@@ -2335,9 +2425,9 @@ function buildHookFallbackTitle(topic: string) {
 function buildHookFallbackSubtitle(topic: string) {
   const topicFocus = buildTopicFocus(topic);
   const variants = [
-    `Покажу структуру по ${topicFocus}: что сказать, чтобы читатель дошёл до действия.`,
-    "Разберём реальные формулировки вместо общих советов — с примерами под тему.",
-    "Соберём цепочку: крючок, напряжение, разворот и ясный CTA без давления."
+    `Покажу 3 формулировки по ${topicFocus}, которые удерживают внимание в первые 5 секунд.`,
+    `Разберём 1 реальный сценарий по ${topicFocus}: где люди уходят и какой шаг возвращает диалог.`,
+    `Соберём короткий каркас по ${topicFocus}: факт -> разворот -> действие без воды.`
   ];
 
   return trimToWordBoundary(pickVariantByTopic(topicFocus, variants), 132);
@@ -2566,6 +2656,27 @@ function hasAwkwardHookTitle(value: string) {
     /^[\p{L}-]+\s+[\p{L}-]{4,}ть:\s+как\b/iu.test(normalized) ||
     /«[^»]*\b(и|а|но|или|к|по|на|для|без|от)\s*»/iu.test(normalized)
   );
+}
+
+function isListLikeHookTitle(value: string) {
+  const normalized = value.toLowerCase().replace(/\s+/gu, " ").trim();
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    /^\d+\s+(ошиб|способ|шаг|причин|пункт|иде)/iu.test(normalized) ||
+    /(?:^|[^\p{L}])(топ|лучших|способов|best|top)(?=$|[^\p{L}])/iu.test(normalized)
+  );
+}
+
+function isHookQuestionTemplate(value: string) {
+  const normalized = value.toLowerCase().replace(/\s+/gu, " ").trim();
+  if (!normalized) {
+    return false;
+  }
+
+  return /хотите\s+узнать\s+как|how\s+to|many\s+wonder|do\s+you\s+want\s+to\s+know/iu.test(normalized);
 }
 
 function isHookEchoingTopic(title: string, topic: string) {
@@ -3129,6 +3240,42 @@ function canRetryWithAnotherModel(error: unknown) {
   }
 
   return false;
+}
+
+function resolveFallbackReason(error: unknown): CarouselFallbackReason {
+  if (!error || typeof error !== "object") {
+    return "error";
+  }
+
+  const status =
+    typeof (error as { status?: unknown }).status === "number"
+      ? (error as { status?: number }).status
+      : null;
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof (error as { message?: unknown }).message === "string"
+        ? String((error as { message?: unknown }).message)
+        : "";
+  const code =
+    typeof (error as { code?: unknown }).code === "string"
+      ? String((error as { code?: string }).code)
+      : "";
+  const name =
+    typeof (error as { name?: unknown }).name === "string"
+      ? String((error as { name?: string }).name)
+      : "";
+  const source = `${name} ${code} ${message}`.toLowerCase();
+
+  if (status === 429 || /\bquota\b|insufficient_quota|rate limit|billing/i.test(source)) {
+    return "quota";
+  }
+
+  if (/\btimeout\b|timed out|time out|etimedout|econnaborted|abort|deadline/i.test(source)) {
+    return "timeout";
+  }
+
+  return "error";
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

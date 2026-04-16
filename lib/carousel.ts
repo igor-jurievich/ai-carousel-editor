@@ -1600,19 +1600,19 @@ function fallbackTitleByRole(role: CarouselSlideRole) {
   }
 
   if (role === "mistake") {
-    return "Ключевой миф, который мешает";
+    return "Вот где ломается";
   }
 
   if (role === "consequence") {
-    return "Где начинаются потери после этого шага";
+    return "Цена этой ошибки";
   }
 
   if (role === "shift") {
-    return "Что поменять в логике подачи";
+    return "Меняем угол";
   }
 
   if (role === "solution") {
-    return "Следующий шаг, который можно применить сразу";
+    return "Вот что работает";
   }
 
   if (role === "example") {
@@ -1627,9 +1627,12 @@ function fallbackTitleByRole(role: CarouselSlideRole) {
 }
 
 function deriveTitleFromOutline(role: CarouselSlideRole, outline: OutlineLike) {
-  const firstBullet = Array.isArray(outline.bullets)
-    ? sanitizeBlueprintText(String(outline.bullets[0] ?? ""), 84, true)
-    : "";
+  const allowBulletToTitle =
+    role !== "mistake" && role !== "consequence" && role !== "shift" && role !== "solution";
+  const firstBullet =
+    allowBulletToTitle && Array.isArray(outline.bullets)
+      ? sanitizeBlueprintText(String(outline.bullets[0] ?? ""), 84, true)
+      : "";
 
   if (firstBullet) {
     return sanitizeBlueprintText(firstBullet, titleMaxLengthByRole(role), true);

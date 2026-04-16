@@ -3,10 +3,11 @@
 import { saveAs } from "file-saver";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
+import * as Tooltip from "@radix-ui/react-tooltip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type Konva from "konva";
-import { AppIcon } from "@/components/icons";
+import { AppIcon, type AppIconName } from "@/components/icons";
 import { CanvasEditor } from "@/components/CanvasEditor";
 import { MobileTools, type MobileToolTab } from "@/components/MobileTools";
 import { SettingsPanel } from "@/components/SettingsPanel";
@@ -197,11 +198,11 @@ function parseRgbFromColor(value: string) {
 function resolveGridColorForBackground(background: string) {
   const rgb = parseRgbFromColor(background);
   if (!rgb) {
-    return "rgba(24, 28, 34, 0.14)";
+    return "rgba(0, 0, 0, 0.04)";
   }
 
   const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
-  return luminance < 0.48 ? "rgba(255, 255, 255, 0.16)" : "rgba(24, 28, 34, 0.14)";
+  return luminance < 0.48 ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.04)";
 }
 
 function inferGridModeFromSlide(slide: Slide): GridDecorationMode | null {
@@ -462,6 +463,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const mobileGenerateTopicRef = useRef<HTMLTextAreaElement | null>(null);
   const mobileToolbarRef = useRef<HTMLElement | null>(null);
   const mobileToolSheetRef = useRef<HTMLElement | null>(null);
+  const rightSidebarRef = useRef<HTMLElement | null>(null);
+  const signatureSectionRef = useRef<HTMLElement | null>(null);
+  const profileHandleInputRef = useRef<HTMLInputElement | null>(null);
   const editingTextElementIdRef = useRef<string | null>(null);
   const editingValueRef = useRef("");
   const editingDirtyRef = useRef(false);
@@ -1862,6 +1866,23 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setIsTemplateModalOpen(true);
   };
 
+  const handleRequestProfileHandleEdit = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const signatureSection =
+      signatureSectionRef.current ??
+      (rightSidebarRef.current?.querySelector(".settings-card-signature") as HTMLElement | null);
+
+    signatureSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    window.setTimeout(() => {
+      profileHandleInputRef.current?.focus({ preventScroll: true });
+      profileHandleInputRef.current?.select();
+    }, 220);
+  };
+
   const handleOpenSlideExportModal = () => {
     if (isGenerating) {
       setStatus(GENERATE_LOCK_STATUS);
@@ -2418,6 +2439,16 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       (element) => ({
         ...element,
         text: transformTextCase(element.text, mode)
+      }),
+      { recordHistory: false }
+    );
+  };
+
+  const handleSelectedTextAlignChange = (align: "left" | "center" | "right") => {
+    updateSelectedTextElement(
+      (element) => ({
+        ...element,
+        align
       }),
       { recordHistory: false }
     );
@@ -3235,52 +3266,44 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           ) : null}
 
           <div className="studio-grid">
-            <aside className="action-rail">
-              <button
-                className="rail-button"
-                type="button"
-                title="Отменить (Ctrl/Cmd + Z)"
-                onClick={handleUndo}
-                disabled={!canUndo || generationLocked}
-              >
-                <AppIcon name="history-back" size={18} />
-              </button>
-              <button
-                className="rail-button"
-                type="button"
-                title="Повторить (Ctrl/Cmd + Shift + Z)"
-                onClick={handleRedo}
-                disabled={!canRedo || generationLocked}
-              >
-                <AppIcon name="history-forward" size={18} />
-              </button>
-              <button
-                className="rail-button"
-                type="button"
-                title="Выбрать шаблон"
-                onClick={handleOpenTemplateModal}
-                disabled={generationLocked}
-              >
-                <AppIcon name="templates" size={18} />
-              </button>
-              <button
-                className="rail-button"
-                type="button"
-                title={isPreviewMode ? "Вернуться в режим редактирования" : "Режим предпросмотра"}
-                onClick={() => setIsPreviewMode((value) => !value)}
-                disabled={generationLocked}
-              >
-                <AppIcon name={isPreviewMode ? "eye-off" : "eye"} size={18} />
-              </button>
-              <button
-                className="rail-button"
-                type="button"
-                title="Новая сессия"
-                onClick={handleResetSession}
-                disabled={generationLocked}
-              >
-                <AppIcon name="reset" size={18} />
-              </button>
+            <aside className="action-rail" aria-label="Инструменты редактора">
+              <Tooltip.Provider delayDuration={400}>
+                <RailIconButton
+                  icon="history-back"
+                  tooltip="Отменить (Ctrl/Cmd + Z)"
+                  onClick={handleUndo}
+                  disabled={!canUndo || generationLocked}
+                />
+                <RailIconButton
+                  icon="history-forward"
+                  tooltip="Повторить (Ctrl/Cmd + Shift + Z)"
+                  onClick={handleRedo}
+                  disabled={!canRedo || generationLocked}
+                />
+
+                <div className="rail-divider" aria-hidden="true" />
+
+                <RailIconButton
+                  icon="templates"
+                  tooltip="Шаблоны"
+                  onClick={handleOpenTemplateModal}
+                  disabled={generationLocked}
+                  isActive={isTemplateModalOpen}
+                />
+                <RailIconButton
+                  icon={isPreviewMode ? "eye-off" : "eye"}
+                  tooltip={isPreviewMode ? "Режим редактирования" : "Предпросмотр"}
+                  onClick={() => setIsPreviewMode((value) => !value)}
+                  disabled={generationLocked}
+                  isActive={isPreviewMode}
+                />
+                <RailIconButton
+                  icon="reset"
+                  tooltip="Сбросить"
+                  onClick={handleResetSession}
+                  disabled={generationLocked}
+                />
+              </Tooltip.Provider>
             </aside>
 
             <section className="canvas-column" ref={desktopCanvasHostRef}>
@@ -3316,6 +3339,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                 onMoveSlide={handleMoveSlide}
                 onDeleteSlide={handleDeleteSlide}
                 onOpenTemplateModal={handleOpenTemplateModal}
+                onRequestProfileHandleEdit={handleRequestProfileHandleEdit}
                 disabled={generationLocked}
                 previewMode={isPreviewMode}
                 showSlideBadge={false}
@@ -3323,7 +3347,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               />
             </section>
 
-            <aside className="right-sidebar">
+            <aside className="right-sidebar custom-scroll" ref={rightSidebarRef}>
               {activeSlide ? (
                 <SettingsPanel
                   slides={slides}
@@ -3391,7 +3415,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   onSelectedTextFontChange={handleSelectedTextFontChange}
                   onSelectedTextSizeChange={handleSelectedTextSizeChange}
                   onSelectedTextCaseChange={handleSelectedTextCaseChange}
-                  onCenterSelectedTextHorizontally={handleCenterSelectedTextHorizontally}
+                  onSelectedTextAlignChange={handleSelectedTextAlignChange}
                   onSelectedTextTargetRoleChange={handleSelectedTextTargetRoleChange}
                   onApplyHighlightToSelection={handleApplyHighlightToSelection}
                   onClearHighlightFromSelection={handleClearHighlightFromSelection}
@@ -3399,6 +3423,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   onApplyHighlightColorToAllSlides={handleApplyHighlightColorToAllSlides}
                   selectedTextHighlightColor={selectedHighlightColor}
                   selectedTextHighlightOpacity={selectedHighlightOpacity}
+                  signatureSectionRef={signatureSectionRef}
+                  profileHandleInputRef={profileHandleInputRef}
                   disabled={generationLocked}
                   previewMode={isPreviewMode}
                 />
@@ -3546,6 +3572,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onMoveSlide={handleMoveSlide}
               onDeleteSlide={handleDeleteSlide}
               onOpenTemplateModal={handleOpenTemplateModal}
+              onRequestProfileHandleEdit={handleRequestProfileHandleEdit}
               disabled={generationLocked}
               previewMode={isPreviewMode}
               showSlideBadge={false}
@@ -3678,6 +3705,42 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         </div>
       ) : null}
     </main>
+  );
+}
+
+function RailIconButton({
+  icon,
+  tooltip,
+  onClick,
+  disabled = false,
+  isActive = false
+}: {
+  icon: AppIconName;
+  tooltip: string;
+  onClick: () => void;
+  disabled?: boolean;
+  isActive?: boolean;
+}) {
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger asChild>
+        <button
+          className={`rail-button ${isActive ? "is-active" : ""}`}
+          type="button"
+          onClick={onClick}
+          disabled={disabled}
+          aria-label={tooltip}
+        >
+          <AppIcon name={icon} size={18} />
+        </button>
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content className="rail-tooltip-content" side="right" sideOffset={8}>
+          {tooltip}
+          <Tooltip.Arrow className="rail-tooltip-arrow" />
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   );
 }
 
@@ -4216,10 +4279,19 @@ function inferRoleByIndex(index: number): CarouselOutlineSlide["type"] {
 }
 
 function extractOrderedTextLines(slide: Slide) {
-  return slide.elements
+  const textElements = slide.elements
     .filter((element): element is TextElement => element.type === "text")
-    .filter((element) => element.metaKey !== "slide-chip-text")
-    .sort((left, right) => left.y - right.y)
+    .filter((element) => !NON_CONTENT_TEXT_META_KEYS.has(element.metaKey ?? ""))
+    .filter((element) => Boolean(element.text.trim()))
+    .sort((left, right) => left.y - right.y);
+
+  const managedTitle = textElements.filter((element) => element.metaKey === MANAGED_TITLE_META_KEY);
+  const managedBody = textElements.filter((element) => element.metaKey === MANAGED_BODY_META_KEY);
+  const prioritizedElements = [...managedTitle, ...managedBody];
+  const prioritizedIds = new Set(prioritizedElements.map((element) => element.id));
+  const remainingElements = textElements.filter((element) => !prioritizedIds.has(element.id));
+
+  return [...prioritizedElements, ...remainingElements]
     .flatMap((element) =>
       element.text
         .split(/\n+/)

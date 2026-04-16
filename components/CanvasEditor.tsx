@@ -41,6 +41,7 @@ type CanvasEditorProps = {
   onMoveSlide: (slideId: string, direction: "up" | "down") => void;
   onDeleteSlide: (slideId: string) => void;
   onOpenTemplateModal: () => void;
+  onRequestProfileHandleEdit?: () => void;
   onVisibleSlideChange?: (slideId: string) => void;
   scrollToSlideRequest?: { id: string; token: number } | null;
   disabled?: boolean;
@@ -81,6 +82,7 @@ export function CanvasEditor({
   onMoveSlide,
   onDeleteSlide,
   onOpenTemplateModal,
+  onRequestProfileHandleEdit,
   onVisibleSlideChange,
   scrollToSlideRequest,
   disabled = false,
@@ -187,10 +189,7 @@ export function CanvasEditor({
     const hiddenEditingElementId: string | null = null;
     const selectedElementStyle =
       selectedElement
-        ? getFloatingActionStyle(selectedElement, scale, displayWidth, displayHeight, {
-            horizontalInset: 72,
-            verticalInset: 14
-          })
+        ? getFloatingActionStyle(selectedElement, scale, displayWidth, displayHeight)
         : null;
     const canGoPrev = activeSlideIndex > 0;
     const canGoNext = activeSlideIndex >= 0 && activeSlideIndex < slides.length - 1;
@@ -299,6 +298,8 @@ export function CanvasEditor({
                     onRequestSlidePhotoUpload={() =>
                       onAddBackgroundImageToSlide?.(activeSlide.id) ?? onAddImageToSlide(activeSlide.id)
                     }
+                    onRequestProfileHandleEdit={onRequestProfileHandleEdit}
+                    hideResizeHandles
                     showSlideBadge={showSlideBadge}
                   />
                 </div>
@@ -314,10 +315,10 @@ export function CanvasEditor({
                       event.stopPropagation();
                       onDeleteSelectedElement();
                     }}
-                  >
-                    <AppIcon name="trash" size={16} />
-                  </button>
-                ) : null}
+                    >
+                      <AppIcon name="trash" size={14} />
+                    </button>
+                  ) : null}
               </div>
             </div>
 
@@ -478,6 +479,8 @@ export function CanvasEditor({
                           onRequestSlidePhotoUpload={() =>
                             onAddBackgroundImageToSlide?.(slide.id) ?? onAddImageToSlide(slide.id)
                           }
+                          onRequestProfileHandleEdit={onRequestProfileHandleEdit}
+                          hideResizeHandles={false}
                           showSlideBadge={showSlideBadge}
                         />
                       </div>
@@ -494,50 +497,52 @@ export function CanvasEditor({
                             onDeleteSelectedElement();
                           }}
                         >
-                          <AppIcon name="trash" size={16} />
+                          <AppIcon name="trash" size={14} />
                         </button>
                       ) : null}
                     </div>
 
                     {previewMode ? null : (
-                      <div className="slide-tools-rail">
-                        <ToolButton
-                          icon="select"
-                          title="Выбрать и редактировать слайд"
-                          onClick={() => onSelectSlide(slide.id)}
-                          disabled={disabled}
-                        />
-                        <ToolButton
-                          icon="image"
-                          title="Загрузить фото на этот слайд"
-                          onClick={() => onAddImageToSlide(slide.id)}
-                          disabled={disabled}
-                        />
-                        <ToolButton
-                          icon="text"
-                          title="Добавить текст на этот слайд"
-                          onClick={() => onAddTextToSlide(slide.id)}
-                          disabled={disabled}
-                        />
-                        <ToolButton
-                          icon="move-up"
-                          title="Переместить слайд вверх"
-                          onClick={() => onMoveSlide(slide.id, "up")}
-                          disabled={disabled}
-                        />
-                        <ToolButton
-                          icon="move-down"
-                          title="Переместить слайд вниз"
-                          onClick={() => onMoveSlide(slide.id, "down")}
-                          disabled={disabled}
-                        />
-                        <ToolButton
-                          icon="trash"
-                          title="Удалить этот слайд"
-                          onClick={() => onDeleteSlide(slide.id)}
-                          destructive
-                          disabled={disabled || slides.length <= 1}
-                        />
+                      <div className="slide-tools-shell">
+                        <div className="slide-tools-rail">
+                          <ToolButton
+                            icon="select"
+                            title="Выбрать слайд"
+                            onClick={() => onSelectSlide(slide.id)}
+                            disabled={disabled}
+                          />
+                          <ToolButton
+                            icon="image"
+                            title="Вставить изображение"
+                            onClick={() => onAddImageToSlide(slide.id)}
+                            disabled={disabled}
+                          />
+                          <ToolButton
+                            icon="text"
+                            title="Добавить текст"
+                            onClick={() => onAddTextToSlide(slide.id)}
+                            disabled={disabled}
+                          />
+                          <ToolButton
+                            icon="move-up"
+                            title="Вверх"
+                            onClick={() => onMoveSlide(slide.id, "up")}
+                            disabled={disabled}
+                          />
+                          <ToolButton
+                            icon="move-down"
+                            title="Вниз"
+                            onClick={() => onMoveSlide(slide.id, "down")}
+                            disabled={disabled}
+                          />
+                          <ToolButton
+                            icon="trash"
+                            title="Удалить"
+                            onClick={() => onDeleteSlide(slide.id)}
+                            destructive
+                            disabled={disabled || slides.length <= 1}
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -565,21 +570,23 @@ function getFloatingActionStyle(
     verticalInset?: number;
   }
 ) {
-  const buttonSize = 40;
-  const horizontalInset = options?.horizontalInset ?? 8;
+  const buttonSize = 28;
+  const horizontalInset = options?.horizontalInset ?? 10;
   const verticalInset = options?.verticalInset ?? 8;
+  const horizontalOffset = 8;
+  const verticalOffset = 16;
   const right = element.x + element.width;
-  const top = element.y;
+  const top = element.y * scale;
   const nextLeft = Math.min(
     displayWidth - buttonSize - horizontalInset,
-    Math.max(horizontalInset, right * scale - buttonSize * 0.2)
+    Math.max(horizontalInset, right * scale + horizontalOffset)
   );
-  const preferredTop = top * scale - buttonSize - (verticalInset + 2);
+  const preferredTop = top - verticalOffset;
   const nextTop =
     preferredTop < verticalInset
       ? Math.min(
           displayHeight - buttonSize - verticalInset,
-          (element.y + element.height) * scale + verticalInset + 2
+          (element.y + element.height) * scale + 8
         )
       : preferredTop;
 
@@ -592,7 +599,10 @@ function getFloatingActionStyle(
 function InsertButton({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
   return (
     <button type="button" className="insert-slide-button" onClick={onClick} disabled={disabled}>
-      <AppIcon name="plus" size={22} />
+      <span className="insert-slide-line" aria-hidden="true" />
+      <span className="insert-slide-plus" aria-hidden="true">
+        <AppIcon name="plus" size={14} />
+      </span>
     </button>
   );
 }

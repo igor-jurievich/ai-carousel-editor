@@ -28,9 +28,11 @@ type SlideStageProps = {
   onTransformElement?: (elementId: string, updates: Record<string, number>) => void;
   onStartTextEditing?: (elementId: string) => void;
   onRequestSlidePhotoUpload?: (slideId: string) => void;
+  onRequestProfileHandleEdit?: () => void;
   hiddenElementId?: string | null;
   stageRef?: (node: Konva.Stage | null) => void;
   showSlideBadge?: boolean;
+  hideResizeHandles?: boolean;
 };
 
 type SafeArea = {
@@ -72,10 +74,10 @@ const NON_CONTENT_TEXT_META_KEYS = new Set<string>([
   "image-placeholder-text"
 ]);
 const MANAGED_TEXT_META_KEYS = new Set<string>(["managed-title", "managed-body"]);
-const UI_ACCENT = "#2caea1";
-const UI_ACCENT_SOFT = "rgba(86, 207, 194, 0.24)";
-const UI_ACCENT_FAINT = "rgba(86, 207, 194, 0.12)";
-const UI_ACCENT_GUIDE = "rgba(86, 207, 194, 0.72)";
+const UI_ACCENT = "#6366f1";
+const UI_ACCENT_SOFT = "rgba(99, 102, 241, 0.12)";
+const UI_ACCENT_FAINT = "rgba(99, 102, 241, 0.12)";
+const UI_ACCENT_GUIDE = "rgba(99, 102, 241, 0.6)";
 const LEGACY_ACCENT_TEXT_COLORS = new Set(["#ffffff", "#fff", "#f5f7ff", "#f7f9ff"]);
 const LEGACY_ACCENT_CHIP_HEX_COLORS = new Set([
   "#1f49ff",
@@ -1020,7 +1022,7 @@ function SlideImageNode({
       : element.strokeWidth && element.strokeWidth > 0
         ? element.stroke
         : undefined;
-  const outlineWidth = selected ? 4 : element.strokeWidth ?? 0;
+  const outlineWidth = selected ? 2 : element.strokeWidth ?? 0;
 
   return (
     <>
@@ -1052,7 +1054,7 @@ function SlideImageNode({
         onTransformEnd={(event) => onTransformEnd?.(event.target as Konva.Image)}
         stroke={outlineStroke}
         strokeWidth={outlineWidth}
-        shadowBlur={selected ? 18 : 0}
+        shadowBlur={selected ? 10 : 0}
         shadowColor={selected ? UI_ACCENT_SOFT : undefined}
       />
       {darken > 0 ? (
@@ -1102,8 +1104,8 @@ function SlideShapeNode({
       rotation={element.rotation}
       cornerRadius={element.shape === "circle" ? Math.min(element.width, element.height) / 2 : element.cornerRadius}
       stroke={selected ? UI_ACCENT : element.stroke}
-      strokeWidth={selected ? 4 : element.strokeWidth}
-      shadowBlur={selected ? 14 : 0}
+      strokeWidth={selected ? 2 : element.strokeWidth}
+      shadowBlur={selected ? 10 : 0}
       shadowColor={selected ? UI_ACCENT_SOFT : undefined}
       listening={interactive}
       draggable={interactive && selected}
@@ -1144,6 +1146,10 @@ function SlideTextNode({
     () => resolveHighlightRects(element, slideBackground),
     [element, slideBackground]
   );
+  const displayOpacity =
+    element.metaKey === "profile-handle" || element.metaKey === "footer-counter"
+      ? Math.min(resolveElementOpacity(element.opacity), 0.35)
+      : resolveElementOpacity(element.opacity);
 
   return (
     <Group
@@ -1151,7 +1157,7 @@ function SlideTextNode({
       x={element.x}
       y={element.y}
       rotation={element.rotation}
-      opacity={element.opacity}
+      opacity={displayOpacity}
       draggable={interactive && selected}
       dragDistance={4}
       dragBoundFunc={dragBoundFunc}
@@ -1275,9 +1281,11 @@ export function SlideStage({
   onTransformElement,
   onStartTextEditing,
   onRequestSlidePhotoUpload,
+  onRequestProfileHandleEdit,
   hiddenElementId = null,
   stageRef,
-  showSlideBadge = true
+  showSlideBadge = true,
+  hideResizeHandles = false
 }: SlideStageProps) {
   const scale = useMemo(() => width / canvasWidth, [canvasWidth, width]);
   const stagePixelRatio = useMemo(() => {
@@ -1638,14 +1646,19 @@ export function SlideStage({
             };
 
             if (element.type === "text") {
+              const isProfileHandleText =
+                element.metaKey === "profile-handle" && Boolean(onRequestProfileHandleEdit);
               const isLockedTextLayer = Boolean(
-                element.metaKey && NON_INTERACTIVE_TEXT_META_KEYS.has(element.metaKey)
+                element.metaKey &&
+                  NON_INTERACTIVE_TEXT_META_KEYS.has(element.metaKey) &&
+                  !isProfileHandleText
               );
               const isImagePlaceholderText =
                 element.metaKey === "image-placeholder-text" &&
                 !slide.backgroundImage &&
                 Boolean(onRequestSlidePhotoUpload);
-              const interactiveText = interactive && !isLockedTextLayer && !isImagePlaceholderText;
+              const interactiveText =
+                interactive && !isLockedTextLayer && !isImagePlaceholderText && !isProfileHandleText;
 
               return (
                 <SlideTextNode
@@ -1659,18 +1672,24 @@ export function SlideStage({
                   onSelect={
                     isImagePlaceholderText
                       ? () => onRequestSlidePhotoUpload?.(slide.id)
+                      : isProfileHandleText
+                        ? () => onRequestProfileHandleEdit?.()
                       : isLockedTextLayer
                         ? undefined
                         : () => onSelectElement?.(element.id)
                   }
                   onDoubleClick={
-                    isLockedTextLayer || isImagePlaceholderText
+                    isLockedTextLayer || isImagePlaceholderText || isProfileHandleText
                       ? undefined
                       : () => onStartTextEditing?.(element.id)
                   }
-                  onDragEnd={isLockedTextLayer || isImagePlaceholderText ? undefined : handleDragEnd}
+                  onDragEnd={
+                    isLockedTextLayer || isImagePlaceholderText || isProfileHandleText
+                      ? undefined
+                      : handleDragEnd
+                  }
                   onTransformEnd={
-                    isLockedTextLayer || isImagePlaceholderText
+                    isLockedTextLayer || isImagePlaceholderText || isProfileHandleText
                       ? undefined
                       : (node) => handleTransformEnd(element, node)
                   }
@@ -1721,25 +1740,29 @@ export function SlideStage({
         {interactive ? (
           <Transformer
             ref={transformerRef}
-            rotateEnabled
+            rotateEnabled={!hideResizeHandles}
             flipEnabled={false}
             keepRatio={
               (selectedElement?.type === "image" || selectedElement?.type === "image_element") &&
               selectedElement.metaKey !== "image-top"
             }
             enabledAnchors={
-              selectedElement?.type === "text"
-                ? ["middle-left", "middle-right"]
-                : (selectedElement?.type === "image" || selectedElement?.type === "image_element") &&
-                    selectedElement.metaKey === "image-top"
-                  ? ["top-center", "bottom-center"]
-                : ["top-left", "top-right", "bottom-left", "bottom-right"]
+              hideResizeHandles
+                ? []
+                : selectedElement?.type === "text"
+                  ? ["middle-left", "middle-right"]
+                  : (selectedElement?.type === "image" || selectedElement?.type === "image_element") &&
+                      selectedElement.metaKey === "image-top"
+                    ? ["top-center", "bottom-center"]
+                    : ["top-left", "top-right", "bottom-left", "bottom-right"]
             }
             borderStroke={UI_ACCENT}
+            borderStrokeWidth={2}
             anchorFill="#ffffff"
-            anchorStroke="#278f85"
-            anchorStrokeWidth={1}
-            anchorSize={10}
+            anchorStroke={UI_ACCENT}
+            anchorStrokeWidth={1.5}
+            anchorSize={8}
+            anchorCornerRadius={2}
             boundBoxFunc={(oldBox, newBox) => {
               if (Math.abs(newBox.width) < 30 || Math.abs(newBox.height) < 24) {
                 return oldBox;

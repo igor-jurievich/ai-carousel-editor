@@ -247,6 +247,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       slides,
+      generationSource: generationResult.generationSource,
+      fallbackReason: generationResult.fallbackReason,
       project: {
         title: projectTitleFromTopic(topic),
         topic,
@@ -442,7 +444,7 @@ function resolvePromptVariant(value: unknown): PromptVariant {
     return value;
   }
 
-  return Math.random() < 0.5 ? "A" : "B";
+  return "B";
 }
 
 function projectTitleFromTopic(topic: string) {

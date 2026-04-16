@@ -1,7 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Check,
+  ChevronDown,
+  Hash,
+  Info,
+  LayoutGrid,
+  Palette,
+  Rocket,
+  SunMoon,
+  Target,
+  Users,
+  Zap
+} from "lucide-react";
 import { createSlidesFromOutline, projectTitleFromTopic } from "@/lib/carousel";
 import { clampSlidesCount, DEFAULT_SLIDES_COUNT, SLIDES_COUNT_OPTIONS } from "@/lib/slides";
 import { saveLocalProject } from "@/lib/projects";
@@ -12,6 +25,8 @@ import styles from "./generate-page.module.css";
 
 type GenerateResponse = {
   slides?: CarouselOutlineSlide[];
+  generationSource?: "model" | "fallback";
+  fallbackReason?: "quota" | "error" | "timeout";
   project?: {
     title?: string;
     topic?: string;
@@ -32,7 +47,144 @@ type ProfileCreditsResponse = {
   error?: string;
 };
 
+type SelectOption = {
+  value: string;
+  label: string;
+};
+
 const MAX_TOPIC_CHARS = 4000;
+
+const TONE_OPTIONS: SelectOption[] = [
+  { value: "soft", label: "Мягкий" },
+  { value: "balanced", label: "Сбалансированный" },
+  { value: "sharp", label: "Острый" }
+];
+
+const GOAL_OPTIONS: SelectOption[] = [
+  { value: "engagement", label: "Вовлечение" },
+  { value: "leads", label: "Заявки" },
+  { value: "warming", label: "Прогрев" }
+];
+
+const FORMAT_OPTIONS: SelectOption[] = [
+  { value: "1:1", label: "1:1" },
+  { value: "4:5", label: "4:5" },
+  { value: "9:16", label: "9:16" }
+];
+
+const THEME_OPTIONS: SelectOption[] = [
+  { value: "light", label: "Светлая" },
+  { value: "dark", label: "Тёмная" },
+  { value: "color", label: "Цветная" }
+];
+
+const ROLE_LABELS: Record<string, string> = {
+  hook: "Крючок",
+  problem: "Проблема",
+  amplify: "Усиление",
+  mistake: "Ошибка",
+  consequence: "Последствие",
+  shift: "Поворот",
+  solution: "Решение",
+  example: "Пример",
+  cta: "Призыв"
+};
+
+type GenerateSelectFieldProps = {
+  className?: string;
+  icon: ReactNode;
+  id: string;
+  isOpen: boolean;
+  label: string;
+  onChange: (nextValue: string) => void;
+  onClose: () => void;
+  onToggle: (fieldId: string) => void;
+  options: SelectOption[];
+  value: string;
+};
+
+function GenerateSelectField({
+  className,
+  icon,
+  id,
+  isOpen,
+  label,
+  onChange,
+  onClose,
+  onToggle,
+  options,
+  value
+}: GenerateSelectFieldProps) {
+  const selectedOption = options.find((option) => option.value === value);
+  const rootClassName = [styles.fieldLabel, className].filter(Boolean).join(" ");
+
+  return (
+    <div className={rootClassName}>
+      <span className={styles.fieldLabelText}>
+        <span className={styles.fieldLabelIcon} aria-hidden="true">
+          {icon}
+        </span>
+        <span>{label}</span>
+      </span>
+
+      <div
+        className={styles.selectRoot}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            onClose();
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onClose();
+          }
+        }}
+      >
+        <button
+          type="button"
+          className={styles.selectTrigger}
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
+          onClick={() => onToggle(id)}
+        >
+          <span>{selectedOption?.label ?? value}</span>
+          <ChevronDown
+            size={16}
+            className={`${styles.selectChevron} ${isOpen ? styles.selectChevronOpen : ""}`}
+            aria-hidden="true"
+          />
+        </button>
+
+        <div
+          className={`${styles.selectDropdown} ${isOpen ? styles.selectDropdownOpen : ""}`}
+          role="listbox"
+          aria-hidden={!isOpen}
+        >
+          {options.map((option) => {
+            const isSelected = option.value === value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                className={`${styles.selectOption} ${isSelected ? styles.selectOptionSelected : ""}`}
+                onClick={() => {
+                  onChange(option.value);
+                  onClose();
+                }}
+              >
+                <span>{option.label}</span>
+                {isSelected ? <Check size={14} className={styles.selectOptionCheck} aria-hidden="true" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function GeneratePage() {
   const router = useRouter();
@@ -49,6 +201,7 @@ export default function GeneratePage() {
   const [previewSlides, setPreviewSlides] = useState<CarouselOutlineSlide[] | null>(null);
   const [generatedProjectMeta, setGeneratedProjectMeta] = useState<GenerateResponse["project"] | null>(null);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [openSelectId, setOpenSelectId] = useState<string | null>(null);
   const [accountName, setAccountName] = useState("Пользователь");
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [credits, setCredits] = useState<number | null>(null);
@@ -57,6 +210,11 @@ export default function GeneratePage() {
   const composerRef = useRef<HTMLDivElement | null>(null);
   const topicInputRef = useRef<HTMLTextAreaElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const slidesCountOptions = useMemo<SelectOption[]>(
+    () => SLIDES_COUNT_OPTIONS.map((count) => ({ value: String(count), label: String(count) })),
+    []
+  );
 
   const normalizedTopic = topic.trim();
   const canGenerate = normalizedTopic.length >= 3 && !isGenerating;
@@ -104,12 +262,14 @@ export default function GeneratePage() {
       }
       if (!composerRef.current?.contains(event.target)) {
         setIsAdvancedOpen(false);
+        setOpenSelectId(null);
       }
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsAdvancedOpen(false);
+        setOpenSelectId(null);
       }
     };
 
@@ -120,6 +280,12 @@ export default function GeneratePage() {
       document.removeEventListener("pointerdown", handleOutsidePointer);
       document.removeEventListener("keydown", handleEscape);
     };
+  }, [isAdvancedOpen]);
+
+  useEffect(() => {
+    if (!isAdvancedOpen) {
+      setOpenSelectId(null);
+    }
   }, [isAdvancedOpen]);
 
   useEffect(() => {
@@ -210,6 +376,7 @@ export default function GeneratePage() {
 
     try {
       setIsAdvancedOpen(false);
+      setOpenSelectId(null);
       setIsGenerating(true);
       setError(null);
       trackEvent({
@@ -257,6 +424,11 @@ export default function GeneratePage() {
 
       setPreviewSlides(data.slides);
       setGeneratedProjectMeta(data.project ?? null);
+      if (data.generationSource === "fallback") {
+        console.warn("[generate] Deterministic fallback was used.", {
+          reason: data.fallbackReason ?? "error"
+        });
+      }
       if (typeof data.remainingCredits === "number" && Number.isFinite(data.remainingCredits)) {
         setCredits(Math.max(0, Math.trunc(data.remainingCredits)));
       } else {
@@ -380,45 +552,59 @@ export default function GeneratePage() {
 
   const accountInitial = (accountName.trim().charAt(0) || "P").toUpperCase();
   const hasNoCredits = typeof credits === "number" && credits <= 0;
-  const creditsLabel = typeof credits === "number" ? credits : "...";
+  const isCreditsLoading = typeof credits !== "number";
 
   return (
     <main className={`page-shell ${styles.page}`}>
-      <div className={`${styles.layout} ${previewList.length ? styles.layoutWithPreview : styles.layoutStart}`}>
-        <header className={styles.hero}>
-          <div className={styles.heroTop}>
-            <div className={styles.accountControls}>
-              <span className={`${styles.creditsBadge} ${hasNoCredits ? styles.creditsBadgeZero : ""}`}>
-                ⚡ {creditsLabel}
-              </span>
+      <header className={styles.stickyHeader}>
+        <div className={styles.headerInner}>
+          <span className={styles.logo}>pastello.io</span>
 
-              <div className={styles.accountMenu} ref={accountMenuRef}>
-                <button
-                  className={styles.accountAvatar}
-                  type="button"
-                  onClick={() => setIsAccountMenuOpen((current) => !current)}
-                  aria-expanded={isAccountMenuOpen}
-                  aria-haspopup="menu"
-                  aria-label="Меню аккаунта"
-                >
-                  {accountInitial}
-                </button>
+          <div className={styles.headerControls}>
+            <span
+              className={`pill-badge pill-badge-primary ${styles.creditsBadge} ${hasNoCredits ? styles.creditsBadgeZero : ""}`}
+            >
+              <Zap size={14} aria-hidden="true" />
+              {isCreditsLoading ? (
+                <span className={styles.creditsSkeleton} aria-hidden="true" />
+              ) : (
+                <span>{credits}</span>
+              )}
+            </span>
 
-                {isAccountMenuOpen ? (
-                  <div className={styles.accountDropdown} role="menu">
-                    <p className={styles.accountGreeting}>Привет, {accountName}!</p>
-                    <div className={styles.accountDivider} />
-                    <button
-                      type="button"
-                      className={styles.accountSignOut}
-                      onClick={() => void handleSignOut()}
-                    >
-                      Выйти
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+            <div className={styles.accountMenu} ref={accountMenuRef}>
+              <button
+                className={`${styles.accountAvatar} tap-feedback`}
+                type="button"
+                onClick={() => setIsAccountMenuOpen((current) => !current)}
+                aria-expanded={isAccountMenuOpen}
+                aria-haspopup="menu"
+                aria-label="Меню аккаунта"
+              >
+                {accountInitial}
+              </button>
+
+              {isAccountMenuOpen ? (
+                <div className={styles.accountDropdown} role="menu">
+                  <p className={styles.accountGreeting}>Привет, {accountName}!</p>
+                  <div className={styles.accountDivider} />
+                  <button
+                    type="button"
+                    className={styles.accountSignOut}
+                    onClick={() => void handleSignOut()}
+                  >
+                    Выйти
+                  </button>
+                </div>
+              ) : null}
             </div>
+          </div>
+        </div>
+      </header>
+
+      <div className={`${styles.layout} ${previewList.length ? styles.layoutWithPreview : styles.layoutStart}`}>
+        <section className={styles.hero}>
+          <div className={styles.heroTop}>
             <h1 className={styles.heroTitle}>Один промпт. Готовая карусель.</h1>
             <p className={styles.heroSubtitle}>Опиши тему одним сообщением — AI соберёт слайды, хук и структуру.</p>
           </div>
@@ -428,7 +614,15 @@ export default function GeneratePage() {
               <button
                 type="button"
                 className={`${styles.plusButton} ${isAdvancedOpen ? styles.plusButtonActive : ""}`}
-                onClick={() => setIsAdvancedOpen((current) => !current)}
+                onClick={() =>
+                  setIsAdvancedOpen((current) => {
+                    const nextState = !current;
+                    if (!nextState) {
+                      setOpenSelectId(null);
+                    }
+                    return nextState;
+                  })
+                }
                 aria-expanded={isAdvancedOpen}
                 aria-label="Уточнить генерацию"
                 title="Уточнить генерацию"
@@ -464,112 +658,125 @@ export default function GeneratePage() {
               </button>
             </div>
 
-            {isAdvancedOpen ? (
-              <section className={styles.advancedPopover} aria-label="Уточнение генерации">
-                <div className={styles.advancedHead}>Настройки</div>
-                <div className={styles.advancedGrid}>
-                  <label className={styles.fieldLabel}>
-                    🎯 Ниша
-                    <input
-                      className={styles.field}
-                      value={niche}
-                      onChange={(event) => setNiche(event.target.value)}
-                      placeholder="Например: недвижимость, фитнес, образование"
-                    />
-                  </label>
-                  <label className={styles.fieldLabel}>
-                    👥 Целевая аудитория
-                    <input
-                      className={styles.field}
-                      value={audience}
-                      onChange={(event) => setAudience(event.target.value)}
-                      placeholder="Например: собственники 25–40, эксперты, маркетологи"
-                    />
-                  </label>
-                  <label className={styles.fieldLabel}>
-                    🎨 Тон
-                    <select
-                      className={styles.field}
-                      value={tone}
-                      onChange={(event) => setTone(event.target.value)}
-                    >
-                      <option value="soft">Мягкий</option>
-                      <option value="balanced">Сбалансированный</option>
-                      <option value="sharp">Острый</option>
-                    </select>
-                  </label>
-                  <label className={styles.fieldLabel}>
-                    🚀 Цель
-                    <select
-                      className={styles.field}
-                      value={goal}
-                      onChange={(event) => setGoal(event.target.value)}
-                    >
-                      <option value="engagement">Вовлечение</option>
-                      <option value="leads">Заявки</option>
-                      <option value="warming">Прогрев</option>
-                    </select>
-                  </label>
-                  <label className={styles.fieldLabel}>
-                    📐 Формат
-                    <select
-                      className={styles.field}
-                      value={format}
-                      onChange={(event) => setFormat(event.target.value as SlideFormat)}
-                    >
-                      <option value="1:1">1:1</option>
-                      <option value="4:5">4:5</option>
-                      <option value="9:16">9:16</option>
-                    </select>
-                  </label>
-                  <label className={styles.fieldLabel}>
-                    🌗 Тема
-                    <select
-                      className={styles.field}
-                      value={theme}
-                      onChange={(event) => setTheme(event.target.value as CarouselTemplateId)}
-                    >
-                      <option value="light">Светлая</option>
-                      <option value="dark">Тёмная</option>
-                      <option value="color">Цветная</option>
-                    </select>
-                  </label>
-                  <label className={styles.fieldLabel}>
-                    🧩 Количество карточек
-                    <select
-                      className={styles.field}
-                      value={slidesCount}
-                      onChange={(event) => setSlidesCount(clampSlidesCount(Number(event.target.value)))}
-                    >
-                      {SLIDES_COUNT_OPTIONS.map((count) => (
-                        <option key={count} value={count}>
-                          {count}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              </section>
-            ) : null}
+            <section
+              className={`${styles.advancedPanel} ${isAdvancedOpen ? styles.advancedPanelOpen : ""}`}
+              aria-label="Уточнение генерации"
+              aria-hidden={!isAdvancedOpen}
+            >
+              <div className={styles.advancedGrid}>
+                <label className={`${styles.fieldLabel} ${styles.fieldNiche}`}>
+                  <span className={styles.fieldLabelText}>
+                    <Target size={14} className={styles.fieldLabelIcon} aria-hidden="true" />
+                    <span>Ниша</span>
+                  </span>
+                  <input
+                    className={styles.field}
+                    value={niche}
+                    onChange={(event) => setNiche(event.target.value)}
+                    placeholder="Например: недвижимость, фитнес, образование"
+                  />
+                </label>
+
+                <label className={`${styles.fieldLabel} ${styles.fieldAudience}`}>
+                  <span className={styles.fieldLabelText}>
+                    <Users size={14} className={styles.fieldLabelIcon} aria-hidden="true" />
+                    <span>Целевая аудитория</span>
+                  </span>
+                  <input
+                    className={styles.field}
+                    value={audience}
+                    onChange={(event) => setAudience(event.target.value)}
+                    placeholder="Например: собственники 25–40, эксперты, маркетологи"
+                  />
+                </label>
+
+                <GenerateSelectField
+                  className={styles.fieldTone}
+                  icon={<Palette size={14} />}
+                  id="tone"
+                  isOpen={openSelectId === "tone"}
+                  label="Тон"
+                  onChange={setTone}
+                  onClose={() => setOpenSelectId(null)}
+                  onToggle={(fieldId) => setOpenSelectId((current) => (current === fieldId ? null : fieldId))}
+                  options={TONE_OPTIONS}
+                  value={tone}
+                />
+
+                <GenerateSelectField
+                  className={styles.fieldGoal}
+                  icon={<Rocket size={14} />}
+                  id="goal"
+                  isOpen={openSelectId === "goal"}
+                  label="Цель"
+                  onChange={setGoal}
+                  onClose={() => setOpenSelectId(null)}
+                  onToggle={(fieldId) => setOpenSelectId((current) => (current === fieldId ? null : fieldId))}
+                  options={GOAL_OPTIONS}
+                  value={goal}
+                />
+
+                <GenerateSelectField
+                  className={styles.fieldFormat}
+                  icon={<LayoutGrid size={14} />}
+                  id="format"
+                  isOpen={openSelectId === "format"}
+                  label="Формат"
+                  onChange={(nextValue) => setFormat(nextValue as SlideFormat)}
+                  onClose={() => setOpenSelectId(null)}
+                  onToggle={(fieldId) => setOpenSelectId((current) => (current === fieldId ? null : fieldId))}
+                  options={FORMAT_OPTIONS}
+                  value={format}
+                />
+
+                <GenerateSelectField
+                  className={styles.fieldTheme}
+                  icon={<SunMoon size={14} />}
+                  id="theme"
+                  isOpen={openSelectId === "theme"}
+                  label="Тема"
+                  onChange={(nextValue) => setTheme(nextValue as CarouselTemplateId)}
+                  onClose={() => setOpenSelectId(null)}
+                  onToggle={(fieldId) => setOpenSelectId((current) => (current === fieldId ? null : fieldId))}
+                  options={THEME_OPTIONS}
+                  value={theme}
+                />
+
+                <GenerateSelectField
+                  className={styles.fieldCount}
+                  icon={<Hash size={14} />}
+                  id="slides-count"
+                  isOpen={openSelectId === "slides-count"}
+                  label="Количество карточек"
+                  onChange={(nextValue) => setSlidesCount(clampSlidesCount(Number(nextValue)))}
+                  onClose={() => setOpenSelectId(null)}
+                  onToggle={(fieldId) => setOpenSelectId((current) => (current === fieldId ? null : fieldId))}
+                  options={slidesCountOptions}
+                  value={String(slidesCount)}
+                />
+              </div>
+            </section>
           </div>
 
           {error ? <div className={`${styles.status} ${styles.statusError}`}>{error}</div> : null}
-        </header>
+        </section>
 
         {previewList.length ? (
           <section className={styles.previewCard}>
             <div className={styles.previewHead}>
               <h3>Предпросмотр структуры</h3>
-              <span className={styles.previewCount}>{previewList.length} слайдов</span>
+              <span className={`pill-badge pill-badge-primary ${styles.previewCount}`}>
+                {previewList.length} слайдов
+              </span>
             </div>
 
             <div className={styles.previewList}>
               {previewList.map((item, index) => (
-                <div key={`${item.type}-${index}`} className={styles.previewItem}>
+                <div key={`${item.type}-${index}`} className={`${styles.previewItem} tap-feedback`}>
                   <span className={styles.previewIndex}>{index + 1}</span>
                   <span className={styles.previewCopy}>
                     <strong>{item.title}</strong>
-                    <span>{item.type}</span>
+                    <span className={styles.previewRole}>{ROLE_LABELS[item.type] ?? item.type}</span>
                   </span>
                 </div>
               ))}
@@ -589,13 +796,11 @@ export default function GeneratePage() {
             </div>
 
             <div className={styles.previewHint}>
-              На мобильной версии генерация подписи к карусели находится во вкладке «Пост» внутри
-              редактора.
+              <Info size={14} aria-hidden="true" />
+              <span>Подпись к посту сгенерируешь в редакторе — вкладка «Пост»</span>
             </div>
           </section>
         ) : null}
-
-        <p className={styles.signature}>pastello.io — AI carousel generator</p>
       </div>
 
       {isNoCreditsNoticeOpen ? (
