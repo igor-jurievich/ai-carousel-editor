@@ -1,0 +1,144 @@
+.page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: #fafafe;
+  padding: 16px;
+  font-family: "Inter", "Segoe UI", sans-serif;
+}
+
+.wrapper {
+  width: 100%;
+  max-width: 480px;
+}
+
+.logo {
+  margin: 0 0 16px;
+  text-align: center;
+  font-size: 28px;
+  line-height: 1.2;
+  color: #6366f1;
+  font-weight: 700;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #111827;
+}
+
+.subtitle {
+  margin: 8px 0 24px;
+  color: #6b7280;
+  font-size: 15px;
+}
+
+.form {
+  display: grid;
+  gap: 10px;
+}
+
+.fieldLabel {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  height: 46px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0 14px;
+  font-size: 14px;
+  color: #111827;
+  outline: none;
+}
+
+.input:focus {
+  border-color: #6366f1;
+}
+
+.passwordRow {
+  position: relative;
+}
+
+.passwordRow .input {
+  padding-right: 44px;
+}
+
+.eyeButton {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.submitButton {
+  margin-top: 6px;
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: #6366f1;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submitButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  margin: 0;
+  color: #dc2626;
+  font-size: 14px;
+}
+
+.registerHint {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.registerLink {
+  color: #6366f1;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.registerLink:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+  .page {
+    padding: 8px;
+  }
+
+  .card {
+    padding: 24px 18px;
+  }
+}
