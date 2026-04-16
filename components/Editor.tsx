@@ -45,6 +45,7 @@ import type {
   CarouselTemplateId,
   ShapeElement,
   Slide,
+  SlidePhotoSettings,
   SlideFormat,
   TextElement,
   TextHighlightRange
@@ -72,6 +73,12 @@ const MANAGED_TEXT_META_KEYS = new Set(["managed-title", "managed-body"]);
 const MANAGED_TITLE_META_KEY = "managed-title";
 const MANAGED_BODY_META_KEY = "managed-body";
 const DEFAULT_HIGHLIGHT_COLOR = "#6366f1";
+const DEFAULT_SLIDE_PHOTO_SETTINGS: SlidePhotoSettings = {
+  zoom: 100,
+  offsetX: 0,
+  offsetY: 0,
+  overlay: 0
+};
 const NON_CONTENT_TEXT_META_KEYS = new Set([
   "slide-chip-text",
   "managed-title-accent-text",
@@ -812,6 +819,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const activePhotoSlotEnabled = Boolean(
     activeSlide?.slideType === "image_text" && activeSlide.photoSlotEnabled !== false
   );
+  const activePhotoSettings = normalizeSlidePhotoSettings(activeSlide?.photoSettings);
   const activeGridVisible = Boolean(
     activeSlide?.elements.some(
       (element) =>
@@ -1649,58 +1657,33 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         throw new Error("Не найден слайд для добавления изображения.");
       }
 
-      const targetSlideIndex = slides.findIndex((slide) => slide.id === targetSlideId);
-      const targetSlide = targetSlideIndex >= 0 ? slides[targetSlideIndex] : null;
+      const targetSlide = slides.find((slide) => slide.id === targetSlideId) ?? null;
 
       if (!targetSlide) {
         throw new Error("Не найден слайд для добавления изображения.");
       }
 
-      if (targetSlide.slideType === "image_text") {
-        updateSlide(targetSlideId, (slide) => {
-          const withBackground = setSlideBackgroundImage(
-            slide,
-            dataUrl,
-            targetSlideIndex,
-            slides.length,
-            slideFormat
-          );
-          return {
-            ...withBackground,
-            photoSlotEnabled: true
-          };
-        });
-        setSelectedElementId(null);
-      } else {
-        const imageMeta = await readImageMeta(dataUrl);
-        const maxWidth = Math.min(900, slideDimensions.width - 180);
-        const maxHeight = Math.max(180, Math.min(560, slideDimensions.height * 0.42));
-        const fitRatio = Math.min(
-          1,
-          maxWidth / Math.max(1, imageMeta.width),
-          maxHeight / Math.max(1, imageMeta.height)
-        );
-        const imageWidth = Math.round(Math.max(160, imageMeta.width * fitRatio));
-        const imageHeight = Math.round(Math.max(120, imageMeta.height * fitRatio));
-        const element = createImageElement(dataUrl, {
-          width: imageWidth,
-          height: imageHeight,
-          x: Math.round((slideDimensions.width - imageWidth) / 2),
-          y: Math.round(Math.max(72, (slideDimensions.height - imageHeight) * 0.26)),
-          fitMode: "contain",
-          zoom: 1,
-          offsetX: 0,
-          offsetY: 0,
-          naturalWidth: imageMeta.width,
-          naturalHeight: imageMeta.height
-        });
+      const imageMeta = await readImageMeta(dataUrl);
+      const imageWidth = 200;
+      const imageHeight = 200;
+      const element = createImageElement(dataUrl, {
+        width: imageWidth,
+        height: imageHeight,
+        x: Math.round((slideDimensions.width - imageWidth) / 2),
+        y: Math.round((slideDimensions.height - imageHeight) / 2),
+        fitMode: "cover",
+        zoom: 1,
+        offsetX: 0,
+        offsetY: 0,
+        naturalWidth: imageMeta.width,
+        naturalHeight: imageMeta.height
+      });
 
-        updateSlide(targetSlideId, (slide) => ({
-          ...slide,
-          elements: [...slide.elements, element]
-        }));
-        setSelectedElementId(element.id);
-      }
+      updateSlide(targetSlideId, (slide) => ({
+        ...slide,
+        elements: [...slide.elements, element]
+      }));
+      setSelectedElementId(element.id);
 
       setActiveSlideId(targetSlideId);
       trackEvent({
@@ -2325,6 +2308,37 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     });
   };
 
+  const handleApplyHighlightColorToAllSlides = () => {
+    const nextColor = normalizeColorForInput(selectedHighlightColor, DEFAULT_HIGHLIGHT_COLOR);
+    updateSlides(
+      (current) =>
+        current.map((slide) => ({
+          ...slide,
+          elements: slide.elements.map((element) => {
+            if (element.type !== "text") {
+              return element;
+            }
+
+            const baseline = normalizeHighlightRanges(element.highlights, element.text.length);
+            if (!baseline.length) {
+              return element;
+            }
+
+            return {
+              ...element,
+              highlights: baseline.map((range) => ({
+                ...range,
+                color: nextColor
+              }))
+            };
+          })
+        })),
+      { recordHistory: false }
+    );
+    setSelectedTextHighlightColorOverride(nextColor);
+    setStatus("Цвет выделения применён ко всем слайдам.");
+  };
+
   const handleSelectedTextHighlightOpacityChange = (value: number) => {
     const nextOpacity = Math.max(0.08, Math.min(1, Number.isFinite(value) ? value : 0.94));
     setSelectedTextHighlightOpacityOverride(nextOpacity);
@@ -2407,6 +2421,24 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       }),
       { recordHistory: false }
     );
+  };
+
+  const handleCenterSelectedTextHorizontally = () => {
+    if (!effectiveSelectedTextElement) {
+      return;
+    }
+
+    const centeredX = Math.round((slideDimensions.width - effectiveSelectedTextElement.width) / 2);
+    const minX = 8;
+    const maxX = Math.max(minX, slideDimensions.width - effectiveSelectedTextElement.width - 8);
+    const nextX = Math.max(minX, Math.min(maxX, centeredX));
+
+    updateElement(
+      effectiveSelectedTextElement.id,
+      (element) => (element.type === "text" ? { ...element, x: nextX } : element),
+      { recordHistory: false }
+    );
+    setStatus("Текстовый блок выровнен по центру.");
   };
 
   const handleSelectedTextTargetRoleChange = (role: EditableTextTargetRole) => {
@@ -2558,6 +2590,24 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       (slide) => ({
         ...slide,
         background: value
+      }),
+      { recordHistory: false }
+    );
+  };
+
+  const handleActiveSlidePhotoSettingsChange = (updates: Partial<SlidePhotoSettings>) => {
+    if (!activeSlide) {
+      return;
+    }
+
+    updateSlide(
+      activeSlide.id,
+      (slide) => ({
+        ...slide,
+        photoSettings: normalizeSlidePhotoSettings({
+          ...slide.photoSettings,
+          ...updates
+        })
       }),
       { recordHistory: false }
     );
@@ -3261,6 +3311,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                 onInsertSlideAt={handleInsertSlideAt}
                 onAddTextToSlide={handleAddText}
                 onAddImageToSlide={handleAddImage}
+                onAddBackgroundImageToSlide={handleAddBackgroundImage}
                 onDeleteSelectedElement={handleDeleteElement}
                 onMoveSlide={handleMoveSlide}
                 onDeleteSlide={handleDeleteSlide}
@@ -3315,6 +3366,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   }}
                   onFormatChange={handleFormatChange}
                   onSlideBackgroundChange={handleSlideBackgroundColorChange}
+                  photoSettings={activePhotoSettings}
+                  onSlidePhotoSettingsChange={handleActiveSlidePhotoSettingsChange}
                   onApplyStylePreset={handleApplyStylePreset}
                   onGridVisibilityChange={handleGridVisibilityChange}
                   onOpenTemplateModal={handleOpenTemplateModal}
@@ -3338,10 +3391,12 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   onSelectedTextFontChange={handleSelectedTextFontChange}
                   onSelectedTextSizeChange={handleSelectedTextSizeChange}
                   onSelectedTextCaseChange={handleSelectedTextCaseChange}
+                  onCenterSelectedTextHorizontally={handleCenterSelectedTextHorizontally}
                   onSelectedTextTargetRoleChange={handleSelectedTextTargetRoleChange}
                   onApplyHighlightToSelection={handleApplyHighlightToSelection}
                   onClearHighlightFromSelection={handleClearHighlightFromSelection}
                   onClearAllHighlights={handleClearAllHighlights}
+                  onApplyHighlightColorToAllSlides={handleApplyHighlightColorToAllSlides}
                   selectedTextHighlightColor={selectedHighlightColor}
                   selectedTextHighlightOpacity={selectedHighlightOpacity}
                   disabled={generationLocked}
@@ -3486,6 +3541,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onInsertSlideAt={handleInsertSlideAt}
               onAddTextToSlide={handleAddText}
               onAddImageToSlide={handleAddImage}
+              onAddBackgroundImageToSlide={handleAddBackgroundImage}
               onDeleteSelectedElement={handleDeleteElement}
               onMoveSlide={handleMoveSlide}
               onDeleteSlide={handleDeleteSlide}
@@ -3538,6 +3594,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               }
               onToggleSubtitleAcrossSlides={handleToggleSubtitleAcrossSlides}
               onSlideBackgroundChange={handleSlideBackgroundColorChange}
+              photoSettings={activePhotoSettings}
+              onSlidePhotoSettingsChange={handleActiveSlidePhotoSettingsChange}
               onApplyStylePreset={handleApplyStylePreset}
               onGridVisibilityChange={handleGridVisibilityChange}
               onSelectedTextChange={handleSelectedTextChange}
@@ -3548,11 +3606,13 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onSelectedTextFontChange={handleSelectedTextFontChange}
               onSelectedTextSizeChange={handleSelectedTextSizeChange}
               onSelectedTextCaseChange={handleSelectedTextCaseChange}
+              onCenterSelectedTextHorizontally={handleCenterSelectedTextHorizontally}
               onSelectedTextTargetRoleChange={handleSelectedTextTargetRoleChange}
               onApplyColorScheme={handleApplyColorScheme}
               onApplyHighlightToSelection={handleApplyHighlightToSelection}
               onClearHighlightFromSelection={handleClearHighlightFromSelection}
               onClearAllHighlights={handleClearAllHighlights}
+              onApplyHighlightColorToAllSlides={handleApplyHighlightColorToAllSlides}
               selectedTextHighlightColor={selectedHighlightColor}
               selectedTextHighlightOpacity={selectedHighlightOpacity}
               toolbarRef={mobileToolbarRef}
@@ -3676,9 +3736,23 @@ async function ensureFontsReadyForExport() {
   ]);
 }
 
+function normalizeSlidePhotoSettings(
+  value: Partial<SlidePhotoSettings> | Slide["photoSettings"] | undefined
+): SlidePhotoSettings {
+  const source = value ?? DEFAULT_SLIDE_PHOTO_SETTINGS;
+  return {
+    zoom: Math.max(100, Math.min(200, typeof source.zoom === "number" ? source.zoom : 100)),
+    offsetX: Math.max(-50, Math.min(50, typeof source.offsetX === "number" ? source.offsetX : 0)),
+    offsetY: Math.max(-50, Math.min(50, typeof source.offsetY === "number" ? source.offsetY : 0)),
+    overlay: Math.max(0, Math.min(80, typeof source.overlay === "number" ? source.overlay : 0))
+  };
+}
+
 function hasCustomSlidePhoto(slide: Slide) {
   return slide.elements.some(
-    (element) => element.type === "image" && element.metaKey !== "image-top"
+    (element) =>
+      (element.type === "image" || element.type === "image_element") &&
+      element.metaKey !== "image-top"
   );
 }
 
@@ -4355,7 +4429,11 @@ function transformTextCase(
     );
   }
 
-  return value;
+  return value
+    .toLowerCase()
+    .replace(/(^\s*|[.!?]\s*)(\p{L})/gu, (_, prefix: string, letter: string) => {
+      return `${prefix}${letter.toUpperCase()}`;
+    });
 }
 
 async function downscaleDataUrl(

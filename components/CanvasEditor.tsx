@@ -36,6 +36,7 @@ type CanvasEditorProps = {
   onInsertSlideAt: (index: number, slideType?: "text" | "image_text" | "big_text") => void;
   onAddTextToSlide: (slideId: string) => void;
   onAddImageToSlide: (slideId: string) => void;
+  onAddBackgroundImageToSlide?: (slideId: string) => void;
   onDeleteSelectedElement: () => void;
   onMoveSlide: (slideId: string, direction: "up" | "down") => void;
   onDeleteSlide: (slideId: string) => void;
@@ -75,6 +76,7 @@ export function CanvasEditor({
   onInsertSlideAt,
   onAddTextToSlide,
   onAddImageToSlide,
+  onAddBackgroundImageToSlide,
   onDeleteSelectedElement,
   onMoveSlide,
   onDeleteSlide,
@@ -294,7 +296,9 @@ export function CanvasEditor({
                       onTransformElement(activeSlide.id, elementId, updates)
                     }
                     onStartTextEditing={(elementId) => onStartTextEditing(activeSlide.id, elementId)}
-                    onRequestSlidePhotoUpload={() => onAddImageToSlide(activeSlide.id)}
+                    onRequestSlidePhotoUpload={() =>
+                      onAddBackgroundImageToSlide?.(activeSlide.id) ?? onAddImageToSlide(activeSlide.id)
+                    }
                     showSlideBadge={showSlideBadge}
                   />
                 </div>
@@ -471,7 +475,9 @@ export function CanvasEditor({
                           onStartTextEditing={(elementId) =>
                             onStartTextEditing(slide.id, elementId)
                           }
-                          onRequestSlidePhotoUpload={() => onAddImageToSlide(slide.id)}
+                          onRequestSlidePhotoUpload={() =>
+                            onAddBackgroundImageToSlide?.(slide.id) ?? onAddImageToSlide(slide.id)
+                          }
                           showSlideBadge={showSlideBadge}
                         />
                       </div>

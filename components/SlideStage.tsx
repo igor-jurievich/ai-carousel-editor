@@ -55,6 +55,7 @@ type SnapGuides = {
 const SNAP_THRESHOLD = 10;
 const ROTATION_SNAP_VALUES = [-180, -90, 0, 90, 180];
 const ROTATION_SNAP_THRESHOLD = 6;
+const ELEMENT_EDGE_MARGIN = 8;
 const EMPTY_GUIDES: SnapGuides = { vertical: [], horizontal: [] };
 const NON_INTERACTIVE_TEXT_META_KEYS = new Set<string>([
   "managed-title-accent-text",
@@ -298,30 +299,17 @@ function resolveDragBounds(
   element: CanvasElement,
   canvasWidth: number,
   canvasHeight: number,
-  safeArea: SafeArea,
+  _safeArea: SafeArea,
   width = element.width,
   height = element.height
 ): DragBounds {
   const measuredTextHeight =
     element.type === "text" ? Math.max(height, estimateTextHeight(element, width) + 14) : height;
   const effectiveHeight = measuredTextHeight;
-  const textBleedX = element.type === "text" ? Math.min(26, Math.round(width * 0.08)) : 0;
-  const textBleedY = element.type === "text" ? Math.min(20, Math.round(effectiveHeight * 0.08)) : 0;
-  const safeMinX = Math.max(0, safeArea.left - textBleedX);
-  const safeMaxX = Math.min(canvasWidth - width, safeArea.right - width + textBleedX);
-  const safeMinY = Math.max(0, safeArea.top - textBleedY);
-  const safeMaxY = Math.min(canvasHeight - effectiveHeight, safeArea.bottom - effectiveHeight + textBleedY);
-  const safeWidth = Math.max(60, safeArea.right - safeArea.left);
-  const safeHeight = Math.max(40, safeArea.bottom - safeArea.top);
-  const useCanvasX = width > safeWidth + textBleedX * 2;
-  const useCanvasY = effectiveHeight > safeHeight + textBleedY * 2;
-
-  const minX = useCanvasX ? 0 : safeMinX;
-  const maxX = useCanvasX ? Math.max(0, canvasWidth - width) : Math.max(minX, safeMaxX);
-  const minY = useCanvasY ? 0 : safeMinY;
-  const maxY = useCanvasY
-    ? Math.max(0, canvasHeight - effectiveHeight)
-    : Math.max(minY, safeMaxY);
+  const minX = ELEMENT_EDGE_MARGIN;
+  const maxX = Math.max(minX, canvasWidth - width - ELEMENT_EDGE_MARGIN);
+  const minY = ELEMENT_EDGE_MARGIN;
+  const maxY = Math.max(minY, canvasHeight - effectiveHeight - ELEMENT_EDGE_MARGIN);
 
   return {
     minX,
@@ -893,14 +881,14 @@ function resolveSnap(
   position: { x: number; y: number },
   elementSize: { width: number; height: number },
   bounds: DragBounds,
-  safeArea: SafeArea,
+  _safeArea: SafeArea,
   canvasWidth: number,
   canvasHeight: number
 ) {
-  const minXGuide = bounds.minX <= 0 ? 0 : safeArea.left;
-  const maxXGuide = bounds.maxX >= canvasWidth - elementSize.width ? canvasWidth : safeArea.right;
-  const minYGuide = bounds.minY <= 0 ? 0 : safeArea.top;
-  const maxYGuide = bounds.maxY >= canvasHeight - elementSize.height ? canvasHeight : safeArea.bottom;
+  const minXGuide = bounds.minX;
+  const maxXGuide = bounds.maxX + elementSize.width;
+  const minYGuide = bounds.minY;
+  const maxYGuide = bounds.maxY + elementSize.height;
   const xCandidates = [
     { target: bounds.minX, guide: minXGuide },
     { target: bounds.maxX, guide: maxXGuide },
@@ -944,6 +932,42 @@ function resolveSnap(
       y: clamp(nextY, bounds.minY, bounds.maxY)
     },
     guides
+  };
+}
+
+function applySlidePhotoSettingsToImage(element: ImageElement, slide: Slide): ImageElement {
+  if (element.metaKey !== "image-top") {
+    return element;
+  }
+
+  const settings = slide.photoSettings;
+  if (!settings) {
+    return element;
+  }
+
+  const zoom = clamp((Number.isFinite(settings.zoom) ? settings.zoom : 100) / 100, 1, 2);
+  const offsetXPercent = clamp(
+    Number.isFinite(settings.offsetX) ? settings.offsetX : 0,
+    -50,
+    50
+  );
+  const offsetYPercent = clamp(
+    Number.isFinite(settings.offsetY) ? settings.offsetY : 0,
+    -50,
+    50
+  );
+  const overlay = clamp(
+    (Number.isFinite(settings.overlay) ? settings.overlay : 0) / 100,
+    0,
+    0.8
+  );
+
+  return {
+    ...element,
+    zoom,
+    offsetX: (element.width * offsetXPercent) / 100,
+    offsetY: (element.height * offsetYPercent) / 100,
+    darken: overlay
   };
 }
 
@@ -1352,8 +1376,6 @@ export function SlideStage({
   const handleTransformEnd = (element: CanvasElement, node: Konva.Node) => {
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
-    const safeWidth = Math.max(120, safeArea.right - safeArea.left);
-    const safeHeight = Math.max(42, safeArea.bottom - safeArea.top);
     const maxWidth = element.type === "text" ? canvasWidth - 12 : canvasWidth;
     const maxHeight = element.type === "text" ? canvasHeight - 12 : canvasHeight;
     let nextWidth = clamp(
@@ -1367,7 +1389,7 @@ export function SlideStage({
       maxHeight
     );
 
-    if (element.type === "image" && element.metaKey !== "image-top") {
+    if ((element.type === "image" || element.type === "image_element") && element.metaKey !== "image-top") {
       const aspect = element.width / Math.max(1, element.height);
       if (Math.abs(scaleX - 1) >= Math.abs(scaleY - 1)) {
         nextHeight = clamp(nextWidth / aspect, 24, maxHeight);
@@ -1559,6 +1581,11 @@ export function SlideStage({
             seenManagedTextMeta.add(element.metaKey);
             return true;
           })
+          .sort((left, right) => {
+            const leftPriority = left.type === "image_element" ? 0 : 1;
+            const rightPriority = right.type === "image_element" ? 0 : 1;
+            return leftPriority - rightPriority;
+          })
           .map((element) => {
             const selected = selectedElementId === element.id;
             const elementSize = {
@@ -1674,10 +1701,11 @@ export function SlideStage({
               );
             }
 
+            const resolvedImageElement = applySlidePhotoSettingsToImage(element, slide);
             return (
               <SlideImageNode
                 key={element.id}
-                element={element}
+                element={resolvedImageElement}
                 selected={selected}
                 interactive={interactive}
                 nodeRef={nodeRef as (node: Konva.Image | null) => void}
@@ -1696,13 +1724,13 @@ export function SlideStage({
             rotateEnabled
             flipEnabled={false}
             keepRatio={
-              selectedElement?.type === "image" &&
+              (selectedElement?.type === "image" || selectedElement?.type === "image_element") &&
               selectedElement.metaKey !== "image-top"
             }
             enabledAnchors={
               selectedElement?.type === "text"
                 ? ["middle-left", "middle-right"]
-                : selectedElement?.type === "image" &&
+                : (selectedElement?.type === "image" || selectedElement?.type === "image_element") &&
                     selectedElement.metaKey === "image-top"
                   ? ["top-center", "bottom-center"]
                 : ["top-left", "top-right", "bottom-left", "bottom-right"]
