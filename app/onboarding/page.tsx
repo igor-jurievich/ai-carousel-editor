@@ -63,6 +63,9 @@ function getErrorMessage(error: unknown) {
   }
 
   const message = error.message.toLowerCase();
+  if (message.includes("fetch failed") || message.includes("network")) {
+    return "Не удаётся подключиться к серверу авторизации. Проверь настройки Supabase и попробуй ещё раз";
+  }
   if (
     message.includes("already registered") ||
     message.includes("already been registered") ||
@@ -240,6 +243,8 @@ export default function OnboardingPage() {
       addBotMessage(message);
 
       if (message.includes("email уже используется")) {
+        setStep("login");
+      } else if (message.includes("серверу авторизации")) {
         setStep("login");
       } else if (message.includes("Пароль должен")) {
         setStep("password");

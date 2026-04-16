@@ -1,11 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
+import { getSupabasePublicConfig } from "@/lib/supabase";
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
+  const config = getSupabasePublicConfig();
+  if (!config) {
+    return response;
+  }
+
   const supabase = createMiddlewareClient({
     req: request,
     res: response
+  }, {
+    supabaseUrl: config.supabaseUrl,
+    supabaseKey: config.supabaseKey
   });
 
   const {

@@ -10,37 +10,72 @@ import type {
 
 type DatabaseClient = SupabaseClient;
 const STORAGE_BUCKET = "carousel-assets";
+const KNOWN_SUPABASE_URL_TYPO = "https://mpklqwogzhxivijebcwl.supabase.co";
+const KNOWN_SUPABASE_URL_CORRECT = "https://mpklqwogzhxiwijebcwl.supabase.co";
 
 let browserClient: DatabaseClient | null = null;
 
+function resolveSupabaseUrl(rawUrl: string | undefined) {
+  const value = (rawUrl ?? "").trim();
+  if (!value) {
+    return value;
+  }
+
+  if (value === KNOWN_SUPABASE_URL_TYPO) {
+    return KNOWN_SUPABASE_URL_CORRECT;
+  }
+
+  return value;
+}
+
+export function getSupabasePublicConfig() {
+  const supabaseUrl = resolveSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const supabaseKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim();
+
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+
+  return {
+    supabaseUrl,
+    supabaseKey
+  };
+}
+
 export function isSupabaseConfigured() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  return Boolean(getSupabasePublicConfig());
 }
 
 export function getSupabaseBrowserClient() {
-  if (!isSupabaseConfigured() || typeof window === "undefined") {
+  const config = getSupabasePublicConfig();
+  if (!config || typeof window === "undefined") {
     return null;
   }
 
   if (!browserClient) {
-    browserClient = createClientComponentClient() as DatabaseClient;
+    browserClient = createClientComponentClient({
+      supabaseUrl: config.supabaseUrl,
+      supabaseKey: config.supabaseKey
+    }) as DatabaseClient;
   }
 
   return browserClient;
 }
 
 export function createSupabaseClientComponentClient() {
-  if (!isSupabaseConfigured()) {
+  const config = getSupabasePublicConfig();
+  if (!config) {
     return null;
   }
-  return createClientComponentClient() as DatabaseClient;
+  return createClientComponentClient({
+    supabaseUrl: config.supabaseUrl,
+    supabaseKey: config.supabaseKey
+  }) as DatabaseClient;
 }
 
 export async function createSupabaseServerComponentClient() {
-  if (!isSupabaseConfigured()) {
+  const config = getSupabasePublicConfig();
+  if (!config) {
     return null;
   }
 
@@ -49,7 +84,13 @@ export async function createSupabaseServerComponentClient() {
     import("next/headers")
   ]);
 
-  return createServerComponentClient({ cookies }) as DatabaseClient;
+  return createServerComponentClient(
+    { cookies },
+    {
+      supabaseUrl: config.supabaseUrl,
+      supabaseKey: config.supabaseKey
+    }
+  ) as DatabaseClient;
 }
 
 function mapSlides(rows: Array<{ id: string; name: string; background: string; elements: Slide["elements"] }>): Slide[] {
