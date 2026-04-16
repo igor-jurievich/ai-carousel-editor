@@ -35,13 +35,25 @@ export default function LoginPage() {
         throw new Error("invalid_login");
       }
 
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error: loginError } = await supabase.auth.signInWithPassword({
         email: authEmail,
         password
       });
 
-      if (error) {
-        throw error;
+      if (loginError) {
+        const fallbackEmail = resolveFallbackEmail(login);
+        if (!fallbackEmail) {
+          throw loginError;
+        }
+
+        const { error: fallbackError } = await supabase.auth.signInWithPassword({
+          email: fallbackEmail,
+          password
+        });
+
+        if (fallbackError) {
+          throw fallbackError;
+        }
       }
 
       router.replace("/generate");
@@ -131,4 +143,13 @@ function resolveAuthEmailFromLogin(value: string) {
   }
 
   return `${normalized}@pastello.io`;
+}
+
+function resolveFallbackEmail(value: string) {
+  const candidate = value.trim().toLowerCase();
+  if (!candidate.includes("@")) {
+    return null;
+  }
+
+  return candidate;
 }
