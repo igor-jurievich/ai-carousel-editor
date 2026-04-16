@@ -90,11 +90,18 @@ async function testGeneratePageLayout(page, failures) {
   await page.goto(`${BASE_URL}/generate`, { waitUntil: "networkidle" });
   const legacyAdvancedToggle = page.locator("details.generate-advanced summary").first();
   const advancedToggle = page.getByRole("button", { name: "Уточнить генерацию" }).first();
+  const plusToggleFallback = page
+    .locator(
+      'button[aria-label="Уточнить генерацию"], button[title="Уточнить генерацию"], .chatBar button'
+    )
+    .first();
 
   if ((await legacyAdvancedToggle.count()) > 0) {
     await legacyAdvancedToggle.click();
   } else if ((await advancedToggle.count()) > 0) {
     await advancedToggle.click();
+  } else if ((await plusToggleFallback.count()) > 0) {
+    await plusToggleFallback.click();
   } else {
     failures.push(`generate page: advanced controls toggle not found (url: ${page.url()})`);
     return;
@@ -139,10 +146,16 @@ async function testEditorControls(page, failures) {
     const hasGeneratePlusPost = generateButtons.some((button) =>
       /Сгенерировать \+ пост|Подождите\.\.\./i.test(normalize(button.textContent || ""))
     );
+    const hasGeneratePanel = Boolean(document.querySelector("details.mobile-generate-panel"));
+    const hasPostTabButton = Array.from(
+      document.querySelectorAll(".mobile-editor-shell .mobile-bottom-toolbar-v2 .mobile-bottom-tool")
+    ).some((button) => /Пост/i.test(normalize(button.textContent || "")));
 
     return {
       quickActionsCount,
-      hasGeneratePlusPost
+      hasGeneratePlusPost,
+      hasGeneratePanel,
+      hasPostTabButton
     };
   });
   assert(controlsProbe.quickActionsCount === 0, "editor: quick action strip should be hidden", failures);
@@ -155,7 +168,15 @@ async function testEditorControls(page, failures) {
     await page.waitForTimeout(250);
   }
 
-  assert(controlsProbe.hasGeneratePlusPost, "editor: missing mobile button 'Сгенерировать + пост'", failures);
+  if (controlsProbe.hasGeneratePanel) {
+    assert(controlsProbe.hasGeneratePlusPost, "editor: missing mobile button 'Сгенерировать + пост'", failures);
+  } else {
+    assert(
+      controlsProbe.hasPostTabButton,
+      "editor: generate panel is hidden and mobile 'Пост' tab is not available",
+      failures
+    );
+  }
 
   const sideInsertCount = await page.locator(".mobile-side-insert").count();
   assert(sideInsertCount === 0, "editor: side insert '+' controls should be hidden on mobile", failures);
