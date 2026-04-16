@@ -8,7 +8,6 @@ import styles from "./admin-page.module.css";
 type AdminUser = {
   id: string;
   name: string | null;
-  email: string;
   role: string | null;
   topic: string | null;
   credits: number;
@@ -54,8 +53,7 @@ export default function AdminPage() {
 
     return users.filter((user) => {
       const name = user.name?.toLowerCase() ?? "";
-      const email = user.email.toLowerCase();
-      return name.includes(normalizedSearch) || email.includes(normalizedSearch);
+      return name.includes(normalizedSearch);
     });
   }, [search, users]);
 
@@ -189,7 +187,7 @@ export default function AdminPage() {
               className={styles.searchInput}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Поиск по имени или email"
+              placeholder="Поиск по имени"
             />
           </div>
 
@@ -200,7 +198,6 @@ export default function AdminPage() {
               <thead>
                 <tr>
                   <th>Имя</th>
-                  <th className={styles.mobileHidden}>Email</th>
                   <th className={styles.mobileHidden}>Роль</th>
                   <th className={styles.mobileHidden}>Тема</th>
                   <th>Баллы</th>
@@ -211,7 +208,7 @@ export default function AdminPage() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className={styles.stateCell}>
+                    <td colSpan={6} className={styles.stateCell}>
                       Загружаем пользователей...
                     </td>
                   </tr>
@@ -224,7 +221,6 @@ export default function AdminPage() {
                     return (
                       <tr key={user.id}>
                         <td>{user.name?.trim() || "Без имени"}</td>
-                        <td className={styles.mobileHidden}>{user.email || "—"}</td>
                         <td className={styles.mobileHidden}>{user.role?.trim() || "—"}</td>
                         <td className={styles.mobileHidden}>{user.topic?.trim() || "—"}</td>
                         <td>
@@ -287,7 +283,7 @@ export default function AdminPage() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={7} className={styles.stateCell}>
+                    <td colSpan={6} className={styles.stateCell}>
                       Пользователи не найдены.
                     </td>
                   </tr>

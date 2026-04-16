@@ -6,9 +6,6 @@ import { getSupabasePublicConfig } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
-const LIST_USERS_PAGE_SIZE = 200;
-const MAX_LIST_USERS_PAGES = 20;
-
 type AdminUserRow = {
   id: string;
   name: string | null;
@@ -53,25 +50,13 @@ export async function GET() {
     );
   }
 
-  let emailByUserId: Map<string, string>;
-  try {
-    emailByUserId = await collectEmailsByUserId(serviceClient);
-  } catch (error) {
-    console.error("Failed to fetch users list from auth admin:", error);
-    return NextResponse.json(
-      { error: "Не удалось получить email пользователей." },
-      { status: 500 }
-    );
-  }
-
   const users = ((profiles ?? []) as AdminUserRow[]).map((profile) => ({
     id: profile.id,
     name: profile.name,
     role: profile.role,
     topic: profile.topic,
     credits: Number.isFinite(Number(profile.credits)) ? Number(profile.credits) : 0,
-    createdAt: profile.created_at,
-    email: emailByUserId.get(profile.id) ?? ""
+    createdAt: profile.created_at
   }));
 
   return NextResponse.json({ users });
@@ -225,30 +210,4 @@ async function requireAdmin(sessionClient: any) {
   }
 
   return null;
-}
-
-async function collectEmailsByUserId(serviceClient: any) {
-  const result = new Map<string, string>();
-
-  for (let page = 1; page <= MAX_LIST_USERS_PAGES; page += 1) {
-    const { data, error } = await serviceClient.auth.admin.listUsers({
-      page,
-      perPage: LIST_USERS_PAGE_SIZE
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    const users = data.users ?? [];
-    for (const user of users) {
-      result.set(user.id, user.email ?? "");
-    }
-
-    if (users.length < LIST_USERS_PAGE_SIZE) {
-      break;
-    }
-  }
-
-  return result;
 }
