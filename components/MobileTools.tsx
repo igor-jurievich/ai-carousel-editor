@@ -2,7 +2,13 @@
 
 import { useRef, useState, type MutableRefObject, type TouchEvent } from "react";
 import { AppIcon, type AppIconName } from "@/components/icons";
-import type { CanvasElement, CarouselPostCaption, TextElement } from "@/types/editor";
+import { HexColorField } from "@/components/HexColorField";
+import type {
+  CanvasElement,
+  CarouselPostCaption,
+  SlidePhotoSettings,
+  TextElement
+} from "@/types/editor";
 
 export type MobileToolTab =
   | "templates"
@@ -25,6 +31,7 @@ type MobileToolsProps = {
   profileSubtitle: string;
   subtitlesVisibleAcrossSlides: boolean;
   photoSlotEnabled: boolean;
+  photoSettings: SlidePhotoSettings;
   hasBackgroundImage: boolean;
   gridVisible: boolean;
   captionResult: CarouselPostCaption | null;
@@ -42,6 +49,7 @@ type MobileToolsProps = {
   onProfileSubtitleChange: (value: string) => void;
   onToggleSubtitleAcrossSlides: (visible: boolean) => void;
   onSlideBackgroundChange: (value: string, options?: { applyAll?: boolean }) => void;
+  onSlidePhotoSettingsChange: (updates: Partial<SlidePhotoSettings>) => void;
   onApplyStylePreset: (
     presetId: "mono" | "grid" | "gradient" | "notes" | "dots" | "flash",
     options?: { applyAll?: boolean }
@@ -54,11 +62,13 @@ type MobileToolsProps = {
   onSelectedTextFontChange: (value: string) => void;
   onSelectedTextSizeChange: (value: number) => void;
   onSelectedTextCaseChange: (mode: "normal" | "uppercase" | "lowercase" | "capitalize") => void;
+  onCenterSelectedTextHorizontally: () => void;
   onSelectedTextTargetRoleChange: (role: "title" | "body") => void;
   onApplyColorScheme: (mode: "single" | "double", options?: { applyAll?: boolean }) => void;
   onApplyHighlightToSelection: () => void;
   onClearHighlightFromSelection: () => void;
   onClearAllHighlights: () => void;
+  onApplyHighlightColorToAllSlides: () => void;
   selectedTextHighlightColor: string;
   selectedTextHighlightOpacity: number;
   toolbarRef?: MutableRefObject<HTMLElement | null>;
@@ -87,6 +97,14 @@ const FONT_OPTIONS = [
   "Oswald",
   "Space Grotesk",
   "Playfair Display"
+];
+const BACKGROUND_COLOR_PRESETS: Array<{ label: string; value: string }> = [
+  { label: "Белый", value: "#ffffff" },
+  { label: "Черный", value: "#000000" },
+  { label: "Светло-серый", value: "#f2f2f2" },
+  { label: "Теплый", value: "#f6f2ed" },
+  { label: "Холодный", value: "#edf3f6" },
+  { label: "Графит", value: "#1f2428" }
 ];
 const HEX_COLOR_INPUT_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -148,6 +166,7 @@ export function MobileTools({
   profileSubtitle,
   subtitlesVisibleAcrossSlides,
   photoSlotEnabled,
+  photoSettings,
   hasBackgroundImage,
   gridVisible,
   captionResult,
@@ -165,6 +184,7 @@ export function MobileTools({
   onProfileSubtitleChange,
   onToggleSubtitleAcrossSlides,
   onSlideBackgroundChange,
+  onSlidePhotoSettingsChange,
   onApplyStylePreset,
   onSelectedTextChange,
   onSelectedTextColorChange,
@@ -174,11 +194,13 @@ export function MobileTools({
   onSelectedTextFontChange,
   onSelectedTextSizeChange,
   onSelectedTextCaseChange,
+  onCenterSelectedTextHorizontally,
   onSelectedTextTargetRoleChange,
   onApplyColorScheme,
   onApplyHighlightToSelection,
   onClearHighlightFromSelection,
   onClearAllHighlights,
+  onApplyHighlightColorToAllSlides,
   selectedTextHighlightColor,
   selectedTextHighlightOpacity,
   toolbarRef,
@@ -195,6 +217,7 @@ export function MobileTools({
   const activeTextElement = selectedTextElement;
   const normalizedTextColor = normalizeColorForInput(activeTextElement?.fill, "#56cfc2");
   const normalizedHighlightColor = normalizeColorForInput(selectedTextHighlightColor, "#1f49ff");
+  const normalizedBackgroundColor = normalizeColorForInput(slideBackground, "#ffffff");
   const applyColorMode = (nextMode: "single" | "double") => {
     setColorMode(nextMode);
     onApplyColorScheme(nextMode, { applyAll: applyColorForAll });
@@ -229,7 +252,7 @@ export function MobileTools({
   const selectedElementLabel = selectedElement
     ? selectedElement.type === "text"
       ? "Выбран текст"
-      : selectedElement.type === "image"
+      : selectedElement.type === "image" || selectedElement.type === "image_element"
         ? "Выбрано изображение"
         : "Выбрана фигура"
     : activeTextElement
@@ -424,10 +447,10 @@ export function MobileTools({
                           onChange={(event) => handleSinglePaletteColorChange(event.target.value)}
                           disabled={disabled || !activeTextElement}
                         />
-                        <input
-                          className="field"
-                          value={normalizedTextColor.toUpperCase()}
-                          readOnly
+                        <HexColorField
+                          value={normalizedTextColor}
+                          onValidChange={handleSinglePaletteColorChange}
+                          disabled={disabled || !activeTextElement}
                         />
                       </div>
                     </label>
@@ -444,10 +467,10 @@ export function MobileTools({
                           onChange={(event) => onSelectedTextColorChange(event.target.value)}
                           disabled={disabled || !activeTextElement}
                         />
-                        <input
-                          className="field"
-                          value={normalizedTextColor.toUpperCase()}
-                          readOnly
+                        <HexColorField
+                          value={normalizedTextColor}
+                          onValidChange={onSelectedTextColorChange}
+                          disabled={disabled || !activeTextElement}
                         />
                       </div>
                     </label>
@@ -461,10 +484,10 @@ export function MobileTools({
                           onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
                           disabled={disabled || !activeTextElement}
                         />
-                        <input
-                          className="field"
-                          value={normalizedHighlightColor.toUpperCase()}
-                          readOnly
+                        <HexColorField
+                          value={normalizedHighlightColor}
+                          onValidChange={onSelectedTextHighlightColorChange}
+                          disabled={disabled || !activeTextElement}
                         />
                       </div>
                     </label>
@@ -477,21 +500,47 @@ export function MobileTools({
               <div className="settings-block">
                 <span className="settings-label">Фон</span>
                 <label className="field-label">
-                  Цвет фона
-                  <select
-                    className="field"
-                    value={normalizeColor(slideBackground)}
-                    onChange={(event) =>
-                      onSlideBackgroundChange(event.target.value, { applyAll: applyStyleForAll })
-                    }
-                    disabled={disabled}
-                  >
-                    <option value="#ffffff">Белый</option>
-                    <option value="#f2f2f2">Светло-серый</option>
-                    <option value="#f6f2ed">Теплый</option>
-                    <option value="#edf3f6">Холодный</option>
-                    <option value="#1f2428">Графит</option>
-                  </select>
+                  Цвет фона (HEX)
+                  <div className="mobile-color-inline">
+                    <input
+                      type="color"
+                      className="color-input"
+                      value={normalizedBackgroundColor}
+                      onChange={(event) =>
+                        onSlideBackgroundChange(event.target.value, { applyAll: applyStyleForAll })
+                      }
+                      disabled={disabled}
+                    />
+                    <HexColorField
+                      value={normalizedBackgroundColor}
+                      onValidChange={(value) =>
+                        onSlideBackgroundChange(value, { applyAll: applyStyleForAll })
+                      }
+                      disabled={disabled}
+                    />
+                  </div>
+                </label>
+                <label className="field-label">
+                  Быстрые пресеты
+                  <div className="mobile-style-grid">
+                    {BACKGROUND_COLOR_PRESETS.map((preset) => {
+                      const isActive =
+                        normalizeColor(slideBackground).toLowerCase() === preset.value.toLowerCase();
+                      return (
+                        <button
+                          key={preset.value}
+                          type="button"
+                          className={`mobile-style-chip ${isActive ? "active" : ""}`}
+                          onClick={() =>
+                            onSlideBackgroundChange(preset.value, { applyAll: applyStyleForAll })
+                          }
+                          disabled={disabled}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </label>
                 <label className="mobile-switch-row">
                   <span>Фото-блок</span>
@@ -518,7 +567,7 @@ export function MobileTools({
                     onClick={onAddSlidePhoto}
                     disabled={disabled}
                   >
-                    + Добавить фото на слайд
+                    + Фото
                   </button>
                 </div>
                 <div className="field-row">
@@ -539,6 +588,70 @@ export function MobileTools({
                     Очистить фото
                   </button>
                 </div>
+                {hasBackgroundImage ? (
+                  <div className="field-grid">
+                    <label className="field-label">
+                      Зум ({photoSettings.zoom}%)
+                      <input
+                        className="range"
+                        type="range"
+                        min={100}
+                        max={200}
+                        step={1}
+                        value={photoSettings.zoom}
+                        onChange={(event) =>
+                          onSlidePhotoSettingsChange({ zoom: Number(event.target.value) })
+                        }
+                        disabled={disabled}
+                      />
+                    </label>
+                    <label className="field-label">
+                      Позиция X ({photoSettings.offsetX}%)
+                      <input
+                        className="range"
+                        type="range"
+                        min={-50}
+                        max={50}
+                        step={1}
+                        value={photoSettings.offsetX}
+                        onChange={(event) =>
+                          onSlidePhotoSettingsChange({ offsetX: Number(event.target.value) })
+                        }
+                        disabled={disabled}
+                      />
+                    </label>
+                    <label className="field-label">
+                      Позиция Y ({photoSettings.offsetY}%)
+                      <input
+                        className="range"
+                        type="range"
+                        min={-50}
+                        max={50}
+                        step={1}
+                        value={photoSettings.offsetY}
+                        onChange={(event) =>
+                          onSlidePhotoSettingsChange({ offsetY: Number(event.target.value) })
+                        }
+                        disabled={disabled}
+                      />
+                    </label>
+                    <label className="field-label">
+                      Затемнение ({photoSettings.overlay}%)
+                      <input
+                        className="range"
+                        type="range"
+                        min={0}
+                        max={80}
+                        step={1}
+                        value={photoSettings.overlay}
+                        onChange={(event) =>
+                          onSlidePhotoSettingsChange({ overlay: Number(event.target.value) })
+                        }
+                        disabled={disabled}
+                      />
+                    </label>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -667,8 +780,21 @@ export function MobileTools({
                         onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
                         disabled={disabled || !activeTextElement}
                       />
-                      <input className="field" value={normalizedHighlightColor.toUpperCase()} readOnly />
+                      <HexColorField
+                        value={normalizedHighlightColor}
+                        onValidChange={onSelectedTextHighlightColorChange}
+                        disabled={disabled || !activeTextElement}
+                      />
                     </div>
+                    <button
+                      type="button"
+                      className="ghost-chip ghost-chip-muted ghost-chip-small"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={onApplyHighlightColorToAllSlides}
+                      disabled={disabled || !activeTextElement}
+                    >
+                      → Все слайды
+                    </button>
                   </label>
                   <div className="field-row">
                     <button
@@ -715,41 +841,6 @@ export function MobileTools({
                     disabled={disabled || !activeTextElement}
                   />
                 </label>
-
-                <div className="mobile-case-grid">
-                  <button
-                    type="button"
-                    className="mobile-case-btn"
-                    onClick={() => onSelectedTextCaseChange("capitalize")}
-                    disabled={disabled || !activeTextElement}
-                  >
-                    Aa
-                  </button>
-                  <button
-                    type="button"
-                    className="mobile-case-btn"
-                    onClick={() => onSelectedTextCaseChange("uppercase")}
-                    disabled={disabled || !activeTextElement}
-                  >
-                    AA
-                  </button>
-                  <button
-                    type="button"
-                    className="mobile-case-btn"
-                    onClick={() => onSelectedTextCaseChange("lowercase")}
-                    disabled={disabled || !activeTextElement}
-                  >
-                    aa
-                  </button>
-                  <button
-                    type="button"
-                    className="mobile-case-btn"
-                    onClick={() => onSelectedTextCaseChange("normal")}
-                    disabled={disabled || !activeTextElement}
-                  >
-                    Норм
-                  </button>
-                </div>
 
                 <label className="field-label">
                   Ник
@@ -931,7 +1022,7 @@ export function MobileTools({
                     onClick={() => onSelectedTextCaseChange("normal")}
                     disabled={disabled || !activeTextElement}
                   >
-                    Aa
+                    аА
                   </button>
                 </div>
                 <div className="mobile-size-control">
@@ -947,6 +1038,14 @@ export function MobileTools({
                   />
                   <div className="mobile-size-value">{Math.round(activeTextElement?.fontSize ?? 28)}px</div>
                 </div>
+                <button
+                  type="button"
+                  className="ghost-chip ghost-chip-muted"
+                  onClick={onCenterSelectedTextHorizontally}
+                  disabled={disabled || !activeTextElement}
+                >
+                  —|— По центру
+                </button>
                 <label className="mobile-switch-row">
                   <span>Применить для всех слайдов</span>
                   <input
