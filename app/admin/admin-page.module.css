@@ -1,0 +1,263 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+.page {
+  min-height: 100svh;
+  background: #fafafe;
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: 24px 16px 36px;
+}
+
+.container {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brandWrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.brand {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.05;
+  color: #111827;
+  letter-spacing: -0.02em;
+}
+
+.panelLabel {
+  color: #9ca3af;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.signOutButton {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #111827;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  color: #111827;
+}
+
+.searchInput {
+  width: min(320px, 100%);
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  padding: 0 12px;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+}
+
+.error {
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
+.tableScroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.table thead th {
+  background: #f8faff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table tbody td {
+  padding: 10px 12px;
+  color: #111827;
+  font-size: 14px;
+  border-bottom: 1px solid #eef2f7;
+  vertical-align: middle;
+}
+
+.table tbody tr:nth-child(odd) td {
+  background: #ffffff;
+}
+
+.table tbody tr:nth-child(even) td {
+  background: #fafafe;
+}
+
+.table tbody tr:hover td {
+  background: #f0f4ff;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.creditsPill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 20px;
+  background: #f0f4ff;
+  color: #6366f1;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+}
+
+.desktopActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.customAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.customInput {
+  width: 84px;
+  height: 30px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+  padding: 0 8px;
+}
+
+.actionButton,
+.actionButtonSecondary,
+.mobileTopUp {
+  border: none;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.actionButton {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.actionButtonSecondary {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.mobileTopUp {
+  display: none;
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.actionButton:disabled,
+.actionButtonSecondary:disabled,
+.mobileTopUp:disabled {
+  opacity: 0.55;
+}
+
+.stateCell {
+  text-align: center;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 100;
+  border-radius: 10px;
+  border: 1px solid #d1fae5;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 14px;
+  box-shadow: 0 10px 24px rgba(16, 185, 129, 0.12);
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 16px 12px 24px;
+  }
+
+  .table {
+    min-width: 620px;
+  }
+
+  .mobileHidden {
+    display: none;
+  }
+
+  .desktopActions {
+    display: none;
+  }
+
+  .mobileTopUp {
+    display: inline-flex;
+  }
+}
