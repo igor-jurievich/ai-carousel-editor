@@ -15,6 +15,7 @@
     "smoke:export": "node scripts/export-smoke.mjs"
   },
   "dependencies": {
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.49.4",
     "file-saver": "^2.0.5",
     "jspdf": "^4.2.0",

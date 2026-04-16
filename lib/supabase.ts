@@ -1,4 +1,7 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClientComponentClient
+} from "@supabase/auth-helpers-nextjs";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CarouselProject,
   CarouselProjectSummary,
@@ -23,20 +26,30 @@ export function getSupabaseBrowserClient() {
   }
 
   if (!browserClient) {
-    browserClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true
-        }
-      }
-    );
+    browserClient = createClientComponentClient() as DatabaseClient;
   }
 
   return browserClient;
+}
+
+export function createSupabaseClientComponentClient() {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+  return createClientComponentClient() as DatabaseClient;
+}
+
+export async function createSupabaseServerComponentClient() {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+
+  const [{ createServerComponentClient }, { cookies }] = await Promise.all([
+    import("@supabase/auth-helpers-nextjs"),
+    import("next/headers")
+  ]);
+
+  return createServerComponentClient({ cookies }) as DatabaseClient;
 }
 
 function mapSlides(rows: Array<{ id: string; name: string; background: string; elements: Slide["elements"] }>): Slide[] {
