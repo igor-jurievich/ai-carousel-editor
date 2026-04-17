@@ -560,7 +560,13 @@ export default function GeneratePage() {
     <main className={`page-shell ${styles.page}`}>
       <header className={styles.stickyHeader}>
         <div className={styles.headerInner}>
-          <span className={styles.logo}>pastello.io</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <img src="/logo.svg" alt="pastello.io" width={32} height={32} />
+            <span className={styles.logo}>
+              pastello
+              <span style={{ color: "#6366f1", fontWeight: 400 }}>.io</span>
+            </span>
+          </div>
 
           <div className={styles.headerControls}>
             <span

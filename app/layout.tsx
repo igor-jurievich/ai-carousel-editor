@@ -19,7 +19,10 @@ const playfairDisplay = Playfair_Display({
 
 export const metadata: Metadata = {
   title: "Помощник эксперта",
-  description: "Приложение Vorobev Studio для генерации и редактирования каруселей для соцсетей."
+  description: "Приложение Vorobev Studio для генерации и редактирования каруселей для соцсетей.",
+  icons: {
+    icon: "/favicon.svg"
+  }
 };
 
 export const viewport: Viewport = {
