@@ -83,10 +83,8 @@ const FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
 };
 
 const DEFAULT_MODEL_CANDIDATES = [
-  "gpt-5.2",
-  "gpt-5",
-  // TODO: Keep gpt-4o as fallback until this API key gets access to gpt-5.2.
-  "gpt-4o"
+"gpt-5.1",
+"gpt-4o"
 ] as const;
 
 const HOOK_SUBTITLE_INPUT_MAX = 154;
