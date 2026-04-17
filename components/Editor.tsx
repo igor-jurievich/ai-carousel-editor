@@ -3,6 +3,7 @@
 import { saveAs } from "file-saver";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
+import * as Popover from "@radix-ui/react-popover";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -494,8 +495,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     const shouldOpenPostTool = window.innerWidth <= MOBILE_BREAKPOINT && toolFromQuery === "post";
 
     if (shouldOpenPostTool) {
-      setMobileToolTab("post");
-      setStatus("Открыта вкладка «Пост»: здесь можно сгенерировать подпись к карусели.");
+      setMobileToolTab("export");
+      setStatus("Открыта вкладка «Экспорт»: здесь можно выгрузить карусель и сделать подпись.");
     }
 
     initialMobileToolAppliedRef.current = true;
@@ -1477,8 +1478,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         }
       });
       if (openPostTool && window.innerWidth <= MOBILE_BREAKPOINT) {
-        setMobileToolTab("post");
-        setStatus(`Создано ${nextSlides.length} слайдов. Открыта вкладка «Пост».`);
+        setMobileToolTab("export");
+        setStatus(`Создано ${nextSlides.length} слайдов. Открыта вкладка «Экспорт».`);
       } else {
         setStatus(`Создано ${nextSlides.length} слайдов в формате ${slideFormat}.`);
       }
@@ -2637,7 +2638,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return;
     }
 
-    if (nextTab === "text" || nextTab === "font" || nextTab === "size" || nextTab === "color") {
+    if (nextTab === "text" || nextTab === "style") {
       const preferredText =
         selectedTextTargetRole === "body"
           ? managedBodyTextElement ?? managedTitleTextElement
@@ -3489,24 +3490,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         <div className="mobile-editor-shell">
           <header className="mobile-topbar">
             <div className="mobile-top-left">
-              <button
-                className="mobile-icon-button"
-                type="button"
-                title="Отменить"
-                onClick={handleUndo}
-                disabled={!canUndo || generationLocked}
-              >
-                <AppIcon name="history-back" size={16} />
-              </button>
-              <button
-                className="mobile-icon-button"
-                type="button"
-                title="Повторить"
-                onClick={handleRedo}
-                disabled={!canRedo || generationLocked}
-              >
-                <AppIcon name="history-forward" size={16} />
-              </button>
+              <span className="mobile-top-title">Редактор</span>
             </div>
 
             <div className="mobile-top-center">
@@ -3534,6 +3518,79 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               <span>{isExportRendering ? "Экспорт..." : "Экспорт"}</span>
             </button>
           </header>
+
+          {activeSlide ? (
+            <div className="mobile-slide-mini-bar" aria-label="Управление слайдами">
+              <div className="mobile-slide-mini-left">
+                <button
+                  className="mobile-slide-mini-button"
+                  type="button"
+                  title="Отменить"
+                  onClick={handleUndo}
+                  disabled={!canUndo || generationLocked}
+                >
+                  <AppIcon name="history-back" size={15} />
+                </button>
+                <button
+                  className="mobile-slide-mini-button"
+                  type="button"
+                  title="Повторить"
+                  onClick={handleRedo}
+                  disabled={!canRedo || generationLocked}
+                >
+                  <AppIcon name="history-forward" size={15} />
+                </button>
+              </div>
+
+              <div className="mobile-slide-mini-center">
+                Слайд {Math.max(1, activeSlideIndex + 1)} / {slides.length}
+              </div>
+
+              <Popover.Root>
+                <Popover.Trigger asChild>
+                  <button
+                    className="mobile-slide-mini-menu-trigger"
+                    type="button"
+                    aria-label="Действия со слайдом"
+                    disabled={generationLocked}
+                  >
+                    …
+                  </button>
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content
+                    className="mobile-slide-mini-menu"
+                    align="end"
+                    side="bottom"
+                    sideOffset={8}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleInsertSlideAt(activeSlideIndex + 1, "text")}
+                      disabled={generationLocked}
+                    >
+                      Добавить слайд
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDuplicateSlide(activeSlide.id)}
+                      disabled={generationLocked}
+                    >
+                      Дублировать
+                    </button>
+                    <button
+                      type="button"
+                      className="is-danger"
+                      onClick={() => handleDeleteSlide(activeSlide.id)}
+                      disabled={generationLocked || slides.length <= 1}
+                    >
+                      Удалить слайд
+                    </button>
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
+            </div>
+          ) : null}
 
           {isGeneratePanelVisible ? (
             <details className="mobile-generate-panel" ref={mobileGeneratePanelRef}>
@@ -3587,8 +3644,6 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             </details>
           ) : null}
 
-          <div className="mobile-status-pill">{status}</div>
-
           <section className="mobile-canvas-zone" ref={mobileCanvasHostRef}>
             <CanvasEditor
               mode="single"
@@ -3629,7 +3684,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               previewMode={isPreviewMode}
               showSlideBadge={false}
               fontsReady={fontsReady}
-              hideMobileSlideTools={false}
+              hideMobileSlideTools
             />
           </section>
 
@@ -3637,6 +3692,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             <MobileTools
               activeTab={mobileToolTab}
               onTabChange={handleMobileToolTabChange}
+              slides={slides}
+              activeSlideId={activeSlideId}
               selectedElement={selectedElement}
               selectedTextElement={effectiveSelectedTextElement}
               selectedTextTargetRole={selectedTextTargetRole}
@@ -3648,12 +3705,19 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               hasBackgroundImage={activeHasBackgroundImage}
               gridVisible={activeGridVisible}
               captionResult={captionResult}
+              isGenerating={isGenerating}
               isGeneratingCaption={isGeneratingCaption}
+              isExporting={isExportRendering}
               onGenerateCaption={handleGenerateCaption}
               onCopyCaption={handleCopyCaption}
+              onOpenExportModal={handleOpenSlideExportModal}
+              onSelectSlide={(slideId) => handleSelectSlide(slideId, { source: "list" })}
+              onInsertSlideAt={handleInsertSlideAt}
+              onDuplicateSlide={handleDuplicateSlide}
+              onMoveSlide={handleMoveSlide}
+              onDeleteSlide={handleDeleteSlide}
               onPhotoSlotEnabledChange={(value) => handlePhotoSlotToggle(value, activeSlide.id)}
               slideBackground={activeSlide.background}
-              onAddSlidePhoto={() => handleAddImage(activeSlide.id)}
               onUploadBackgroundImage={() => handleAddBackgroundImage(activeSlide.id)}
               onRemoveBackgroundImage={() => {
                 if (activeSlideIndex === -1) {
@@ -3685,6 +3749,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onSelectedTextFontChange={handleSelectedTextFontChange}
               onSelectedTextSizeChange={handleSelectedTextSizeChange}
               onSelectedTextCaseChange={handleSelectedTextCaseChange}
+              onSelectedTextAlignChange={handleSelectedTextAlignChange}
               onCenterSelectedTextHorizontally={handleCenterSelectedTextHorizontally}
               onSelectedTextTargetRoleChange={handleSelectedTextTargetRoleChange}
               onApplyColorScheme={handleApplyColorScheme}

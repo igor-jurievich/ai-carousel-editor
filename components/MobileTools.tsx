@@ -1,28 +1,30 @@
 "use client";
 
-import { useRef, useState, type MutableRefObject, type TouchEvent } from "react";
+import * as Switch from "@radix-ui/react-switch";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type TouchEvent
+} from "react";
 import { AppIcon, type AppIconName } from "@/components/icons";
 import { HexColorField } from "@/components/HexColorField";
 import type {
   CanvasElement,
   CarouselPostCaption,
+  Slide,
   SlidePhotoSettings,
   TextElement
 } from "@/types/editor";
 
-export type MobileToolTab =
-  | "templates"
-  | "color"
-  | "background"
-  | "style"
-  | "text"
-  | "post"
-  | "font"
-  | "size";
+export type MobileToolTab = "slides" | "style" | "text" | "photo" | "export";
 
 type MobileToolsProps = {
   activeTab: MobileToolTab | null;
   onTabChange: (tab: MobileToolTab | null) => void;
+  slides: Slide[];
+  activeSlideId: string | null;
   selectedElement: CanvasElement | null;
   selectedTextElement: TextElement | null;
   selectedTextTargetRole: "title" | "body";
@@ -35,13 +37,20 @@ type MobileToolsProps = {
   hasBackgroundImage: boolean;
   gridVisible: boolean;
   captionResult: CarouselPostCaption | null;
+  isGenerating: boolean;
   isGeneratingCaption: boolean;
+  isExporting: boolean;
   onGenerateCaption: () => void;
   onCopyCaption: () => void;
+  onOpenExportModal: () => void;
+  onSelectSlide: (slideId: string) => void;
+  onInsertSlideAt: (index: number, slideType?: "text" | "image_text" | "big_text") => void;
+  onDuplicateSlide: (slideId: string) => void;
+  onMoveSlide: (slideId: string, direction: "up" | "down") => void;
+  onDeleteSlide: (slideId: string) => void;
   onPhotoSlotEnabledChange: (value: boolean) => void;
   slideBackground: string;
   onUploadBackgroundImage: () => void;
-  onAddSlidePhoto: () => void;
   onRemoveBackgroundImage: () => void;
   onGridVisibilityChange: (visible: boolean, options?: { applyAll?: boolean }) => void;
   onOpenTemplateModal: () => void;
@@ -62,6 +71,7 @@ type MobileToolsProps = {
   onSelectedTextFontChange: (value: string) => void;
   onSelectedTextSizeChange: (value: number) => void;
   onSelectedTextCaseChange: (mode: "normal" | "uppercase" | "lowercase" | "capitalize") => void;
+  onSelectedTextAlignChange: (align: "left" | "center" | "right") => void;
   onCenterSelectedTextHorizontally: () => void;
   onSelectedTextTargetRoleChange: (role: "title" | "body") => void;
   onApplyColorScheme: (mode: "single" | "double", options?: { applyAll?: boolean }) => void;
@@ -78,14 +88,11 @@ type MobileToolsProps = {
 };
 
 const TOOLBAR_ITEMS: Array<{ id: MobileToolTab; icon: AppIconName; label: string }> = [
-  { id: "templates", icon: "templates", label: "Шаблоны" },
-  { id: "post", icon: "edit", label: "Пост" },
-  { id: "color", icon: "palette", label: "Цвет" },
-  { id: "background", icon: "background", label: "Фон" },
-  { id: "style", icon: "style", label: "Стиль" },
+  { id: "slides", icon: "layers", label: "Слайды" },
+  { id: "style", icon: "palette", label: "Стиль" },
   { id: "text", icon: "text", label: "Текст" },
-  { id: "font", icon: "font", label: "Шрифт" },
-  { id: "size", icon: "size", label: "Размер" }
+  { id: "photo", icon: "image", label: "Фото" },
+  { id: "export", icon: "download", label: "Экспорт" }
 ];
 
 const FONT_OPTIONS = [
@@ -100,11 +107,11 @@ const FONT_OPTIONS = [
 ];
 const BACKGROUND_COLOR_PRESETS: Array<{ label: string; value: string }> = [
   { label: "Белый", value: "#ffffff" },
-  { label: "Черный", value: "#000000" },
-  { label: "Светло-серый", value: "#f2f2f2" },
-  { label: "Теплый", value: "#f6f2ed" },
-  { label: "Холодный", value: "#edf3f6" },
-  { label: "Графит", value: "#1f2428" }
+  { label: "Черный", value: "#111111" },
+  { label: "Светло-серый", value: "#f0f0f5" },
+  { label: "Теплый", value: "#f5e6d3" },
+  { label: "Холодный", value: "#e0eaf5" },
+  { label: "Графит", value: "#2a2a2a" }
 ];
 const HEX_COLOR_INPUT_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -113,51 +120,49 @@ const STYLE_PRESETS = [
     id: "mono",
     label: "Монохром",
     background: "#ffffff",
-    preview: "none",
-    gridVisible: false
+    preview: "none"
   },
   {
     id: "grid",
     label: "Сетка",
     background: "#f8f8f9",
     preview:
-      "repeating-linear-gradient(90deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px), repeating-linear-gradient(180deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px)",
-    gridVisible: true
+      "repeating-linear-gradient(90deg, rgba(18,21,27,0.14) 0 1px, transparent 1px 10px), repeating-linear-gradient(180deg, rgba(18,21,27,0.14) 0 1px, transparent 1px 10px)"
   },
   {
     id: "gradient",
     label: "Градиент",
     background: "#f4ede8",
-    preview: "linear-gradient(135deg, #f7f7f7 0%, #f2e8df 100%)",
-    gridVisible: false
+    preview: "linear-gradient(135deg, #f7f7f7 0%, #f2e8df 100%)"
   },
   {
     id: "notes",
     label: "Заметки",
     background: "#ececf1",
-    preview: "linear-gradient(180deg, #f2f2f6 0%, #eaebef 100%)",
-    gridVisible: false
+    preview:
+      "repeating-linear-gradient(180deg, rgba(63,67,77,0.18) 0 1px, transparent 1px 10px), linear-gradient(180deg, #f8f9fc 0%, #eef1f7 100%)"
   },
   {
     id: "dots",
     label: "Точки",
     background: "#f5f5f6",
     preview:
-      "radial-gradient(circle, rgba(18,21,27,0.2) 1px, transparent 1.2px), radial-gradient(circle, rgba(18,21,27,0.14) 1px, transparent 1.2px)",
-    gridVisible: true
+      "radial-gradient(circle, rgba(18,21,27,0.24) 1px, transparent 1.2px), radial-gradient(circle, rgba(18,21,27,0.16) 1px, transparent 1.2px)"
   },
   {
     id: "flash",
     label: "Молнии",
     background: "#e8e9ed",
-    preview: "linear-gradient(130deg, #f6f6f7 10%, #e8e9ed 46%, #dfe1e7 100%)",
-    gridVisible: false
+    preview:
+      "repeating-linear-gradient(135deg, rgba(56,60,70,0.15) 0 6px, transparent 6px 16px), repeating-linear-gradient(45deg, rgba(56,60,70,0.12) 0 6px, transparent 6px 18px), linear-gradient(135deg, #f7f7f9 0%, #e4e6ec 100%)"
   }
 ] as const;
 
 export function MobileTools({
   activeTab,
   onTabChange,
+  slides,
+  activeSlideId,
   selectedElement,
   selectedTextElement,
   selectedTextTargetRole,
@@ -170,13 +175,20 @@ export function MobileTools({
   hasBackgroundImage,
   gridVisible,
   captionResult,
+  isGenerating,
   isGeneratingCaption,
+  isExporting,
   onGenerateCaption,
   onCopyCaption,
+  onOpenExportModal,
+  onSelectSlide,
+  onInsertSlideAt,
+  onDuplicateSlide,
+  onMoveSlide,
+  onDeleteSlide,
   onPhotoSlotEnabledChange,
   slideBackground,
   onUploadBackgroundImage,
-  onAddSlidePhoto,
   onRemoveBackgroundImage,
   onGridVisibilityChange,
   onOpenTemplateModal,
@@ -194,6 +206,7 @@ export function MobileTools({
   onSelectedTextFontChange,
   onSelectedTextSizeChange,
   onSelectedTextCaseChange,
+  onSelectedTextAlignChange,
   onCenterSelectedTextHorizontally,
   onSelectedTextTargetRoleChange,
   onApplyColorScheme,
@@ -209,15 +222,44 @@ export function MobileTools({
   previewMode = false
 }: MobileToolsProps) {
   const swipeRef = useRef<{ startY: number; startX: number; drag: number } | null>(null);
+  const captionCopyResetTimeoutRef = useRef<number | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
   const [colorMode, setColorMode] = useState<"single" | "double">("single");
   const [applyColorForAll, setApplyColorForAll] = useState(true);
   const [applyStyleForAll, setApplyStyleForAll] = useState(true);
-  const [applySizeForAll, setApplySizeForAll] = useState(false);
+  const [isCaptionCopied, setIsCaptionCopied] = useState(false);
   const activeTextElement = selectedTextElement;
-  const normalizedTextColor = normalizeColorForInput(activeTextElement?.fill, "#56cfc2");
+  const normalizedTextColor = normalizeColorForInput(activeTextElement?.fill, "#6366f1");
   const normalizedHighlightColor = normalizeColorForInput(selectedTextHighlightColor, "#1f49ff");
   const normalizedBackgroundColor = normalizeColorForInput(slideBackground, "#ffffff");
+  const normalizedSlideBackground = normalizeColor(slideBackground).toLowerCase();
+  const activeSlideIndex = slides.findIndex((slide) => slide.id === activeSlideId);
+  const fallbackSlideIndex = activeSlideIndex >= 0 ? activeSlideIndex : 0;
+  const currentSlide = slides[fallbackSlideIndex] ?? null;
+  const selectedElementLabel = selectedElement
+    ? selectedElement.type === "text"
+      ? "Выбран текст"
+      : selectedElement.type === "image" || selectedElement.type === "image_element"
+        ? "Выбрано изображение"
+        : "Выбрана фигура"
+    : activeTextElement
+      ? selectedTextTargetRole === "body"
+        ? "Автовыбор: описание"
+        : "Автовыбор: заголовок"
+      : "";
+
+  useEffect(() => {
+    return () => {
+      if (captionCopyResetTimeoutRef.current !== null) {
+        window.clearTimeout(captionCopyResetTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setIsCaptionCopied(false);
+  }, [captionResult]);
+
   const applyColorMode = (nextMode: "single" | "double") => {
     setColorMode(nextMode);
     onApplyColorScheme(nextMode, { applyAll: applyColorForAll });
@@ -227,7 +269,7 @@ export function MobileTools({
     }
 
     if (nextMode === "single") {
-      const unifiedColor = activeTextElement.fill || selectedTextHighlightColor || "#56cfc2";
+      const unifiedColor = activeTextElement.fill || selectedTextHighlightColor || "#6366f1";
       onSelectedTextColorChange(unifiedColor);
       onSelectedTextHighlightColorChange(unifiedColor);
       if (selectedTextHighlightOpacity < 0.65) {
@@ -245,21 +287,29 @@ export function MobileTools({
       onSelectedTextHighlightOpacityChange(0.9);
     }
   };
+
   const handleSinglePaletteColorChange = (value: string) => {
     onSelectedTextColorChange(value);
     onSelectedTextHighlightColorChange(value);
   };
-  const selectedElementLabel = selectedElement
-    ? selectedElement.type === "text"
-      ? "Выбран текст"
-      : selectedElement.type === "image" || selectedElement.type === "image_element"
-        ? "Выбрано изображение"
-        : "Выбрана фигура"
-    : activeTextElement
-      ? selectedTextTargetRole === "body"
-        ? "Автовыбор: описание"
-        : "Автовыбор: заголовок"
-      : "";
+
+  const handleCaptionCopyClick = () => {
+    if (!captionResult || disabled) {
+      return;
+    }
+
+    onCopyCaption();
+    setIsCaptionCopied(true);
+
+    if (captionCopyResetTimeoutRef.current !== null) {
+      window.clearTimeout(captionCopyResetTimeoutRef.current);
+    }
+
+    captionCopyResetTimeoutRef.current = window.setTimeout(() => {
+      setIsCaptionCopied(false);
+      captionCopyResetTimeoutRef.current = null;
+    }, 2000);
+  };
 
   const handleSheetTouchStart = (event: TouchEvent<HTMLElement>) => {
     const touch = event.touches[0];
@@ -309,6 +359,15 @@ export function MobileTools({
 
   return (
     <>
+      {activeTab ? (
+        <button
+          type="button"
+          className="mobile-tool-sheet-backdrop"
+          aria-label="Закрыть панель"
+          onClick={() => onTabChange(null)}
+        />
+      ) : null}
+
       <nav
         ref={(node) => {
           if (toolbarRef) {
@@ -326,14 +385,7 @@ export function MobileTools({
               type="button"
               className={`mobile-bottom-tool ${isActive ? "active" : ""}`}
               disabled={disabled}
-              onClick={() => {
-                if (item.id === "templates") {
-                  onOpenTemplateModal();
-                  onTabChange(null);
-                  return;
-                }
-                onTabChange(isActive ? null : item.id);
-              }}
+              onClick={() => onTabChange(isActive ? null : item.id)}
             >
               <span className="mobile-bottom-tool-icon">
                 <AppIcon name={item.icon} size={18} />
@@ -362,11 +414,10 @@ export function MobileTools({
             transform: dragOffset ? `translateY(${dragOffset}px)` : undefined
           }}
         >
+          <div className="mobile-tool-sheet-handle" aria-hidden="true" />
+
           <div className="mobile-tool-sheet-header">
-            <div className="mobile-tool-sheet-title-row">
-              <h3>{getTabTitle(activeTab)}</h3>
-              {activeTab === "text" ? <span className="mobile-sheet-badge">Подсказка</span> : null}
-            </div>
+            <h3>{getTabTitle(activeTab)}</h3>
             <button
               type="button"
               className="mobile-tool-close"
@@ -377,12 +428,9 @@ export function MobileTools({
             </button>
           </div>
 
-          <div className={`mobile-tool-sheet-body mobile-tool-sheet-body-${activeTab}`}>
-            {selectedElementLabel ? <div className="settings-selected-pill">{selectedElementLabel}</div> : null}
-
-            {activeTab === "templates" ? (
+          <div className={`mobile-tool-sheet-body custom-scroll mobile-tool-sheet-body-${activeTab}`}>
+            {activeTab === "slides" ? (
               <div className="settings-block">
-                <span className="settings-label">Шаблон карусели</span>
                 <button
                   type="button"
                   className="template-library-trigger template-library-trigger-mobile"
@@ -396,49 +444,149 @@ export function MobileTools({
                     <AppIcon name="templates" size={16} />
                   </span>
                   <span className="template-library-trigger-copy">
-                    <strong>Открыть библиотеку</strong>
+                    <strong>Шаблоны</strong>
                     <small>{activeTemplateName}</small>
                   </span>
                   <AppIcon name="chevron-right" size={14} />
                 </button>
-              </div>
-            ) : null}
 
-            {activeTab === "color" ? (
-              <div className="settings-block">
-                <span className="settings-label">Цветовая схема</span>
-                <label className="mobile-switch-row">
-                  <span>Применить для всех слайдов</span>
-                  <input
-                    type="checkbox"
-                    checked={applyColorForAll}
-                    onChange={(event) => setApplyColorForAll(event.target.checked)}
-                    disabled={disabled}
-                  />
-                </label>
-                <div className="segment-control">
+                <div className="mobile-slide-list custom-scroll">
+                  {slides.map((slide, index) => {
+                    const isActive = slide.id === activeSlideId;
+                    return (
+                      <div
+                        key={slide.id}
+                        className={`mobile-slide-list-item ${isActive ? "active" : ""}`}
+                      >
+                        <button
+                          type="button"
+                          className="mobile-slide-list-main"
+                          onClick={() => onSelectSlide(slide.id)}
+                          disabled={disabled}
+                        >
+                          <span className="mobile-slide-list-index">{index + 1}</span>
+                          <span className="mobile-slide-list-copy">
+                            <strong>{slide.name || `Слайд ${index + 1}`}</strong>
+                            <small>{getSlideRoleLabel(slide.generationRole)}</small>
+                          </span>
+                        </button>
+                        <div className="mobile-slide-list-actions">
+                          <button
+                            type="button"
+                            className="mobile-slide-list-action"
+                            onClick={() => onMoveSlide(slide.id, "up")}
+                            disabled={disabled || index === 0}
+                            title="Вверх"
+                            aria-label="Переместить вверх"
+                          >
+                            <AppIcon name="move-up" size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="mobile-slide-list-action"
+                            onClick={() => onMoveSlide(slide.id, "down")}
+                            disabled={disabled || index === slides.length - 1}
+                            title="Вниз"
+                            aria-label="Переместить вниз"
+                          >
+                            <AppIcon name="move-down" size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="mobile-slide-list-action mobile-slide-list-action-danger"
+                            onClick={() => onDeleteSlide(slide.id)}
+                            disabled={disabled || slides.length <= 1}
+                            title="Удалить"
+                            aria-label="Удалить слайд"
+                          >
+                            <AppIcon name="trash" size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="field-row field-row-actions">
                   <button
                     type="button"
-                    className={`segment-item ${colorMode === "single" ? "active" : ""}`}
-                    onClick={() => applyColorMode("single")}
+                    className="ghost-chip"
+                    onClick={() => onInsertSlideAt(fallbackSlideIndex + 1, "text")}
                     disabled={disabled}
                   >
-                    Одинарная
+                    + Текст
                   </button>
                   <button
                     type="button"
-                    className={`segment-item ${colorMode === "double" ? "active" : ""}`}
-                    onClick={() => applyColorMode("double")}
+                    className="ghost-chip"
+                    onClick={() => onInsertSlideAt(fallbackSlideIndex + 1, "image_text")}
                     disabled={disabled}
                   >
-                    Двойная
+                    + Фото + текст
                   </button>
                 </div>
 
-                {colorMode === "single" ? (
-                  <div className="mobile-sheet-row">
+                <div className="field-row field-row-actions">
+                  <button
+                    type="button"
+                    className="ghost-chip"
+                    onClick={() => onInsertSlideAt(fallbackSlideIndex + 1, "big_text")}
+                    disabled={disabled}
+                  >
+                    + Большой текст
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-chip ghost-chip-muted"
+                    onClick={() => {
+                      if (currentSlide) {
+                        onDuplicateSlide(currentSlide.id);
+                      }
+                    }}
+                    disabled={disabled || !currentSlide}
+                  >
+                    Дублировать
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {activeTab === "style" ? (
+              <div className="settings-block">
+                <div className="mobile-sheet-subsection">
+                  <div className="mobile-sheet-subsection-header">
+                    <span className="settings-label">Цветовая схема</span>
+                    <MobileSwitchRow
+                      label="Применить для всех"
+                      checked={applyColorForAll}
+                      onCheckedChange={setApplyColorForAll}
+                      disabled={disabled}
+                      compact
+                    />
+                  </div>
+
+                  <div className="segment-control">
+                    <button
+                      type="button"
+                      className={`segment-item ${colorMode === "single" ? "active" : ""}`}
+                      onClick={() => applyColorMode("single")}
+                      disabled={disabled}
+                    >
+                      Один цвет
+                    </button>
+                    <button
+                      type="button"
+                      className={`segment-item ${colorMode === "double" ? "active" : ""}`}
+                      onClick={() => applyColorMode("double")}
+                      disabled={disabled}
+                    >
+                      Два цвета
+                    </button>
+                  </div>
+
+                  {colorMode === "single" ? (
                     <label className="field-label">
-                      Единый цвет текста и выделения
+                      Цвет текста и выделения
                       <div className="mobile-color-inline">
                         <input
                           type="color"
@@ -454,266 +602,155 @@ export function MobileTools({
                         />
                       </div>
                     </label>
-                  </div>
-                ) : (
-                  <div className="mobile-sheet-row">
-                    <label className="field-label">
-                      Цвет текста
-                      <div className="mobile-color-inline">
-                        <input
-                          type="color"
-                          className="color-input"
-                          value={normalizedTextColor}
-                          onChange={(event) => onSelectedTextColorChange(event.target.value)}
-                          disabled={disabled || !activeTextElement}
-                        />
-                        <HexColorField
-                          value={normalizedTextColor}
-                          onValidChange={onSelectedTextColorChange}
-                          disabled={disabled || !activeTextElement}
-                        />
-                      </div>
-                    </label>
-                    <label className="field-label">
-                      Цвет выделения
-                      <div className="mobile-color-inline">
-                        <input
-                          type="color"
-                          className="color-input"
-                          value={normalizedHighlightColor}
-                          onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
-                          disabled={disabled || !activeTextElement}
-                        />
-                        <HexColorField
-                          value={normalizedHighlightColor}
-                          onValidChange={onSelectedTextHighlightColorChange}
-                          disabled={disabled || !activeTextElement}
-                        />
-                      </div>
-                    </label>
-                  </div>
-                )}
-              </div>
-            ) : null}
+                  ) : (
+                    <div className="mobile-sheet-row mobile-sheet-row-two">
+                      <label className="field-label">
+                        Цвет текста
+                        <div className="mobile-color-inline">
+                          <input
+                            type="color"
+                            className="color-input"
+                            value={normalizedTextColor}
+                            onChange={(event) => onSelectedTextColorChange(event.target.value)}
+                            disabled={disabled || !activeTextElement}
+                          />
+                          <HexColorField
+                            value={normalizedTextColor}
+                            onValidChange={onSelectedTextColorChange}
+                            disabled={disabled || !activeTextElement}
+                          />
+                        </div>
+                      </label>
+                      <label className="field-label">
+                        Цвет выделения
+                        <div className="mobile-color-inline">
+                          <input
+                            type="color"
+                            className="color-input"
+                            value={normalizedHighlightColor}
+                            onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
+                            disabled={disabled || !activeTextElement}
+                          />
+                          <HexColorField
+                            value={normalizedHighlightColor}
+                            onValidChange={onSelectedTextHighlightColorChange}
+                            disabled={disabled || !activeTextElement}
+                          />
+                        </div>
+                      </label>
+                    </div>
+                  )}
+                </div>
 
-            {activeTab === "background" ? (
-              <div className="settings-block">
-                <span className="settings-label">Фон</span>
-                <label className="field-label">
-                  Цвет фона (HEX)
-                  <div className="mobile-color-inline">
-                    <input
-                      type="color"
-                      className="color-input"
-                      value={normalizedBackgroundColor}
-                      onChange={(event) =>
-                        onSlideBackgroundChange(event.target.value, { applyAll: applyStyleForAll })
-                      }
+                <div className="mobile-sheet-subsection">
+                  <div className="mobile-sheet-subsection-header">
+                    <span className="settings-label">Фон</span>
+                    <MobileSwitchRow
+                      label="Применить для всех"
+                      checked={applyStyleForAll}
+                      onCheckedChange={setApplyStyleForAll}
                       disabled={disabled}
-                    />
-                    <HexColorField
-                      value={normalizedBackgroundColor}
-                      onValidChange={(value) =>
-                        onSlideBackgroundChange(value, { applyAll: applyStyleForAll })
-                      }
-                      disabled={disabled}
+                      compact
                     />
                   </div>
-                </label>
-                <label className="field-label">
-                  Быстрые пресеты
-                  <div className="mobile-style-grid">
+
+                  <label className="field-label">
+                    Цвет фона (HEX)
+                    <div className="mobile-color-inline">
+                      <input
+                        type="color"
+                        className="color-input"
+                        value={normalizedBackgroundColor}
+                        onChange={(event) =>
+                          onSlideBackgroundChange(event.target.value, { applyAll: applyStyleForAll })
+                        }
+                        disabled={disabled}
+                      />
+                      <HexColorField
+                        value={normalizedBackgroundColor}
+                        onValidChange={(value) =>
+                          onSlideBackgroundChange(value, { applyAll: applyStyleForAll })
+                        }
+                        disabled={disabled}
+                      />
+                    </div>
+                  </label>
+
+                  <div className="mobile-color-swatches">
                     {BACKGROUND_COLOR_PRESETS.map((preset) => {
-                      const isActive =
-                        normalizeColor(slideBackground).toLowerCase() === preset.value.toLowerCase();
+                      const isActive = normalizedSlideBackground === preset.value.toLowerCase();
                       return (
                         <button
                           key={preset.value}
                           type="button"
-                          className={`mobile-style-chip ${isActive ? "active" : ""}`}
+                          className={`mobile-color-swatch ${isActive ? "active" : ""} ${
+                            preset.value.toLowerCase() === "#ffffff" ? "is-light" : ""
+                          }`}
+                          style={{ backgroundColor: preset.value }}
+                          title={preset.label}
+                          aria-label={preset.label}
                           onClick={() =>
                             onSlideBackgroundChange(preset.value, { applyAll: applyStyleForAll })
                           }
                           disabled={disabled}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mobile-sheet-subsection">
+                  <span className="settings-label">Стиль фона</span>
+                  <div className="mobile-style-grid mobile-style-grid-preview">
+                    {STYLE_PRESETS.map((preset) => {
+                      const isActive = normalizedSlideBackground === preset.background.toLowerCase();
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          className={`mobile-style-chip mobile-style-chip-preview ${
+                            isActive ? "active" : ""
+                          }`}
+                          disabled={disabled}
+                          onClick={() =>
+                            onApplyStylePreset(preset.id, { applyAll: applyStyleForAll })
+                          }
                         >
-                          {preset.label}
+                          <span
+                            className="mobile-style-chip-preview-box"
+                            style={{
+                              backgroundColor: preset.background,
+                              backgroundImage: preset.preview === "none" ? undefined : preset.preview,
+                              backgroundSize:
+                                preset.id === "dots"
+                                  ? "8px 8px, 8px 8px"
+                                  : preset.id === "grid"
+                                    ? "10px 10px, 10px 10px"
+                                    : undefined
+                            }}
+                          />
+                          <span>{preset.label}</span>
                         </button>
                       );
                     })}
                   </div>
-                </label>
-                <label className="mobile-switch-row">
-                  <span>Фото-блок</span>
-                  <input
-                    type="checkbox"
-                    checked={photoSlotEnabled}
-                    onChange={(event) => onPhotoSlotEnabledChange(event.target.checked)}
-                    disabled={disabled}
-                  />
-                </label>
-                <label className="mobile-switch-row">
-                  <span>Применить для всех слайдов</span>
-                  <input
-                    type="checkbox"
-                    checked={applyStyleForAll}
-                    onChange={(event) => setApplyStyleForAll(event.target.checked)}
-                    disabled={disabled}
-                  />
-                </label>
-                <div className="field-row">
-                  <button
-                    type="button"
-                    className="ghost-chip"
-                    onClick={onAddSlidePhoto}
-                    disabled={disabled}
-                  >
-                    + Фото
-                  </button>
-                </div>
-                <div className="field-row">
-                  <button
-                    type="button"
-                    className="ghost-chip"
-                    onClick={onUploadBackgroundImage}
-                    disabled={disabled}
-                  >
-                    + Выбрать файл
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-chip ghost-chip-muted"
-                    onClick={onRemoveBackgroundImage}
-                    disabled={!hasBackgroundImage || disabled}
-                  >
-                    Очистить фото
-                  </button>
-                </div>
-                {hasBackgroundImage ? (
-                  <div className="field-grid">
-                    <label className="field-label">
-                      Зум ({photoSettings.zoom}%)
-                      <input
-                        className="range"
-                        type="range"
-                        min={100}
-                        max={200}
-                        step={1}
-                        value={photoSettings.zoom}
-                        onChange={(event) =>
-                          onSlidePhotoSettingsChange({ zoom: Number(event.target.value) })
-                        }
-                        disabled={disabled}
-                      />
-                    </label>
-                    <label className="field-label">
-                      Позиция X ({photoSettings.offsetX}%)
-                      <input
-                        className="range"
-                        type="range"
-                        min={-50}
-                        max={50}
-                        step={1}
-                        value={photoSettings.offsetX}
-                        onChange={(event) =>
-                          onSlidePhotoSettingsChange({ offsetX: Number(event.target.value) })
-                        }
-                        disabled={disabled}
-                      />
-                    </label>
-                    <label className="field-label">
-                      Позиция Y ({photoSettings.offsetY}%)
-                      <input
-                        className="range"
-                        type="range"
-                        min={-50}
-                        max={50}
-                        step={1}
-                        value={photoSettings.offsetY}
-                        onChange={(event) =>
-                          onSlidePhotoSettingsChange({ offsetY: Number(event.target.value) })
-                        }
-                        disabled={disabled}
-                      />
-                    </label>
-                    <label className="field-label">
-                      Затемнение ({photoSettings.overlay}%)
-                      <input
-                        className="range"
-                        type="range"
-                        min={0}
-                        max={80}
-                        step={1}
-                        value={photoSettings.overlay}
-                        onChange={(event) =>
-                          onSlidePhotoSettingsChange({ overlay: Number(event.target.value) })
-                        }
-                        disabled={disabled}
-                      />
-                    </label>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
 
-            {activeTab === "style" ? (
-              <div className="settings-block">
-                <span className="settings-label">Стиль фона</span>
-                <label className="mobile-switch-row">
-                  <span>Применить для всех слайдов</span>
-                  <input
-                    type="checkbox"
-                    checked={applyStyleForAll}
-                    onChange={(event) => setApplyStyleForAll(event.target.checked)}
-                    disabled={disabled}
-                  />
-                </label>
-                <div className="mobile-style-grid">
-                  {STYLE_PRESETS.map((preset) => {
-                    const isActive = normalizeColor(slideBackground) === preset.background;
-                    return (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        className={`mobile-style-chip ${isActive ? "active" : ""}`}
-                        disabled={disabled}
-                        onClick={() =>
-                          onApplyStylePreset(preset.id, { applyAll: applyStyleForAll })
-                        }
-                      >
-                        <span
-                          className="mobile-style-chip-preview"
-                          style={{
-                            backgroundColor: preset.background,
-                            backgroundImage: preset.preview === "none" ? undefined : preset.preview,
-                            backgroundSize:
-                              preset.id === "dots"
-                                ? "8px 8px, 8px 8px"
-                                : preset.id === "grid"
-                                  ? "10px 10px, 10px 10px"
-                                  : undefined
-                          }}
-                        />
-                        <span>{preset.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <label className="mobile-switch-row">
-                  <span>Показывать сетку</span>
-                  <input
-                    type="checkbox"
+                  <MobileSwitchRow
+                    label="Показывать сетку"
                     checked={gridVisible}
-                    onChange={(event) =>
-                      onGridVisibilityChange(event.target.checked, { applyAll: applyStyleForAll })
+                    onCheckedChange={(checked) =>
+                      onGridVisibilityChange(checked, { applyAll: applyStyleForAll })
                     }
                     disabled={disabled}
                   />
-                </label>
+                </div>
               </div>
             ) : null}
 
             {activeTab === "text" ? (
               <div className="settings-block">
+                {selectedElementLabel ? <div className="settings-selected-pill">{selectedElementLabel}</div> : null}
+
                 <div className="segment-control">
                   <button
                     type="button"
@@ -764,12 +801,30 @@ export function MobileTools({
                       )
                     }
                     placeholder="Выберите текст на слайде"
-                    rows={3}
+                    rows={4}
                     disabled={disabled || !activeTextElement}
                   />
                 </label>
 
                 <div className="mobile-sheet-row">
+                  <label className="field-label">
+                    Цвет текста
+                    <div className="mobile-color-inline">
+                      <input
+                        type="color"
+                        className="color-input"
+                        value={normalizedTextColor}
+                        onChange={(event) => onSelectedTextColorChange(event.target.value)}
+                        disabled={disabled || !activeTextElement}
+                      />
+                      <HexColorField
+                        value={normalizedTextColor}
+                        onValidChange={onSelectedTextColorChange}
+                        disabled={disabled || !activeTextElement}
+                      />
+                    </div>
+                  </label>
+
                   <label className="field-label">
                     Цвет выделения
                     <div className="mobile-color-inline">
@@ -786,17 +841,9 @@ export function MobileTools({
                         disabled={disabled || !activeTextElement}
                       />
                     </div>
-                    <button
-                      type="button"
-                      className="ghost-chip ghost-chip-muted ghost-chip-small"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={onApplyHighlightColorToAllSlides}
-                      disabled={disabled || !activeTextElement}
-                    >
-                      → Все слайды
-                    </button>
                   </label>
-                  <div className="field-row">
+
+                  <div className="field-row field-row-actions">
                     <button
                       type="button"
                       className="ghost-chip"
@@ -816,132 +863,48 @@ export function MobileTools({
                       Снять
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    className="ghost-chip ghost-chip-muted"
-                    onClick={onClearAllHighlights}
-                    disabled={disabled || !activeTextElement}
-                  >
-                    Очистить все выделения
-                  </button>
-                </div>
 
-                <label className="field-label">
-                  Прозрачность выделения
-                  <input
-                    type="range"
-                    className="range"
-                    min={8}
-                    max={100}
-                    step={1}
-                    value={Math.round(selectedTextHighlightOpacity * 100)}
-                    onChange={(event) =>
-                      onSelectedTextHighlightOpacityChange(Number(event.target.value) / 100)
-                    }
-                    disabled={disabled || !activeTextElement}
-                  />
-                </label>
-
-                <label className="field-label">
-                  Ник
-                  <input
-                    className="field"
-                    value={profileHandle}
-                    onChange={(event) => onProfileHandleChange(event.target.value)}
-                    placeholder="@username"
-                    disabled={disabled}
-                  />
-                </label>
-                <label className="field-label">
-                  Подпись
-                  <input
-                    className="field"
-                    value={profileSubtitle}
-                    onChange={(event) => onProfileSubtitleChange(event.target.value)}
-                    placeholder="Подпись (необязательно)"
-                    disabled={disabled}
-                  />
-                </label>
-                <label className="mobile-switch-row">
-                  <span>Показывать подпись на всех слайдах</span>
-                  <input
-                    type="checkbox"
-                    checked={subtitlesVisibleAcrossSlides}
-                    onChange={(event) => onToggleSubtitleAcrossSlides(event.target.checked)}
-                    disabled={disabled}
-                  />
-                </label>
-              </div>
-            ) : null}
-
-            {activeTab === "post" ? (
-              <div className="settings-block">
-                <span className="settings-label">Подпись к посту</span>
-                <div className="field-row field-row-actions">
-                  <button
-                    type="button"
-                    className="ghost-chip"
-                    onClick={onGenerateCaption}
-                    disabled={disabled || isGeneratingCaption}
-                  >
-                    {isGeneratingCaption ? "Генерирую..." : "Сгенерировать"}
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-chip ghost-chip-muted"
-                    onClick={onCopyCaption}
-                    disabled={disabled || !captionResult}
-                  >
-                    Копировать
-                  </button>
-                </div>
-
-                {captionResult ? (
-                  <textarea
-                    className="textarea"
-                    value={[
-                      captionResult.text,
-                      "",
-                      `CTA: ${captionResult.cta}`,
-                      captionResult.ctaSoft ? `Soft CTA: ${captionResult.ctaSoft}` : "",
-                      captionResult.ctaAggressive ? `Aggressive CTA: ${captionResult.ctaAggressive}` : "",
-                      "",
-                      captionResult.hashtags.join(" ")
-                    ]
-                      .filter(Boolean)
-                      .join("\n")}
-                    rows={8}
-                    readOnly
-                  />
-                ) : (
-                  <div className="settings-hint">
-                    Сначала сгенерируйте карусель, затем нажмите «Сгенерировать».
+                  <div className="field-row field-row-actions">
+                    <button
+                      type="button"
+                      className="ghost-chip ghost-chip-muted"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={onApplyHighlightColorToAllSlides}
+                      disabled={disabled || !activeTextElement}
+                    >
+                      Все слайды
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-chip ghost-chip-muted"
+                      onClick={onClearAllHighlights}
+                      disabled={disabled || !activeTextElement}
+                    >
+                      Очистить всё
+                    </button>
                   </div>
-                )}
-              </div>
-            ) : null}
-
-            {activeTab === "font" ? (
-              <div className="settings-block">
-                <span className="settings-label">Шрифты</span>
-                <div className="segment-control">
-                  <button
-                    type="button"
-                    className={`segment-item ${selectedTextTargetRole === "title" ? "active" : ""}`}
-                    onClick={() => onSelectedTextTargetRoleChange("title")}
-                    disabled={disabled}
-                  >
-                    Заголовок
-                  </button>
-                  <button
-                    type="button"
-                    className={`segment-item ${selectedTextTargetRole === "body" ? "active" : ""}`}
-                    onClick={() => onSelectedTextTargetRoleChange("body")}
-                    disabled={disabled}
-                  >
-                    Описание
-                  </button>
                 </div>
+
+                <label className="field-label">
+                  <span>Прозрачность выделения</span>
+                  <div className="mobile-size-control">
+                    <input
+                      type="range"
+                      className="range"
+                      min={8}
+                      max={100}
+                      step={1}
+                      value={Math.round(selectedTextHighlightOpacity * 100)}
+                      onChange={(event) =>
+                        onSelectedTextHighlightOpacityChange(Number(event.target.value) / 100)
+                      }
+                      disabled={disabled || !activeTextElement}
+                    />
+                    <div className="mobile-size-value">{Math.round(selectedTextHighlightOpacity * 100)}%</div>
+                  </div>
+                </label>
+
+                <span className="settings-label">Шрифт</span>
                 <div className="mobile-font-grid">
                   {FONT_OPTIONS.map((fontName) => {
                     const isActive = activeTextElement?.fontFamily === fontName;
@@ -960,37 +923,21 @@ export function MobileTools({
                   })}
                 </div>
 
-                <button type="button" className="mobile-upload-font-btn" disabled>
-                  + Добавить шрифт
-                </button>
-                <div className="mobile-font-note">
-                  Убедитесь, что у Вас есть лицензия на использование загружаемого шрифта
+                <span className="settings-label">Размер и регистр</span>
+                <div className="mobile-size-control">
+                  <input
+                    type="range"
+                    className="range"
+                    min={14}
+                    max={96}
+                    step={1}
+                    value={Math.round(activeTextElement?.fontSize ?? 28)}
+                    onChange={(event) => onSelectedTextSizeChange(Number(event.target.value))}
+                    disabled={disabled || !activeTextElement}
+                  />
+                  <div className="mobile-size-value">{Math.round(activeTextElement?.fontSize ?? 28)}px</div>
                 </div>
-              </div>
-            ) : null}
 
-            {activeTab === "size" ? (
-              <div className="settings-block">
-                <span className="settings-label">Размер текста</span>
-                <div className="segment-control">
-                  <button
-                    type="button"
-                    className={`segment-item ${selectedTextTargetRole === "title" ? "active" : ""}`}
-                    onClick={() => onSelectedTextTargetRoleChange("title")}
-                    disabled={disabled}
-                  >
-                    Заголовок
-                  </button>
-                  <button
-                    type="button"
-                    className={`segment-item ${selectedTextTargetRole === "body" ? "active" : ""}`}
-                    onClick={() => onSelectedTextTargetRoleChange("body")}
-                    disabled={disabled}
-                  >
-                    Описание
-                  </button>
-                </div>
-                <span className="field-label">Регистр</span>
                 <div className="mobile-case-grid">
                   <button
                     type="button"
@@ -1025,19 +972,44 @@ export function MobileTools({
                     аА
                   </button>
                 </div>
-                <div className="mobile-size-control">
-                  <input
-                    type="range"
-                    className="range"
-                    min={14}
-                    max={96}
-                    step={1}
-                    value={Math.round(activeTextElement?.fontSize ?? 28)}
-                    onChange={(event) => onSelectedTextSizeChange(Number(event.target.value))}
+
+                <span className="settings-label">Выравнивание</span>
+                <div className="segment-control segment-control-neutral segment-control-align">
+                  <button
+                    type="button"
+                    className={`segment-item segment-item-neutral segment-item-icon ${
+                      activeTextElement?.align === "left" ? "active" : ""
+                    }`}
+                    onClick={() => onSelectedTextAlignChange("left")}
+                    title="По левому краю"
                     disabled={disabled || !activeTextElement}
-                  />
-                  <div className="mobile-size-value">{Math.round(activeTextElement?.fontSize ?? 28)}px</div>
+                  >
+                    <AppIcon name="align-left" size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`segment-item segment-item-neutral segment-item-icon ${
+                      activeTextElement?.align === "center" ? "active" : ""
+                    }`}
+                    onClick={() => onSelectedTextAlignChange("center")}
+                    title="По центру"
+                    disabled={disabled || !activeTextElement}
+                  >
+                    <AppIcon name="align-center" size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`segment-item segment-item-neutral segment-item-icon ${
+                      activeTextElement?.align === "right" ? "active" : ""
+                    }`}
+                    onClick={() => onSelectedTextAlignChange("right")}
+                    title="По правому краю"
+                    disabled={disabled || !activeTextElement}
+                  >
+                    <AppIcon name="align-right" size={14} />
+                  </button>
                 </div>
+
                 <button
                   type="button"
                   className="ghost-chip ghost-chip-muted"
@@ -1046,15 +1018,188 @@ export function MobileTools({
                 >
                   —|— По центру
                 </button>
-                <label className="mobile-switch-row">
-                  <span>Применить для всех слайдов</span>
+              </div>
+            ) : null}
+
+            {activeTab === "photo" ? (
+              <div className="settings-block">
+                <MobileSwitchRow
+                  label="Фото-блок"
+                  checked={photoSlotEnabled}
+                  onCheckedChange={onPhotoSlotEnabledChange}
+                  disabled={disabled}
+                />
+
+                <div className="field-row field-row-actions">
+                  <button
+                    type="button"
+                    className="ghost-chip"
+                    onClick={onUploadBackgroundImage}
+                    disabled={disabled || !photoSlotEnabled}
+                  >
+                    Загрузить фото
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-chip ghost-chip-muted"
+                    onClick={onRemoveBackgroundImage}
+                    disabled={disabled || !photoSlotEnabled || !hasBackgroundImage}
+                  >
+                    Очистить фото
+                  </button>
+                </div>
+
+                {hasBackgroundImage ? (
+                  <div className="field-grid">
+                    <label className="field-label">
+                      Зум ({photoSettings.zoom}%)
+                      <input
+                        className="range"
+                        type="range"
+                        min={100}
+                        max={200}
+                        step={1}
+                        value={photoSettings.zoom}
+                        onChange={(event) =>
+                          onSlidePhotoSettingsChange({ zoom: Number(event.target.value) })
+                        }
+                        disabled={disabled || !photoSlotEnabled}
+                      />
+                    </label>
+                    <label className="field-label">
+                      Позиция X ({photoSettings.offsetX}%)
+                      <input
+                        className="range"
+                        type="range"
+                        min={-50}
+                        max={50}
+                        step={1}
+                        value={photoSettings.offsetX}
+                        onChange={(event) =>
+                          onSlidePhotoSettingsChange({ offsetX: Number(event.target.value) })
+                        }
+                        disabled={disabled || !photoSlotEnabled}
+                      />
+                    </label>
+                    <label className="field-label">
+                      Позиция Y ({photoSettings.offsetY}%)
+                      <input
+                        className="range"
+                        type="range"
+                        min={-50}
+                        max={50}
+                        step={1}
+                        value={photoSettings.offsetY}
+                        onChange={(event) =>
+                          onSlidePhotoSettingsChange({ offsetY: Number(event.target.value) })
+                        }
+                        disabled={disabled || !photoSlotEnabled}
+                      />
+                    </label>
+                    <label className="field-label">
+                      Затемнение ({photoSettings.overlay}%)
+                      <input
+                        className="range"
+                        type="range"
+                        min={0}
+                        max={80}
+                        step={1}
+                        value={photoSettings.overlay}
+                        onChange={(event) =>
+                          onSlidePhotoSettingsChange({ overlay: Number(event.target.value) })
+                        }
+                        disabled={disabled || !photoSlotEnabled}
+                      />
+                    </label>
+                  </div>
+                ) : null}
+
+                <label className="field-label">
+                  Ник
                   <input
-                    type="checkbox"
-                    checked={applySizeForAll}
-                    onChange={(event) => setApplySizeForAll(event.target.checked)}
+                    className="field"
+                    value={profileHandle}
+                    onChange={(event) => onProfileHandleChange(event.target.value)}
+                    placeholder="@username"
                     disabled={disabled}
                   />
                 </label>
+
+                <label className="field-label">
+                  Подпись
+                  <input
+                    className="field"
+                    value={profileSubtitle}
+                    onChange={(event) => onProfileSubtitleChange(event.target.value)}
+                    placeholder="Подпись (необязательно)"
+                    disabled={disabled}
+                  />
+                </label>
+
+                <MobileSwitchRow
+                  label="Показывать подпись на всех слайдах"
+                  checked={subtitlesVisibleAcrossSlides}
+                  onCheckedChange={onToggleSubtitleAcrossSlides}
+                  disabled={disabled}
+                />
+              </div>
+            ) : null}
+
+            {activeTab === "export" ? (
+              <div className="settings-block">
+                <button
+                  type="button"
+                  className="btn export-primary-cta"
+                  onClick={onOpenExportModal}
+                  disabled={disabled || isExporting || isGenerating}
+                >
+                  <AppIcon name="download" size={16} />
+                  <span>{isExporting ? "Экспорт..." : "Экспортировать карусель"}</span>
+                </button>
+
+                <div className="field-row field-row-actions caption-actions-row">
+                  <button
+                    type="button"
+                    className="btn caption-generate-button"
+                    onClick={onGenerateCaption}
+                    disabled={disabled || isGenerating || isGeneratingCaption}
+                  >
+                    <span>{isGeneratingCaption ? "Генерирую..." : "Сгенерировать подпись"}</span>
+                  </button>
+                  {captionResult ? (
+                    <button
+                      type="button"
+                      className="ghost-chip ghost-chip-muted caption-copy-button"
+                      onClick={handleCaptionCopyClick}
+                      disabled={disabled}
+                    >
+                      {isCaptionCopied ? "Скопировано ✓" : "Копировать"}
+                    </button>
+                  ) : null}
+                </div>
+
+                {captionResult ? (
+                  <textarea
+                    className="textarea"
+                    value={[
+                      captionResult.text,
+                      "",
+                      `CTA: ${captionResult.cta}`,
+                      captionResult.ctaSoft ? `Soft CTA: ${captionResult.ctaSoft}` : "",
+                      captionResult.ctaAggressive ? `Aggressive CTA: ${captionResult.ctaAggressive}` : "",
+                      "",
+                      captionResult.hashtags.join(" ")
+                    ]
+                      .filter(Boolean)
+                      .join("\n")}
+                    rows={8}
+                    readOnly
+                  />
+                ) : (
+                  <div className="settings-hint">
+                    Сначала сгенерируйте карусель, затем нажмите «Сгенерировать подпись».
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
@@ -1064,36 +1209,84 @@ export function MobileTools({
   );
 }
 
+function MobileSwitchRow({
+  label,
+  checked,
+  onCheckedChange,
+  disabled,
+  compact = false
+}: {
+  label: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  disabled: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <label className={`mobile-switch-row ${compact ? "mobile-switch-row-compact" : ""}`}>
+      <span>{label}</span>
+      <Switch.Root
+        className="mobile-switch-root"
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        disabled={disabled}
+        aria-label={label}
+      >
+        <Switch.Thumb className="mobile-switch-thumb" />
+      </Switch.Root>
+    </label>
+  );
+}
+
 function getTabTitle(tab: MobileToolTab) {
-  if (tab === "templates") {
-    return "Шаблоны";
-  }
-
-  if (tab === "color") {
-    return "Цветовая схема";
-  }
-
-  if (tab === "background") {
-    return "Фон";
+  if (tab === "slides") {
+    return "Слайды";
   }
 
   if (tab === "style") {
-    return "Стиль фона";
+    return "Стиль";
   }
 
   if (tab === "text") {
-    return "Редактирование текста";
+    return "Текст";
   }
 
-  if (tab === "font") {
-    return "Шрифты";
+  if (tab === "photo") {
+    return "Фото";
   }
 
-  if (tab === "post") {
-    return "Подпись к посту";
-  }
+  return "Экспорт";
+}
 
-  return "Размер текста";
+function getSlideRoleLabel(role: Slide["generationRole"]) {
+  if (role === "hook") {
+    return "Крючок";
+  }
+  if (role === "problem") {
+    return "Проблема";
+  }
+  if (role === "amplify") {
+    return "Усиление";
+  }
+  if (role === "mistake") {
+    return "Ошибка";
+  }
+  if (role === "consequence") {
+    return "Последствие";
+  }
+  if (role === "shift") {
+    return "Поворот";
+  }
+  if (role === "solution") {
+    return "Решение";
+  }
+  if (role === "example") {
+    return "Пример";
+  }
+  if (role === "cta") {
+    return "Призыв";
+  }
+  return "Слайд";
 }
 
 function normalizeColor(value: string) {
