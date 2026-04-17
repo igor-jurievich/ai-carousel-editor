@@ -15,6 +15,7 @@ import {
   Users,
   Zap
 } from "lucide-react";
+import { toast } from "sonner";
 import { createSlidesFromOutline, projectTitleFromTopic } from "@/lib/carousel";
 import { clampSlidesCount, DEFAULT_SLIDES_COUNT, SLIDES_COUNT_OPTIONS } from "@/lib/slides";
 import { saveLocalProject } from "@/lib/projects";
@@ -461,6 +462,7 @@ export default function GeneratePage() {
           ? generationError.message
           : "Не смогли сгенерировать. Попробуйте переформулировать тему."
       );
+      toast.error("Не удалось сгенерировать");
       setPreviewSlides(null);
       setGeneratedProjectMeta(null);
     } finally {
