@@ -37,10 +37,19 @@ type CaptionGenerationInput = {
   goal?: string;
 };
 
+type CarouselGenerationMeta = {
+  model: string;
+  tokensUsed: number;
+  validationErrors: string[];
+  retried: boolean;
+};
+
 type CarouselGenerationResult = {
   slides: CarouselOutlineSlide[];
+  caption: string;
   promptVariant: PromptVariant;
   generationSource: CarouselGenerationSource;
+  generationMeta: CarouselGenerationMeta;
   fallbackReason?: CarouselFallbackReason;
 };
 
@@ -74,9 +83,10 @@ const FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
 };
 
 const DEFAULT_MODEL_CANDIDATES = [
-  "gpt-4.1",
-  "gpt-4.1-mini",
-  "gpt-4o-mini"
+  "gpt-5.2",
+  "gpt-5",
+  // TODO: Keep gpt-4o as fallback until this API key gets access to gpt-5.2.
+  "gpt-4o"
 ] as const;
 
 const HOOK_SUBTITLE_INPUT_MAX = 154;
@@ -84,7 +94,198 @@ const HOOK_SUBTITLE_OUTPUT_MAX = 148;
 const CTA_SUBTITLE_INPUT_MAX = 172;
 const CTA_SUBTITLE_OUTPUT_MAX = 164;
 const DEFAULT_MODEL_ATTEMPTS = 1;
-const DEFAULT_MODEL_CANDIDATE_LIMIT = 2;
+const DEFAULT_MODEL_CANDIDATE_LIMIT = 3;
+
+const FALLBACK_TITLES: Record<CarouselSlideRole, string[]> = {
+  hook: [
+    "Это ломает результат с первого дня",
+    "Пока ты это делаешь — результат стоит",
+    "Одна деталь, которую все пропускают"
+  ],
+  problem: [
+    "Знакомая ситуация?",
+    "Вот с чего всё начинается",
+    "Так выглядит проблема изнутри"
+  ],
+  amplify: [
+    "Дальше — хуже",
+    "Масштаб больше, чем кажется",
+    "Это тянет за собой всё остальное"
+  ],
+  mistake: [
+    "Главная ошибка — вот эта",
+    "Вот что делают не так",
+    "Ошибка, которая дорого обходится"
+  ],
+  consequence: [
+    "Цена этой ошибки",
+    "Вот чем это заканчивается",
+    "К чему это приводит"
+  ],
+  shift: [
+    "А теперь посмотри иначе",
+    "Вот что меняет картину",
+    "Разворот: всё проще чем кажется"
+  ],
+  solution: [
+    "Вот что работает",
+    "Три шага к результату",
+    "Делай так — и увидишь разницу"
+  ],
+  example: [
+    "Пример из практики",
+    "До/после: реальный кейс",
+    "Как это сработало"
+  ],
+  cta: [
+    "Сохрани и примени",
+    "Напиши в директ — пришлю шаблон",
+    "Попробуй и напиши что получилось"
+  ]
+};
+
+const CAROUSEL_SYSTEM_PROMPT = `Ты — топовый Instagram-копирайтер. Пишешь карусели которые люди сохраняют, пересылают друзьям и комментируют "блин, это про меня".
+
+ТВОЯ ЗАДАЧА:
+Создать карусель из 9 слайдов на тему, которую даст пользователь.
+Ответ — строго JSON, без markdown, без пояснений.
+
+═══════════════════════════════════════
+СТРУКТУРА 9 СЛАЙДОВ (обязательная):
+═══════════════════════════════════════
+
+Слайд 1 — HOOK (крючок):
+- Заголовок вызывает реакцию "что?!" или "это про меня"
+- Не вопрос, а утверждение или провокация
+- Описание: 1-2 предложения, усиливающие интригу
+- ПЛОХО: "5 ошибок в рекламе" (скучно, клише)
+- ХОРОШО: "Ты сливаешь 80% бюджета на людей, которым плевать на твой продукт"
+
+Слайд 2 — PROBLEM (проблема):
+- Заголовок называет боль аудитории конкретно
+- Описание: 3 пункта-симптома (начинаются с →)
+- Пункты — это то, что человек УЗНАЁТ у себя
+- Каждый пункт: конкретная ситуация, не абстракция
+
+Слайд 3 — AMPLIFY (усиление):
+- Заголовок показывает МАСШТАБ проблемы
+- Описание: 3 пункта, каждый бьёт по нервам
+- Используй цифры, сроки, деньги, сравнения
+- Читатель должен подумать: "блин, это реально серьёзно"
+
+Слайд 4 — MISTAKE (ошибка):
+- Заголовок: конкретная ошибка, которую делает аудитория
+- ОБЯЗАТЕЛЬНО описание: 3 пункта почему это ошибка
+- Формулировка: что конкретно делают не так, с примерами
+- ЭТОТ СЛАЙД ОБЯЗАН ИМЕТЬ BODY-ТЕКСТ, НЕ ТОЛЬКО ЗАГОЛОВОК
+
+Слайд 5 — CONSEQUENCE (последствие):
+- Заголовок: цена этой ошибки
+- Описание: 3 последствия с конкретикой (цифры, сроки, деньги)
+- Каждый пункт начинается с →
+- Должно быть больно читать
+
+Слайд 6 — SHIFT (поворот):
+- Заголовок: переворот мышления, "а вот как на самом деле"
+- ОБЯЗАТЕЛЬНО описание: 2-3 предложения объясняющие новый взгляд
+- Это момент "ага!" — когда всё встаёт на место
+- ЭТОТ СЛАЙД ОБЯЗАН ИМЕТЬ BODY-ТЕКСТ, НЕ ТОЛЬКО ЗАГОЛОВОК
+
+Слайд 7 — SOLUTION (решение):
+- Заголовок: "Вот что работает" или подобный
+- Описание: 3 конкретных действия (начинаются с →)
+- Каждое действие — что КОНКРЕТНО делать, не "будьте лучше"
+- Читатель должен смочь применить это завтра
+
+Слайд 8 — EXAMPLE (пример/кейс):
+- Заголовок: "До/после:" + конкретная ситуация
+- Описание: До: [что было с цифрами]. После: [что стало с цифрами]
+- Цифры могут быть примерными, но реалистичными
+- Конкретное имя клиента НЕ нужно, но ситуация должна быть узнаваемой
+
+Слайд 9 — CTA (призыв):
+- Заголовок: чёткий призыв к действию
+- НЕ "подпишись", а конкретный оффер
+- Описание: 1-2 предложения что получит человек
+- Примеры: "Напиши СТОП в директ — пришлю чек-лист", "Сохрани и проверь свою воронку по этим 5 пунктам"
+
+═══════════════════════════════════════
+ПРАВИЛА ТЕКСТА:
+═══════════════════════════════════════
+
+ЯЗЫК:
+- Пиши как будто говоришь с другом-профессионалом за кофе
+- Русский разговорный-деловой: не канцелярит, не пацанский
+- "ты"-обращение по умолчанию (если аудитория B2C) или "вы" (если B2B/premium)
+- Живые глаголы: "сливаешь", "прогорает", "улетает" — вместо "осуществляется", "происходит"
+
+ЗАГОЛОВКИ:
+- МАКСИМУМ 6 слов. Это жёсткий лимит.
+- Если не влезает в 6 слов — переформулируй короче
+- Первое слово заголовка — самое сильное (оно будет выделено цветом)
+- Не начинай с "Как", "Почему", "5 способов" — это клише
+- ХОРОШО: "Бюджет горит — лиды нулевые"
+- ПЛОХО: "Как правильно настроить рекламу для бизнеса"
+
+ОПИСАНИЯ (body текст):
+- Максимум 3 пункта на слайд (не 4, не 5 — ровно 3)
+- Каждый пункт — ОДНО предложение, максимум 15 слов
+- Пункты начинаются с → (стрелка)
+- Если слайд без списка — максимум 2 предложения
+
+ЗАПРЕЩЕНО:
+- Штампы: "в современном мире", "не секрет что", "давайте разберёмся", "каждый из нас", "всем известно"
+- Вводные: "итак", "дело в том что", "стоит отметить", "важно понимать"
+- Водянистые прилагательные: "эффективный", "качественный", "уникальный", "инновационный"
+- Абстракции без цифр: "много денег", "долго", "часто" — заменяй на конкретику
+- Кавычки-ёлочки в заголовках (они ломают вёрстку)
+- @username, счётчики подписчиков, хештеги в тексте слайдов
+
+═══════════════════════════════════════
+АДАПТАЦИЯ ПОД НИШУ:
+═══════════════════════════════════════
+
+Если указана ниша пользователя — используй терминологию этой ниши:
+- Недвижимость: "объект", "показ", "CPL", "лид", "Авито", "ЦИАН", "торг"
+- Маркетинг: "креатив", "CTR", "конверсия", "воронка", "ретаргет"
+- Фитнес: "дефицит калорий", "метаболизм", "прогрессия нагрузок"
+- Бьюти: "запись", "LTV клиента", "повторный визит"
+- Образование: "вовлечённость", "домашка", "отток учеников"
+
+Если ниша НЕ указана — пиши универсально для экспертов и малого бизнеса.
+
+═══════════════════════════════════════
+ФОРМАТ ОТВЕТА (СТРОГО):
+═══════════════════════════════════════
+
+Ответ — ТОЛЬКО валидный JSON. Никакого текста до или после JSON.
+Никаких markdown-блоков. Просто чистый JSON.
+
+{
+  "slides": [
+    {
+      "role": "hook",
+      "title": "Заголовок максимум 6 слов",
+      "body": "Описание слайда. Максимум 2 предложения."
+    },
+    {
+      "role": "problem",
+      "title": "Заголовок максимум 6 слов",
+      "body": "→ Пункт раз максимум 15 слов\n→ Пункт два максимум 15 слов\n→ Пункт три максимум 15 слов"
+    }
+  ],
+  "caption": "Подпись к посту для Instagram. 3-4 абзаца. Без хештегов."
+}
+
+ПРОВЕРЬ ПЕРЕД ОТВЕТОМ:
+✓ Ровно 9 слайдов
+✓ Каждый заголовок ≤ 6 слов
+✓ Каждый body ≤ 3 пунктов (или ≤ 2 предложений)
+✓ Нет штампов из списка ЗАПРЕЩЕНО
+✓ Есть цифры минимум в 5 слайдах из 9
+✓ Слайды mistake и shift ИМЕЮТ body-текст (не только заголовок!)
+✓ Роли идут строго: hook → problem → amplify → mistake → consequence → shift → solution → example → cta
+✓ Валидный JSON без markdown`;
 
 const BANNED_TEMPLATE_PATTERNS: RegExp[] = [
   /(?:^|[^\p{L}])в\s+современном\s+мире(?=$|[^\p{L}])/iu,
@@ -168,7 +369,7 @@ function resolveModelCandidates() {
 
   const requestedLimit = Number(process.env.OPENAI_MODEL_CANDIDATE_LIMIT);
   const limit = Number.isFinite(requestedLimit)
-    ? Math.max(1, Math.min(4, Math.round(requestedLimit)))
+    ? Math.max(3, Math.min(4, Math.round(requestedLimit)))
     : DEFAULT_MODEL_CANDIDATE_LIMIT;
 
   return uniqueCandidates.slice(0, limit);
@@ -197,14 +398,267 @@ function getOpenAIClient() {
   return client;
 }
 
+async function requestCarouselCompletion(
+  openai: OpenAI,
+  model: string,
+  userMessage: string,
+  slidesCount: number
+) {
+  return await openai.chat.completions.create({
+    model,
+    temperature: 0.8,
+    top_p: 0.9,
+    frequency_penalty: 0.3,
+    presence_penalty: 0.2,
+    max_tokens: 4000,
+    messages: [
+      {
+        role: "system",
+        content: CAROUSEL_SYSTEM_PROMPT
+      },
+      {
+        role: "user",
+        content: userMessage
+      }
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "carousel_text_structure_v2",
+        strict: true,
+        schema: buildResponseSchema(slidesCount)
+      }
+    }
+  });
+}
+
+function readTotalTokens(response: { usage?: { total_tokens?: number | null } | null }) {
+  const raw = response.usage?.total_tokens;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.trunc(raw));
+}
+
+function parseCarouselModelResponse(response: {
+  choices?: Array<{ message?: { content?: string | null } | null }>;
+}) {
+  const raw = response.choices?.[0]?.message?.content?.trim();
+  if (!raw) {
+    throw new Error("OpenAI returned empty output.");
+  }
+
+  const parsed = JSON.parse(raw) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("OpenAI returned invalid JSON payload.");
+  }
+
+  const payload = parsed as { slides?: unknown; caption?: unknown };
+  return {
+    slides: payload.slides,
+    caption: payload.caption
+  };
+}
+
+function validateCarouselResponse(
+  data: { slides?: unknown; caption?: unknown },
+  expectedFlow: CarouselSlideRole[]
+): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!data || typeof data !== "object") {
+    errors.push("Пустой ответ модели");
+    return { valid: false, errors };
+  }
+
+  if (!data.slides || !Array.isArray(data.slides)) {
+    errors.push("Нет массива slides");
+    return { valid: false, errors };
+  }
+
+  if (typeof data.caption !== "string" || !data.caption.trim()) {
+    errors.push("Нет caption");
+  }
+
+  if (data.slides.length !== expectedFlow.length) {
+    errors.push(`Ожидалось ${expectedFlow.length} слайдов, получено ${data.slides.length}`);
+  }
+
+  data.slides.forEach((slide: unknown, i: number) => {
+    const record = toRecord(slide);
+    const role = normalizeText(record.role, 24).toLowerCase();
+    const title = normalizeText(record.title, 180);
+    const body = normalizeText(record.body, 1200);
+
+    if (!title) {
+      errors.push(`Слайд ${i + 1}: нет заголовка`);
+    }
+    if (!body && role !== "hook") {
+      errors.push(`Слайд ${i + 1} (${role || "unknown"}): нет описания`);
+    }
+    if (title && title.split(/\s+/u).length > 6) {
+      errors.push(`Слайд ${i + 1}: заголовок слишком длинный (${title.split(/\s+/u).length} слов)`);
+    }
+    if (expectedFlow[i] && role !== expectedFlow[i]) {
+      errors.push(`Слайд ${i + 1}: роль "${role}", ожидалась "${expectedFlow[i]}"`);
+    }
+  });
+
+  return { valid: errors.length === 0, errors };
+}
+
+function mapModelSlidesToLegacyShape(rawSlides: unknown, expectedFlow: CarouselSlideRole[]) {
+  const source = Array.isArray(rawSlides) ? rawSlides : [];
+
+  return expectedFlow.map((role, index) => {
+    const record = toRecord(source[index]);
+    const title = normalizeText(record.title, 180);
+    const body = normalizeText(record.body, 1200);
+    const bullets = extractBodyBullets(body);
+
+    if (role === "hook") {
+      return {
+        type: "hook",
+        title,
+        subtitle: body
+      };
+    }
+
+    if (role === "problem" || role === "amplify") {
+      return {
+        type: role,
+        title,
+        bullets
+      };
+    }
+
+    if (role === "mistake") {
+      return {
+        type: "mistake",
+        title,
+        body: body || formatBulletsBody(bullets)
+      };
+    }
+
+    if (role === "consequence") {
+      return {
+        type: "consequence",
+        title,
+        bullets
+      };
+    }
+
+    if (role === "shift") {
+      return {
+        type: "shift",
+        title,
+        body
+      };
+    }
+
+    if (role === "solution") {
+      return {
+        type: "solution",
+        title,
+        bullets
+      };
+    }
+
+    if (role === "example") {
+      const parsedExample = parseExampleBody(body);
+      return {
+        type: "example",
+        before: parsedExample.before,
+        after: parsedExample.after
+      };
+    }
+
+    return {
+      type: "cta",
+      title,
+      subtitle: body
+    };
+  });
+}
+
+function extractBodyBullets(body: string) {
+  if (!body) {
+    return [] as string[];
+  }
+
+  const normalizedLines = body
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const arrowLines = normalizedLines
+    .map((line) => line.replace(/^(?:→|-|•)\s*/u, "").trim())
+    .filter(Boolean);
+
+  if (arrowLines.length) {
+    return arrowLines.slice(0, 3);
+  }
+
+  const sentenceBullets = body
+    .split(/[.!?]+/u)
+    .map((part) => part.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  return sentenceBullets.slice(0, 3);
+}
+
+function formatBulletsBody(bullets: string[]) {
+  return bullets
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((item) => `→ ${item}`)
+    .join("\n");
+}
+
+function parseExampleBody(body: string) {
+  if (!body) {
+    return { before: "", after: "" };
+  }
+
+  const cleaned = body.replace(/\r/g, "").trim();
+  const beforeMatch = cleaned.match(/до:\s*(.+?)(?:\n+после:|после:|$)/iu);
+  const afterMatch = cleaned.match(/после:\s*(.+)$/iu);
+
+  return {
+    before: beforeMatch?.[1]?.trim() ?? "",
+    after: afterMatch?.[1]?.trim() ?? ""
+  };
+}
+
+function normalizeGeneratedCaption(value: unknown) {
+  return sanitizeCopyText(normalizeText(value, 2200), 2100);
+}
+
+function dedupeErrors(errors: string[]) {
+  const unique = new Set<string>();
+  const result: string[] = [];
+
+  for (const error of errors) {
+    const normalized = normalizeText(error, 400);
+    if (!normalized || unique.has(normalized)) {
+      continue;
+    }
+    unique.add(normalized);
+    result.push(normalized);
+  }
+
+  return result;
+}
+
 export async function generateCarouselFromTopic(
   topic: string,
   requestedSlidesCount?: number,
   options?: GenerationOptions
 ): Promise<CarouselGenerationResult> {
   const cleanedTopic = normalizeText(topic, 800) || "Новая карусель";
-  const targetCount = resolveSlidesCount(requestedSlidesCount);
-  const expectedFlow = resolveExpectedFlow(targetCount);
+  const expectedFlow = [...CANONICAL_FLOW];
   const promptVariant = resolvePromptVariant(options?.promptVariant);
 
   try {
@@ -216,79 +670,48 @@ export async function generateCarouselFromTopic(
     for (const model of models) {
       for (let attempt = 1; attempt <= modelAttempts; attempt += 1) {
         try {
-          const response = await openai.responses.create({
-            model,
-            temperature: 0.78,
-            max_output_tokens: 2600,
-            input: [
-              {
-                role: "system",
-                content: [
-                  {
-                    type: "input_text",
-                    text: [
-                      "You are a senior Russian social carousel copywriter.",
-                      "You generate only text and semantic slide structure for social carousels.",
-                      "Never generate design, layout, style, colors, fonts, positions, image prompts or coordinates.",
-                      "Return strict JSON only.",
-                      "Write concise, conversational, high-signal Russian copy without fluff and without robotic phrasing.",
-                      "Adapt voice to topic and audience. Keep it native for Instagram/Telegram style content.",
-                      "Keep each slide self-contained and readable on a mobile card.",
-                      "Keep text compact but substantial: title up to ~14 words, subtitle up to ~30 words, bullets up to ~22 words.",
-                      "Start from the provided topic. Do not default to sales/real-estate language if topic is different.",
-                      "If topic is educational/health/lifestyle/psychology etc, keep vocabulary in that domain.",
-                      "Avoid generic opener like «Одна ошибка…» unless the topic explicitly asks for mistakes.",
-                      "Hook title must be topic-specific and must not start with «ошибка», «одна ошибка», «главная ошибка».",
-                      "Never use «ошибка» / «главная ошибка» / «одна ошибка» as the default first frame.",
-                      "Avoid awkward title constructions like «эксперту повысить: ...» or «психологу объяснять: ...».",
-                      "Avoid boilerplate phrases like «в теме ...», «где ломается поток», «что это стоит в теме».",
-                      "Do not force the words «кейс», «разбор», «поток», «лиды» unless the topic needs them.",
-                      "Ban stale openers: «В современном мире», «Как известно», «Не секрет что», «Многие задаются вопросом», «Сегодня как никогда», «В эпоху цифровизации», «Как показывает практика».",
-                      "If a stale phrase appears in draft thinking, rewrite with a concrete fact, number, story or paradox.",
-                      "Hook (slide 1) must use exactly one stop-scroll trigger: provocative claim, concrete number with context, self-recognition scenario, or paradox.",
-                      "Hook must be one punch and one core idea, maximum 2 sentences.",
-                      "Hook must not start with question templates like «Хотите узнать как...», must not be a list, and must not use «5 способов...».",
-                      "Role rules: problem = pain through a specific situation; amplify = consequence already happening now; mistake = concrete wrong action; consequence = real price in time, money, relationships or reputation.",
-                      "Role rules: shift = perspective reversal («what you believed is wrong»); solution = concrete mechanism «do X instead of Y»; example = realistic before/after scenario with details; cta = one action only.",
-                      "Ban generic headings: «Почему это важно», «Что нужно знать», «Главный секрет», «Простой способ», «Эффективный метод», «Ключевые моменты», «Обратите внимание», and any heading with «топ», «лучших», «способов».",
-                      "Ban filler phrases: «на самом деле», «стоит отметить», «важно понимать», «следует учитывать», «необходимо помнить».",
-                      "Each slide must include at least one concrete anchor: number/percent, action verb + object, specific who/where/when situation, or comparison X vs Y.",
-                      "Avoid repeated words, broken compounds and malformed line fragments.",
-                      "For problem/amplify/solution bullets avoid abstract office wording like «работайте системно», «важно понимать», «улучшить процесс».",
-                      "No clichés and no mechanical template substitutions.",
-                      "Do not invent extra fields or extra slide types."
-                    ].join(" ")
-                  }
-                ]
-              },
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "input_text",
-                    text: buildUserPrompt(cleanedTopic, expectedFlow, options, promptVariant)
-                  }
-                ]
-              }
-            ],
-            text: {
-              format: {
-                type: "json_schema",
-                name: "carousel_text_structure",
-                strict: true,
-                schema: buildResponseSchema(expectedFlow.length)
-              }
-            }
-          });
+          const userMessage = buildUserPrompt(
+            cleanedTopic,
+            options?.niche,
+            options?.audience,
+            options?.tone,
+            options?.goal
+          );
+          const validationErrors: string[] = [];
+          let wasRetried = false;
+          let tokensUsed = 0;
 
-          const raw = response.output_text?.trim();
+          const response = await requestCarouselCompletion(openai, model, userMessage, expectedFlow.length);
+          tokensUsed += readTotalTokens(response);
+          let parsedResponse = parseCarouselModelResponse(response);
+          let validationResult = validateCarouselResponse(parsedResponse, expectedFlow);
+          validationErrors.push(...validationResult.errors);
 
-          if (!raw) {
-            throw new Error("OpenAI returned empty output.");
+          if (!validationResult.valid) {
+            wasRetried = true;
+            const retryUserMessage =
+              userMessage +
+              "\n\nВАЖНО: В прошлый раз были ошибки: " +
+              validationResult.errors.join("; ") +
+              ". Исправь их.";
+            const retryResponse = await requestCarouselCompletion(
+              openai,
+              model,
+              retryUserMessage,
+              expectedFlow.length
+            );
+            tokensUsed += readTotalTokens(retryResponse);
+            parsedResponse = parseCarouselModelResponse(retryResponse);
+            validationResult = validateCarouselResponse(parsedResponse, expectedFlow);
+            validationErrors.push(...validationResult.errors);
           }
 
-          const parsed = JSON.parse(raw) as { slides?: unknown[] };
-          const normalizedSlides = normalizeSlides(parsed.slides, expectedFlow, cleanedTopic, options);
+          const normalizedSlides = normalizeSlides(
+            mapModelSlidesToLegacyShape(parsedResponse.slides, expectedFlow),
+            expectedFlow,
+            cleanedTopic,
+            options
+          );
           const constrainedSlides = enforceTopicAndHookIntegrity(
             normalizedSlides,
             expectedFlow,
@@ -335,8 +758,15 @@ export async function generateCarouselFromTopic(
             if (repairedQuality.ok) {
               return {
                 slides: locallyRepairedSlides,
+                caption: normalizeGeneratedCaption(parsedResponse.caption),
                 promptVariant,
-                generationSource: "model"
+                generationSource: "model",
+                generationMeta: {
+                  model,
+                  tokensUsed,
+                  validationErrors: dedupeErrors(validationErrors),
+                  retried: wasRetried
+                }
               };
             }
 
@@ -367,15 +797,29 @@ export async function generateCarouselFromTopic(
                 cleanedTopic,
                 options
               ),
+              caption: normalizeGeneratedCaption(parsedResponse.caption),
               promptVariant,
-              generationSource: "model"
+              generationSource: "model",
+              generationMeta: {
+                model,
+                tokensUsed,
+                validationErrors: dedupeErrors(validationErrors),
+                retried: wasRetried
+              }
             };
           }
 
           return {
             slides: topicCoveredSlides,
+            caption: normalizeGeneratedCaption(parsedResponse.caption),
             promptVariant,
-            generationSource: "model"
+            generationSource: "model",
+            generationMeta: {
+              model,
+              tokensUsed,
+              validationErrors: dedupeErrors(validationErrors),
+              retried: wasRetried
+            }
           };
         } catch (error) {
           lastError = error;
@@ -399,8 +843,16 @@ export async function generateCarouselFromTopic(
 
     return {
       slides: buildFallbackSlides(cleanedTopic, expectedFlow, options),
+      caption: "",
       promptVariant,
       generationSource: "fallback",
+      generationMeta: {
+        model: "fallback",
+        tokensUsed: 0,
+        validationErrors:
+          error instanceof Error && error.message.trim() ? [error.message.trim()] : ["fallback activated"],
+        retried: false
+      },
       fallbackReason: resolveFallbackReason(error)
     };
   }
@@ -660,82 +1112,34 @@ function buildDomainPromptAddendum(domain: TopicDomain) {
 
 function buildUserPrompt(
   topic: string,
-  flow: CarouselSlideRole[],
-  options?: GenerationOptions,
-  promptVariant: PromptVariant = "B"
+  niche?: string,
+  audience?: string,
+  tone?: string,
+  goal?: string
 ) {
-  const topicDomain = resolveTopicDomain(topic, options);
-  const niche = normalizeText(options?.niche ?? "", 120);
-  const audience = normalizeText(options?.audience ?? "", 160);
-  const tone = normalizeText(options?.tone ?? "", 40);
-  const goal = normalizeText(options?.goal ?? "", 48);
+  const resolvedNiche = normalizeText(niche, 120);
+  const resolvedAudience = normalizeText(audience, 160);
+  const resolvedTone = normalizeText(tone, 40);
+  const resolvedGoal = normalizeText(goal, 48);
 
-  const variantRules =
-    promptVariant === "A"
-      ? [
-          "Hook must be clear and topic-specific.",
-          "Shift should present a practical mindset change.",
-          "CTA should end with one specific next action."
-        ]
-      : [
-          "Draft 3 hook ideas internally and choose the strongest stop-scroll variant.",
-          "Hook must include contrast or concrete scene (before/after, click->result, call->silence).",
-          "Shift must be a counterintuitive turning point, not motivational cliché.",
-          "CTA should include action + value + response format (code-word/DM/save-checklist)."
-        ];
+  let prompt = `Тема карусели: "${topic}"`;
 
-  return [
-    `Topic: ${topic}`,
-    niche ? `Niche: ${niche}` : "",
-    audience ? `Audience: ${audience}` : "",
-    tone ? `Tone preference: ${tone}` : "",
-    goal ? `Goal: ${goal}` : "",
-    `Detected domain: ${topicDomain}`,
-    `Slides count: ${flow.length}`,
-    `Required flow (strict order): ${flow.join(" -> ")}`,
-    "Field rules by type:",
-    "- hook: title, subtitle",
-    "- problem: title, bullets[]",
-    "- amplify: title, bullets[]",
-    "- mistake: title",
-    "- consequence: bullets[]",
-    "- shift: title",
-    "- solution: bullets[]",
-    "- example: before, after",
-    "- cta: title, subtitle",
-    "Schema note: each slide object must include all fields: type, title, subtitle, bullets, before, after.",
-    "For fields that are not used by the current type, return empty string \"\" or empty array [].",
-    "Tone: vivid, social-native, high signal, no bureaucratic wording.",
-    "Each slide should carry a strong standalone idea with natural spoken Russian.",
-    "Bullets must be concise but meaningful: 3-4 bullets when natural, each ~10-24 words with concrete detail instead of generic slogans.",
-    "For problem/amplify/consequence/solution include at least one concrete symptom, cost, or action in bullets.",
-    "Each slide must include at least one concrete anchor: number/percent, action verb + object, specific who/where/when situation, or comparison X vs Y.",
-    "Avoid abstract bullets like «важно понимать», «нужно просто», «улучшить процесс» without a concrete situation.",
-    "Hook rules: one punch, one core idea, max 2 sentences.",
-    "Hook must use one of: provocative claim, concrete number with context, self-recognition scenario («ты когда-нибудь...»), or paradox («чем больше X, тем меньше Y»).",
-    "Hook is forbidden to use list templates («5 способов...») and question templates («Хотите узнать как...»).",
-    "Role rules: problem = pain through a specific situation (not abstraction).",
-    "Role rules: amplify = consequence already happening now (not «может привести к»).",
-    "Role rules: mistake = concrete wrong action (not «люди ошибаются»).",
-    "Role rules: consequence = real price in time, money, relationships or reputation.",
-    "Role rules: shift = perspective reversal, solution = concrete mechanism «делай X вместо Y», example = realistic before/after details, cta = one action only.",
-    "No ellipsis («...» or «…») and no unfinished tails. Every line must end as a complete thought.",
-    "Avoid ultra-short list items (<5 words) unless it is a metric or a strict action command.",
-    "Keep wording topic-specific. Avoid universal sales jargon if topic is not sales-related.",
-    "Do not use broken hook syntax like «эксперту повысить: ...» or «психологу объяснять: ...».",
-    ...buildDomainPromptAddendum(topicDomain),
-    "Avoid stale templates like «в теме ...», «одна ошибка ...», «где ломается поток ...».",
-    "Avoid generic headings like «Что делать по шагам», «Что это значит для вас», «Что изменится, если оставить как есть».",
-    "Ban phrases: «в современном мире», «как известно», «не секрет что», «многие задаются вопросом», «сегодня как никогда», «в эпоху цифровизации», «как показывает практика».",
-    "Ban filler wording: «на самом деле», «стоит отметить», «важно понимать», «следует учитывать», «необходимо помнить».",
-    "Ban headings: «Почему это важно», «Что нужно знать», «Главный секрет», «Простой способ», «Эффективный метод», «Ключевые моменты», «Обратите внимание», and headings with «топ», «лучших», «способов».",
-    ...variantRules,
-    "Avoid title collisions and duplicated words inside one line.",
-    "Avoid long clauses and nested lists.",
-    "No markdown, no emojis, no extra commentary."
-  ]
-    .filter(Boolean)
-    .join("\n");
+  if (resolvedNiche) {
+    prompt += `\nНиша автора: ${resolvedNiche}`;
+  }
+  if (resolvedAudience) {
+    prompt += `\nЦелевая аудитория: ${resolvedAudience}`;
+  }
+  if (resolvedTone) {
+    prompt += `\nТон: ${resolvedTone}`;
+  }
+  if (resolvedGoal) {
+    prompt += `\nЦель карусели: ${resolvedGoal}`;
+  }
+
+  prompt += "\n\nСоздай карусель из 9 слайдов. Ответ — только JSON.";
+
+  return prompt;
 }
 
 function buildResponseSchema(slidesCount: number) {
@@ -751,26 +1155,19 @@ function buildResponseSchema(slidesCount: number) {
           type: "object",
           additionalProperties: false,
           properties: {
-            type: {
+            role: {
               type: "string",
               enum: ["hook", "problem", "amplify", "mistake", "consequence", "shift", "solution", "example", "cta"]
             },
-            title: { type: ["string", "null"], maxLength: 120 },
-            subtitle: { type: ["string", "null"], maxLength: 180 },
-            bullets: {
-              type: ["array", "null"],
-              minItems: 0,
-              maxItems: 4,
-              items: { type: "string", maxLength: 150 }
-            },
-            before: { type: ["string", "null"], maxLength: 190 },
-            after: { type: ["string", "null"], maxLength: 190 }
+            title: { type: "string", maxLength: 120 },
+            body: { type: "string", maxLength: 1200 }
           },
-          required: ["type", "title", "subtitle", "bullets", "before", "after"]
+          required: ["role", "title", "body"]
         }
-      }
+      },
+      caption: { type: "string", maxLength: 2400 }
     },
-    required: ["slides"]
+    required: ["slides", "caption"]
   };
 }
 
@@ -801,22 +1198,36 @@ function buildCaptionPrompt(input: CaptionGenerationInput) {
     .join("\n");
 
   return [
-    `Topic: ${input.topic}`,
-    niche ? `Niche: ${niche}` : "",
-    audience ? `Audience: ${audience}` : "",
-    tone ? `Tone: ${tone}` : "",
-    goal ? `Goal: ${goal}` : "",
-    "Carousel summary:",
+    `Напиши подпись к Instagram-посту для карусели на тему: "${input.topic}".`,
+    niche ? `Ниша: ${niche}` : "",
+    audience ? `Аудитория: ${audience}` : "",
+    tone ? `Тон: ${tone}` : "",
+    goal ? `Цель: ${goal}` : "",
+    "",
+    "Формат:",
+    "- 3-4 абзаца",
+    "- Первый абзац: крючок, цепляющее начало (вопрос или утверждение)",
+    "- Второй абзац: суть — о чём карусель и зачем листать",
+    "- Третий абзац: личный опыт или наблюдение автора (1-2 предложения)",
+    "- Четвёртый абзац: призыв к действию (сохрани / перешли другу / напиши в комментариях)",
+    "",
+    "НЕ используй:",
+    "- Хештеги внутри текста подписи",
+    "- Эмодзи в начале абзацев",
+    "- «Всем привет!» и подобные вступления",
+    "- @username, счётчики, ссылки",
+    "",
+    "Тон: как пишет умный человек в своём блоге — не продающий, не нудный, а по делу.",
+    "",
+    "Контекст карусели:",
     slideDigest,
-    "Requirements:",
-    "- text: 900-1500 chars, coherent post caption in Russian.",
-    "- include one practical mini-example or mini-story.",
-    "- avoid repeating slide text line-by-line.",
-    "- keep high readability and social tone, split into short paragraphs.",
-    "- cta_soft: save/checklist style CTA.",
-    "- cta_aggressive: code-word/DM style CTA with explicit value.",
-    "- cta: pick the best CTA for the provided goal.",
-    "- hashtags: 4-8 relevant hashtags."
+    "",
+    "Ответ верни в JSON с полями: text, cta, cta_soft, cta_aggressive, hashtags.",
+    "- text: 3-4 абзаца в заданном формате, без хештегов.",
+    "- cta: основной призыв из 1-2 предложений.",
+    "- cta_soft: мягкий CTA (сохрани / отправь другу).",
+    "- cta_aggressive: прямой CTA (напиши слово / оставь комментарий).",
+    "- hashtags: 4-8 тематических хештегов отдельным массивом."
   ]
     .filter(Boolean)
     .join("\n");
@@ -1787,38 +2198,50 @@ function normalizeSlideByType(
 
   if (expectedType === "mistake") {
     const rawTitle = sanitizeTitleValue(safe.title, 92);
+    const body =
+      sanitizeCopyText(normalizeText(safe.body, 420), 390) ||
+      "→ Ты даёшь общий совет, и человек не узнаёт себя в ситуации\n→ Нет конкретного примера, поэтому мысль звучит как шаблон\n→ После слайда непонятно, что менять прямо сейчас";
     return {
       type: "mistake",
       title:
         (rawTitle && !hasLegacyTemplatePhrase(rawTitle) ? rawTitle : "") ||
-        buildRoleTitleFallback("mistake", topic, options)
-    };
+        buildRoleTitleFallback("mistake", topic, options),
+      body
+    } as CarouselOutlineSlide;
   }
 
   if (expectedType === "consequence") {
+    const rawTitle = sanitizeTitleValue(safe.title, 84);
     return {
       type: "consequence",
+      title: rawTitle || buildRoleTitleFallback("consequence", topic, options),
       bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("consequence", topic, options))
-    };
+    } as CarouselOutlineSlide;
   }
 
   if (expectedType === "shift") {
     const rawTitle = sanitizeTitleValue(safe.title, 92);
+    const body =
+      sanitizeCopyText(normalizeText(safe.body, 420), 390) ||
+      "Сначала покажи конкретный факт, потом вывод. Так читатель понимает логику и доходит до действия.";
     return {
       type: "shift",
       title:
         (rawTitle && !startsWithGenericMistakeLead(rawTitle) && !hasLegacyTemplatePhrase(rawTitle)
           ? rawTitle
           : "") ||
-        buildRoleTitleFallback("shift", topic, options)
-    };
+        buildRoleTitleFallback("shift", topic, options),
+      body
+    } as CarouselOutlineSlide;
   }
 
   if (expectedType === "solution") {
+    const rawTitle = sanitizeTitleValue(safe.title, 84);
     return {
       type: "solution",
+      title: rawTitle || buildRoleTitleFallback("solution", topic, options),
       bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("solution", topic, options))
-    };
+    } as CarouselOutlineSlide;
   }
 
   if (expectedType === "example") {
@@ -1883,18 +2306,18 @@ function normalizeBullets(value: unknown, fallback: string[]) {
 }
 
 function buildCtaTitleFallback(goal: string | undefined, topic: string) {
-  const normalizedGoal = normalizeText(goal, 40).toLowerCase();
-  const focus = buildTopicFocus(topic);
+  void goal;
+  void topic;
+  return trimToWordBoundary(getFallbackTitle("cta"), 96);
+}
 
-  if (isLeadsGoal(normalizedGoal)) {
-    return trimToWordBoundary("Нужна структура, которая доводит до заявки?", 84);
+function getFallbackTitle(role: CarouselSlideRole): string {
+  const titles = FALLBACK_TITLES[role] ?? [""];
+  if (!titles.length) {
+    return "";
   }
 
-  if (isFollowersGoal(normalizedGoal)) {
-    return trimToWordBoundary("Хотите карусели, которые сохраняют и пересылают?", 84);
-  }
-
-  return trimToWordBoundary(`Хотите усилить ${focus} без шаблонных фраз?`, 84);
+  return titles[Math.floor(Math.random() * titles.length)] ?? "";
 }
 
 function buildRoleTitleFallback(
@@ -1902,52 +2325,10 @@ function buildRoleTitleFallback(
   topic: string,
   options?: GenerationOptions
 ) {
-  const domain = resolveTopicDomain(topic, options);
-  const focus = upperFirst(buildCompactTopicFocus(topic, 44));
-
-  const commonByRole: Record<"problem" | "amplify" | "mistake" | "shift", string[]> = {
-    problem: [
-      `${focus}: где начинается просадка`,
-      `${focus}: что срывает результат в начале`,
-      `${focus}: почему внимание теряется слишком рано`
-    ],
-    amplify: [
-      `${focus}: почему это быстро накапливается`,
-      `${focus}: чем затяжная проблема бьет дальше`,
-      `${focus}: как незаметная мелочь превращается в системный провал`
-    ],
-    mistake: [
-      `${focus}: ты ставишь вывод в конец и теряешь дочитывания`,
-      `${focus}: делаешь 3 общих тезиса подряд и убиваешь внимание`,
-      `${focus}: шаблон звучит правильно, но не двигает к действию`
-    ],
-    shift: [
-      `${focus}: вместо общего совета — 1 факт и 1 действие`,
-      `${focus}: меняем угол: сначала цифра, потом объяснение`,
-      `${focus}: чем меньше воды, тем выше досмотры`
-    ]
-  };
-
-  const domainByRole: Partial<Record<"problem" | "amplify" | "mistake" | "shift", string[]>> =
-    buildDomainRoleTitleVariants(domain, focus);
-
-  if (
-    role === "problem" ||
-    role === "amplify" ||
-    role === "mistake" ||
-    role === "shift"
-  ) {
-    const variants =
-      role === "mistake" || role === "shift"
-        ? commonByRole[role]
-        : domainByRole[role]?.length
-          ? [...(domainByRole[role] as string[]), ...commonByRole[role]]
-          : commonByRole[role];
-    const maxLength = role === "mistake" || role === "shift" ? 92 : 80;
-    return trimToWordBoundary(pickVariantByTopic(`${focus}-${role}-${domain}`, variants), maxLength);
-  }
-
-  return trimToWordBoundary(`${focus}: как усилить подачу на практике`, 84);
+  void topic;
+  void options;
+  const maxLength = role === "mistake" || role === "shift" ? 92 : 96;
+  return trimToWordBoundary(getFallbackTitle(role), maxLength);
 }
 
 function buildDomainRoleTitleVariants(domain: TopicDomain, focus: string) {
@@ -2403,23 +2784,8 @@ function normalizeText(value: unknown, maxLength: number) {
 }
 
 function buildHookFallbackTitle(topic: string) {
-  const cleanTopic = normalizeText(topic, 96)
-    .replace(/[.?!…]+$/u, "")
-    .trim();
-
-  if (!cleanTopic) {
-    return "Идея, которая усиливает ваш контент";
-  }
-
-  const topicFocus = buildCompactTopicFocus(cleanTopic, 24);
-  const variants = [
-    `Ты говоришь про «${topicFocus}», а читатель уходит на первом экране`,
-    `В «${topicFocus}» внимание теряется в первые 3 секунды`,
-    `Контент про «${topicFocus}» читают, но не запоминают`,
-    `Не тема, а подача «${topicFocus}» режет дочитывания`
-  ];
-  const picked = trimToWordBoundary(pickVariantByTopic(topicFocus, variants), 72);
-  return removeDanglingTail(picked) || "Идея, которая усиливает ваш контент";
+  void topic;
+  return trimToWordBoundary(getFallbackTitle("hook"), 96);
 }
 
 function buildHookFallbackSubtitle(topic: string) {
@@ -3233,6 +3599,10 @@ function canRetryWithAnotherModel(error: unknown) {
     return /\bmodel\b|does not exist|unknown model|unsupported model|not found|unsupported parameter|unknown parameter|invalid value|invalid_request|json|schema|temperature|max_output_tokens/i.test(
       message
     );
+  }
+
+  if (status === 403) {
+    return /\bmodel\b|access|permission|not allowed|not authorized|insufficient/i.test(message);
   }
 
   if (status === null && /empty output|json|schema|unexpected token/i.test(message)) {

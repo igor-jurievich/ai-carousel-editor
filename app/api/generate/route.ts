@@ -14,7 +14,7 @@ import {
 
 export const runtime = "nodejs";
 
-const MAX_TOPIC_CHARS = 4000;
+const MAX_TOPIC_CHARS = 800;
 const MIN_TOPIC_CHARS = 3;
 const DEFAULT_GENERATE_TIMEOUT_MS = 30_000;
 const DEFAULT_RATE_LIMIT_MAX = 12;
@@ -247,7 +247,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       slides,
+      caption: generationResult.caption || "",
       generationSource: generationResult.generationSource,
+      generationMeta: generationResult.generationMeta,
       fallbackReason: generationResult.fallbackReason,
       project: {
         title: projectTitleFromTopic(topic),
@@ -414,7 +416,10 @@ function isValidSlidesPayload(slides: unknown): slides is CarouselOutlineSlide[]
     }
 
     if (type === "mistake" || type === "shift") {
-      return isText(current.title, 4);
+      return (
+        isText(current.title, 4) &&
+        (isText(current.body, 8) || isText(current.text, 8) || isStringArray(current.bullets, 1))
+      );
     }
 
     if (type === "consequence" || type === "solution") {

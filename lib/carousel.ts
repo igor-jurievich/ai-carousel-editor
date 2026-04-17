@@ -373,12 +373,60 @@ const ROLE_TO_SLIDE_TYPE: Record<CarouselSlideRole, CanvasSlideType> = {
   hook: "image_text",
   problem: "list",
   amplify: "list",
-  mistake: "big_text",
+  mistake: "list",
   consequence: "list",
-  shift: "big_text",
+  shift: "image_text",
   solution: "list",
-  example: "text",
-  cta: "cta"
+  example: "image_text",
+  cta: "image_text"
+};
+
+const FALLBACK_TITLES: Record<CarouselSlideRole, string[]> = {
+  hook: [
+    "Это ломает результат с первого дня",
+    "Пока ты это делаешь — результат стоит",
+    "Одна деталь, которую все пропускают"
+  ],
+  problem: [
+    "Знакомая ситуация?",
+    "Вот с чего всё начинается",
+    "Так выглядит проблема изнутри"
+  ],
+  amplify: [
+    "Дальше — хуже",
+    "Масштаб больше, чем кажется",
+    "Это тянет за собой всё остальное"
+  ],
+  mistake: [
+    "Главная ошибка — вот эта",
+    "Вот что делают не так",
+    "Ошибка, которая дорого обходится"
+  ],
+  consequence: [
+    "Цена этой ошибки",
+    "Вот чем это заканчивается",
+    "К чему это приводит"
+  ],
+  shift: [
+    "А теперь посмотри иначе",
+    "Вот что меняет картину",
+    "Разворот: всё проще чем кажется"
+  ],
+  solution: [
+    "Вот что работает",
+    "Три шага к результату",
+    "Делай так — и увидишь разницу"
+  ],
+  example: [
+    "Пример из практики",
+    "До/после: реальный кейс",
+    "Как это сработало"
+  ],
+  cta: [
+    "Сохрани и примени",
+    "Напиши в директ — пришлю шаблон",
+    "Попробуй и напиши что получилось"
+  ]
 };
 
 export function getTemplate(templateId: CarouselTemplateId) {
@@ -1587,43 +1635,12 @@ function titleMaxLengthByRole(role: CarouselSlideRole) {
 }
 
 function fallbackTitleByRole(role: CarouselSlideRole) {
-  if (role === "hook") {
-    return "Точка роста, которую часто упускают";
+  const titles = FALLBACK_TITLES[role] ?? [];
+  if (!titles.length) {
+    return "Новый слайд";
   }
 
-  if (role === "problem") {
-    return "Почему читатель теряет нить на старте";
-  }
-
-  if (role === "amplify") {
-    return "Как эта просадка накапливается";
-  }
-
-  if (role === "mistake") {
-    return "Вот где ломается";
-  }
-
-  if (role === "consequence") {
-    return "Цена этой ошибки";
-  }
-
-  if (role === "shift") {
-    return "Меняем угол";
-  }
-
-  if (role === "solution") {
-    return "Вот что работает";
-  }
-
-  if (role === "example") {
-    return "До/после на реальной ситуации";
-  }
-
-  if (role === "cta") {
-    return "Хотите адаптацию под свою тему?";
-  }
-
-  return "Новый слайд";
+  return titles[Math.floor(Math.random() * titles.length)] ?? "Новый слайд";
 }
 
 function deriveTitleFromOutline(role: CarouselSlideRole, outline: OutlineLike) {
@@ -1672,13 +1689,11 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
       ? outline.bullets
           .map((item) => sanitizeBulletLine(String(item)))
           .filter(Boolean)
-          .slice(0, 4)
+          .slice(0, 3)
       : [];
 
     if (bullets.length > 0) {
-      const denseBullets = bullets.filter((item) => item.length >= 88).length >= 2;
-      const visibleBullets = denseBullets ? bullets.slice(0, 3) : bullets;
-      return visibleBullets.map((item) => `→ ${item}`).join("\n");
+      return bullets.map((item) => `→ ${item}`).join("\n");
     }
 
     if (typeof outline.text === "string" && outline.text.trim()) {
