@@ -76,16 +76,14 @@ const FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
     "consequence",
     "shift",
     "solution",
-    "solution",
+    "example",
     "example",
     "cta"
   ]
 };
 
 const DEFAULT_MODEL_CANDIDATES = [
-  "gpt-5.2",
-  "gpt-5",
-  // TODO: Keep gpt-4o as fallback until this API key gets access to gpt-5.2.
+  "gpt-5.1",
   "gpt-4o"
 ] as const;
 
@@ -404,26 +402,32 @@ async function requestCarouselCompletion(
   userMessage: string,
   slidesCount: number
 ) {
-  return await openai.chat.completions.create({
+  return await openai.responses.create({
     model,
-    temperature: 0.8,
-    top_p: 0.9,
-    frequency_penalty: 0.3,
-    presence_penalty: 0.2,
-    max_tokens: 4000,
-    messages: [
+    max_output_tokens: 4000,
+    input: [
       {
         role: "system",
-        content: CAROUSEL_SYSTEM_PROMPT
+        content: [
+          {
+            type: "input_text",
+            text: CAROUSEL_SYSTEM_PROMPT
+          }
+        ]
       },
       {
         role: "user",
-        content: userMessage
+        content: [
+          {
+            type: "input_text",
+            text: userMessage
+          }
+        ]
       }
     ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
+    text: {
+      format: {
+        type: "json_schema",
         name: "carousel_text_structure_v2",
         strict: true,
         schema: buildResponseSchema(slidesCount)
@@ -442,9 +446,12 @@ function readTotalTokens(response: { usage?: { total_tokens?: number | null } | 
 }
 
 function parseCarouselModelResponse(response: {
+  output_text?: string | null;
   choices?: Array<{ message?: { content?: string | null } | null }>;
 }) {
-  const raw = response.choices?.[0]?.message?.content?.trim();
+  const raw =
+    (typeof response.output_text === "string" ? response.output_text.trim() : "") ||
+    response.choices?.[0]?.message?.content?.trim();
   if (!raw) {
     throw new Error("OpenAI returned empty output.");
   }
@@ -823,6 +830,7 @@ export async function generateCarouselFromTopic(
           };
         } catch (error) {
           lastError = error;
+          logModelFailure(model, error);
 
           if (!canRetryWithAnotherModel(error)) {
             throw error;
@@ -878,7 +886,6 @@ export async function generateCaptionFromCarousel(
       try {
         const response = await openai.responses.create({
           model,
-          temperature: 0.85,
           max_output_tokens: 1600,
           input: [
             {
@@ -957,6 +964,7 @@ export async function generateCaptionFromCarousel(
         return normalizeCaption(parsed, fallback, input.goal);
       } catch (error) {
         lastError = error;
+        logModelFailure(model, error);
 
         if (!canRetryWithAnotherModel(error)) {
           throw error;
@@ -3570,6 +3578,34 @@ function buildFallbackHashtags(topic: string) {
   }
 
   return result;
+}
+
+function readErrorStringField(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function getModelErrorDetails(error: unknown) {
+  const details = toRecord(error);
+  const nestedError = toRecord(details.error);
+
+  return {
+    status: typeof details.status === "number" && Number.isFinite(details.status) ? details.status : null,
+    message:
+      readErrorStringField(details.message) ??
+      readErrorStringField(nestedError.message) ??
+      (error instanceof Error ? error.message : "Unknown error"),
+    type: readErrorStringField(details.type) ?? readErrorStringField(nestedError.type),
+    code: readErrorStringField(details.code) ?? readErrorStringField(nestedError.code)
+  };
+}
+
+function logModelFailure(model: string, error: unknown) {
+  console.error(`Model "${model}" failed:`, getModelErrorDetails(error));
 }
 
 function canRetryWithAnotherModel(error: unknown) {
