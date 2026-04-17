@@ -374,7 +374,9 @@ export function MobileTools({
             toolbarRef.current = node;
           }
         }}
-        className={`mobile-bottom-toolbar mobile-bottom-toolbar-v2 ${activeTab ? "is-sheet-open" : ""}`}
+        className={`mobile-bottom-toolbar mobile-bottom-toolbar-v2 bottom-tab-bar ${
+          activeTab ? "is-sheet-open" : ""
+        }`}
         aria-label="Панель инструментов"
       >
         {TOOLBAR_ITEMS.map((item) => {
@@ -403,7 +405,9 @@ export function MobileTools({
               toolSheetRef.current = node;
             }
           }}
-          className={`mobile-tool-sheet mobile-tool-sheet-v2 ${dragOffset > 0 ? "is-dragging" : ""}`}
+          className={`mobile-tool-sheet mobile-tool-sheet-v2 bottom-sheet ${
+            dragOffset > 0 ? "is-dragging" : ""
+          }`}
           role="dialog"
           aria-label="Инструменты редактора"
           onTouchStart={handleSheetTouchStart}
@@ -428,7 +432,9 @@ export function MobileTools({
             </button>
           </div>
 
-          <div className={`mobile-tool-sheet-body custom-scroll mobile-tool-sheet-body-${activeTab}`}>
+          <div
+            className={`mobile-tool-sheet-body sheet-content custom-scroll mobile-tool-sheet-body-${activeTab}`}
+          >
             {activeTab === "slides" ? (
               <div className="settings-block">
                 <button
@@ -451,60 +457,64 @@ export function MobileTools({
                 </button>
 
                 <div className="mobile-slide-list custom-scroll">
-                  {slides.map((slide, index) => {
-                    const isActive = slide.id === activeSlideId;
-                    return (
-                      <div
-                        key={slide.id}
-                        className={`mobile-slide-list-item ${isActive ? "active" : ""}`}
-                      >
-                        <button
-                          type="button"
-                          className="mobile-slide-list-main"
-                          onClick={() => onSelectSlide(slide.id)}
-                          disabled={disabled}
+                  {slides.length ? (
+                    slides.map((slide, index) => {
+                      const isActive = slide.id === activeSlideId;
+                      return (
+                        <div
+                          key={slide.id}
+                          className={`mobile-slide-list-item ${isActive ? "active" : ""}`}
                         >
-                          <span className="mobile-slide-list-index">{index + 1}</span>
-                          <span className="mobile-slide-list-copy">
-                            <strong>{slide.name || `Слайд ${index + 1}`}</strong>
-                            <small>{getSlideRoleLabel(slide.generationRole)}</small>
-                          </span>
-                        </button>
-                        <div className="mobile-slide-list-actions">
                           <button
                             type="button"
-                            className="mobile-slide-list-action"
-                            onClick={() => onMoveSlide(slide.id, "up")}
-                            disabled={disabled || index === 0}
-                            title="Вверх"
-                            aria-label="Переместить вверх"
+                            className="mobile-slide-list-main"
+                            onClick={() => onSelectSlide(slide.id)}
+                            disabled={disabled}
                           >
-                            <AppIcon name="move-up" size={14} />
+                            <span className="mobile-slide-list-index">{index + 1}</span>
+                            <span className="mobile-slide-list-copy">
+                              <strong>{slide.name || `Слайд ${index + 1}`}</strong>
+                              <small>{getSlideRoleLabel(slide.generationRole)}</small>
+                            </span>
                           </button>
-                          <button
-                            type="button"
-                            className="mobile-slide-list-action"
-                            onClick={() => onMoveSlide(slide.id, "down")}
-                            disabled={disabled || index === slides.length - 1}
-                            title="Вниз"
-                            aria-label="Переместить вниз"
-                          >
-                            <AppIcon name="move-down" size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className="mobile-slide-list-action mobile-slide-list-action-danger"
-                            onClick={() => onDeleteSlide(slide.id)}
-                            disabled={disabled || slides.length <= 1}
-                            title="Удалить"
-                            aria-label="Удалить слайд"
-                          >
-                            <AppIcon name="trash" size={14} />
-                          </button>
+                          <div className="mobile-slide-list-actions">
+                            <button
+                              type="button"
+                              className="mobile-slide-list-action"
+                              onClick={() => onMoveSlide(slide.id, "up")}
+                              disabled={disabled || index === 0}
+                              title="Вверх"
+                              aria-label="Переместить вверх"
+                            >
+                              <AppIcon name="move-up" size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="mobile-slide-list-action"
+                              onClick={() => onMoveSlide(slide.id, "down")}
+                              disabled={disabled || index === slides.length - 1}
+                              title="Вниз"
+                              aria-label="Переместить вниз"
+                            >
+                              <AppIcon name="move-down" size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="mobile-slide-list-action mobile-slide-list-action-danger"
+                              onClick={() => onDeleteSlide(slide.id)}
+                              disabled={disabled || slides.length <= 1}
+                              title="Удалить"
+                              aria-label="Удалить слайд"
+                            >
+                              <AppIcon name="trash" size={14} />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  ) : (
+                    <div className="settings-empty">Пока нет слайдов. Создайте первую карусель на главной.</div>
+                  )}
                 </div>
 
                 <div className="field-row field-row-actions">
@@ -1178,28 +1188,29 @@ export function MobileTools({
                   ) : null}
                 </div>
 
-                {captionResult ? (
-                  <textarea
-                    className="textarea"
-                    value={[
-                      captionResult.text,
-                      "",
-                      `CTA: ${captionResult.cta}`,
-                      captionResult.ctaSoft ? `Soft CTA: ${captionResult.ctaSoft}` : "",
-                      captionResult.ctaAggressive ? `Aggressive CTA: ${captionResult.ctaAggressive}` : "",
-                      "",
-                      captionResult.hashtags.join(" ")
-                    ]
-                      .filter(Boolean)
-                      .join("\n")}
-                    rows={8}
-                    readOnly
-                  />
-                ) : (
-                  <div className="settings-hint">
-                    Сначала сгенерируйте карусель, затем нажмите «Сгенерировать подпись».
-                  </div>
-                )}
+                <textarea
+                  className={`textarea caption-main-textarea ${
+                    captionResult ? "" : "caption-main-textarea-placeholder"
+                  }`}
+                  value={
+                    captionResult
+                      ? [
+                          captionResult.text,
+                          "",
+                          `CTA: ${captionResult.cta}`,
+                          captionResult.ctaSoft ? `Soft CTA: ${captionResult.ctaSoft}` : "",
+                          captionResult.ctaAggressive ? `Aggressive CTA: ${captionResult.ctaAggressive}` : "",
+                          "",
+                          captionResult.hashtags.join(" ")
+                        ]
+                          .filter(Boolean)
+                          .join("\n")
+                      : ""
+                  }
+                  placeholder="Здесь появится подпись к посту после нажатия «Сгенерировать»"
+                  rows={8}
+                  readOnly
+                />
               </div>
             ) : null}
           </div>

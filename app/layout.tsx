@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Space_Grotesk } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -37,7 +38,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body className={`${spaceGrotesk.variable} ${playfairDisplay.variable}`}>{children}</body>
+      <body className={`${spaceGrotesk.variable} ${playfairDisplay.variable}`}>
+        {children}
+        <Toaster
+          position="top-center"
+          offset={60}
+          toastOptions={{
+            style: {
+              borderRadius: "12px",
+              padding: "12px 16px",
+              fontSize: "14px"
+            }
+          }}
+        />
+      </body>
     </html>
   );
 }

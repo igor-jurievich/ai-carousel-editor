@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, type TouchEvent } from "react";
+import { FileSliders, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { SLIDE_FORMAT_DIMENSIONS } from "@/lib/carousel";
 import type { CanvasElement, Slide, SlideFormat, TextElement } from "@/types/editor";
 import { SlideStage } from "@/components/SlideStage";
@@ -50,6 +51,8 @@ type CanvasEditorProps = {
   showSlideBadge?: boolean;
   fontsReady?: boolean;
   hideMobileSlideTools?: boolean;
+  isLoading?: boolean;
+  onNavigateToPrompt?: () => void;
 };
 
 export function CanvasEditor({
@@ -91,17 +94,38 @@ export function CanvasEditor({
   previewMode = false,
   showSlideBadge = true,
   fontsReady = true,
-  hideMobileSlideTools = false
+  hideMobileSlideTools = false,
+  isLoading = false,
+  onNavigateToPrompt
 }: CanvasEditorProps) {
+  const SWIPE_THRESHOLD_PX = 50;
+  const SWIPE_MAX_Y_DELTA_PX = 44;
+  const SWIPE_MAX_ELAPSED_MS = 650;
+  const SWIPE_TRANSITION_MS = 200;
   const scale = displayWidth / canvasWidth;
   const formatLabel = SLIDE_FORMAT_DIMENSIONS[activeFormat].label;
   const activeSlide = slides.find((slide) => slide.id === activeSlideId) ?? slides[0] ?? null;
   const activeSlideIndex = activeSlide ? slides.findIndex((slide) => slide.id === activeSlide.id) : -1;
   const swipeStateRef = useRef<{ x: number; y: number; timestamp: number } | null>(null);
+  const swipeCommitTimeoutRef = useRef<number | null>(null);
+  const swipeResetTimeoutRef = useRef<number | null>(null);
+  const [swipeOffsetX, setSwipeOffsetX] = useState(0);
+  const [swipeTransitionEnabled, setSwipeTransitionEnabled] = useState(false);
   const stackScrollRef = useRef<HTMLDivElement | null>(null);
   const stackSlideRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const visibleFrameRef = useRef<number | null>(null);
   const lastVisibleSlideIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (swipeCommitTimeoutRef.current !== null) {
+        window.clearTimeout(swipeCommitTimeoutRef.current);
+      }
+      if (swipeResetTimeoutRef.current !== null) {
+        window.clearTimeout(swipeResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const emitMostVisibleSlide = () => {
     if (mode !== "stack" || !onVisibleSlideChange || !stackScrollRef.current || !slides.length) {
@@ -187,16 +211,69 @@ export function CanvasEditor({
     });
   }, [mode, scrollToSlideRequest]);
 
+  if (isLoading) {
+    return (
+      <section className={`panel canvas-panel ${mode === "single" ? "canvas-panel-mobile" : ""}`}>
+        <div className={`canvas-loading-shell ${mode === "single" ? "canvas-loading-shell-mobile" : ""}`}>
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="canvas-loading-card" aria-hidden="true" />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (!slides.length) {
+    return (
+      <section className={`panel canvas-panel ${mode === "single" ? "canvas-panel-mobile" : ""}`}>
+        <div className="canvas-empty-state">
+          <FileSliders size={60} color="#d1d5db" />
+          <p>Начни с промпта на главной</p>
+          <button
+            type="button"
+            className="btn secondary canvas-empty-action"
+            onClick={onNavigateToPrompt}
+          >
+            К промпту
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   if (mode === "single" && activeSlide) {
     const hiddenEditingElementId: string | null = null;
     const selectedElementStyle =
       selectedElement
-        ? getFloatingActionStyle(selectedElement, scale, displayWidth, displayHeight)
+        ? getFloatingActionStyle(selectedElement, scale, displayWidth, displayHeight, {
+            buttonSize: 32,
+            horizontalInset: 8,
+            verticalInset: 8,
+            horizontalOffset: 10,
+            verticalOffset: 16
+          })
         : null;
     const canGoPrev = activeSlideIndex > 0;
     const canGoNext = activeSlideIndex >= 0 && activeSlideIndex < slides.length - 1;
     const canSwipeNavigate =
-      !disabled && !previewMode && !selectedElementId && !editingTextElement && slides.length > 1;
+      !disabled &&
+      !previewMode &&
+      !selectedElementId &&
+      !editingTextElement &&
+      slides.length > 1 &&
+      !isLoading;
+
+    const resetSwipeOffset = () => {
+      if (swipeResetTimeoutRef.current !== null) {
+        window.clearTimeout(swipeResetTimeoutRef.current);
+      }
+      setSwipeTransitionEnabled(true);
+      setSwipeOffsetX(0);
+      swipeResetTimeoutRef.current = window.setTimeout(() => {
+        setSwipeTransitionEnabled(false);
+        swipeResetTimeoutRef.current = null;
+      }, SWIPE_TRANSITION_MS);
+    };
 
     const handleSwipeStart = (event: TouchEvent<HTMLElement>) => {
       if (!canSwipeNavigate) {
@@ -216,6 +293,16 @@ export function CanvasEditor({
         return;
       }
 
+      if (swipeCommitTimeoutRef.current !== null) {
+        window.clearTimeout(swipeCommitTimeoutRef.current);
+        swipeCommitTimeoutRef.current = null;
+      }
+      if (swipeResetTimeoutRef.current !== null) {
+        window.clearTimeout(swipeResetTimeoutRef.current);
+        swipeResetTimeoutRef.current = null;
+      }
+      setSwipeTransitionEnabled(false);
+      setSwipeOffsetX(0);
       swipeStateRef.current = {
         x: touch.clientX,
         y: touch.clientY,
@@ -223,15 +310,43 @@ export function CanvasEditor({
       };
     };
 
+    const handleSwipeMove = (event: TouchEvent<HTMLElement>) => {
+      if (!canSwipeNavigate || !swipeStateRef.current) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      if (!touch) {
+        return;
+      }
+
+      const deltaX = touch.clientX - swipeStateRef.current.x;
+      const deltaY = touch.clientY - swipeStateRef.current.y;
+
+      if (Math.abs(deltaY) > Math.abs(deltaX) * 0.9 && Math.abs(deltaY) > 10) {
+        return;
+      }
+
+      setSwipeTransitionEnabled(false);
+      setSwipeOffsetX(Math.max(-displayWidth, Math.min(displayWidth, deltaX)));
+      event.preventDefault();
+    };
+
     const handleSwipeEnd = (event: TouchEvent<HTMLElement>) => {
       if (!canSwipeNavigate || !swipeStateRef.current) {
         swipeStateRef.current = null;
+        if (swipeOffsetX !== 0) {
+          resetSwipeOffset();
+        }
         return;
       }
 
       const touch = event.changedTouches[0];
       if (!touch) {
         swipeStateRef.current = null;
+        if (swipeOffsetX !== 0) {
+          resetSwipeOffset();
+        }
         return;
       }
 
@@ -240,24 +355,47 @@ export function CanvasEditor({
       const elapsed = Date.now() - swipeStateRef.current.timestamp;
       swipeStateRef.current = null;
 
-      if (elapsed > 650) {
+      if (elapsed > SWIPE_MAX_ELAPSED_MS) {
+        resetSwipeOffset();
         return;
       }
 
-      if (Math.abs(deltaX) < 52 || Math.abs(deltaY) > 44) {
+      if (Math.abs(deltaX) < SWIPE_THRESHOLD_PX || Math.abs(deltaY) > SWIPE_MAX_Y_DELTA_PX) {
+        resetSwipeOffset();
         return;
       }
 
       if (Math.abs(deltaX) < Math.abs(deltaY) * 1.3) {
+        resetSwipeOffset();
         return;
       }
 
-      if (deltaX < 0 && canGoNext) {
-        onSelectSlide(slides[activeSlideIndex + 1].id);
-      } else if (deltaX > 0 && canGoPrev) {
-        onSelectSlide(slides[activeSlideIndex - 1].id);
+      const targetSlideId =
+        deltaX < 0 && canGoNext
+          ? slides[activeSlideIndex + 1]?.id
+          : deltaX > 0 && canGoPrev
+            ? slides[activeSlideIndex - 1]?.id
+            : null;
+
+      if (!targetSlideId) {
+        resetSwipeOffset();
+        return;
       }
+
+      setSwipeTransitionEnabled(true);
+      setSwipeOffsetX(deltaX < 0 ? -displayWidth : displayWidth);
+      if (swipeCommitTimeoutRef.current !== null) {
+        window.clearTimeout(swipeCommitTimeoutRef.current);
+      }
+      swipeCommitTimeoutRef.current = window.setTimeout(() => {
+        onSelectSlide(targetSlideId);
+        setSwipeTransitionEnabled(false);
+        setSwipeOffsetX(0);
+        swipeCommitTimeoutRef.current = null;
+      }, SWIPE_TRANSITION_MS);
     };
+
+    const activeSlideOrdinal = Math.max(1, activeSlideIndex + 1);
 
     return (
       <section className="panel canvas-panel canvas-panel-mobile">
@@ -265,66 +403,107 @@ export function CanvasEditor({
           <div
             className="mobile-canvas-frame"
             onTouchStartCapture={handleSwipeStart}
+            onTouchMoveCapture={handleSwipeMove}
             onTouchEndCapture={handleSwipeEnd}
+            onTouchCancelCapture={handleSwipeEnd}
           >
-            <div className="slide-stack-shell active mobile-slide-shell mobile-preview-shell">
-              {showSlideBadge ? (
-                <div className="active-slide-pill">
-                  Слайд {activeSlideIndex + 1} • {formatLabel}
-                </div>
-              ) : null}
+            <div
+              className="mobile-slide-shell-motion"
+              style={{
+                transform: `translateX(${swipeOffsetX}px)`,
+                transition: swipeTransitionEnabled ? `transform ${SWIPE_TRANSITION_MS}ms ease` : undefined
+              }}
+            >
+              <div className="slide-stack-shell active mobile-slide-shell mobile-preview-shell">
+                {showSlideBadge ? (
+                  <div className="active-slide-pill">
+                    Слайд {activeSlideIndex + 1} • {formatLabel}
+                  </div>
+                ) : null}
 
-              <div className="canvas-stage canvas-stage-editor mobile-stage-editor">
-                <div
-                  className={`canvas-stage-center mobile-stage-surface ${
-                    fontsReady ? "" : "is-loading-fonts"
-                  }`}
-                >
-                  <SlideStage
-                    slide={activeSlide}
-                    width={displayWidth}
-                    height={displayHeight}
-                    canvasWidth={canvasWidth}
-                    canvasHeight={canvasHeight}
-                    hiddenElementId={hiddenEditingElementId}
-                    selectedElementId={selectedElementId}
-                    interactive={!disabled && !previewMode}
-                    onSelectElement={(elementId) => onSelectElement(activeSlide.id, elementId)}
-                    onUpdateElementPosition={(elementId, x, y) =>
-                      onUpdateElementPosition(activeSlide.id, elementId, x, y)
-                    }
-                    onTransformElement={(elementId, updates) =>
-                      onTransformElement(activeSlide.id, elementId, updates)
-                    }
-                    onStartTextEditing={(elementId) => onStartTextEditing(activeSlide.id, elementId)}
-                    onRequestSlidePhotoUpload={() =>
-                      onAddBackgroundImageToSlide?.(activeSlide.id) ?? onAddImageToSlide(activeSlide.id)
-                    }
-                    onRequestProfileHandleEdit={onRequestProfileHandleEdit}
-                    hideResizeHandles
-                    showSlideBadge={showSlideBadge}
-                  />
-                </div>
+                <div className="canvas-stage canvas-stage-editor mobile-stage-editor">
+                  <div
+                    className={`canvas-stage-center mobile-stage-surface ${
+                      fontsReady ? "" : "is-loading-fonts"
+                    }`}
+                  >
+                    <SlideStage
+                      slide={activeSlide}
+                      width={displayWidth}
+                      height={displayHeight}
+                      canvasWidth={canvasWidth}
+                      canvasHeight={canvasHeight}
+                      hiddenElementId={hiddenEditingElementId}
+                      selectedElementId={selectedElementId}
+                      interactive={!disabled && !previewMode}
+                      onSelectElement={(elementId) => onSelectElement(activeSlide.id, elementId)}
+                      onUpdateElementPosition={(elementId, x, y) =>
+                        onUpdateElementPosition(activeSlide.id, elementId, x, y)
+                      }
+                      onTransformElement={(elementId, updates) =>
+                        onTransformElement(activeSlide.id, elementId, updates)
+                      }
+                      onStartTextEditing={(elementId) => onStartTextEditing(activeSlide.id, elementId)}
+                      onRequestSlidePhotoUpload={() =>
+                        onAddBackgroundImageToSlide?.(activeSlide.id) ?? onAddImageToSlide(activeSlide.id)
+                      }
+                      onRequestProfileHandleEdit={onRequestProfileHandleEdit}
+                      hideResizeHandles
+                      showSlideBadge={showSlideBadge}
+                    />
+                  </div>
 
-                {!previewMode && selectedElement && selectedElementStyle ? (
-                  <button
-                    type="button"
-                    className="floating-element-action"
-                    title="Удалить выбранный элемент"
-                    style={selectedElementStyle}
-                    disabled={disabled}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onDeleteSelectedElement();
-                    }}
-                    >
-                      <AppIcon name="trash" size={14} />
-                    </button>
+                  {!previewMode && selectedElement && selectedElementStyle ? (
+                    <>
+                      <div
+                        className="mobile-selection-outline"
+                        aria-hidden="true"
+                        style={{
+                          left: `${selectedElement.x * scale}px`,
+                          top: `${selectedElement.y * scale}px`,
+                          width: `${Math.max(8, selectedElement.width * scale)}px`,
+                          height: `${Math.max(8, selectedElement.height * scale)}px`
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="floating-element-action floating-element-action-mobile"
+                        title="Удалить выбранный элемент"
+                        style={selectedElementStyle}
+                        disabled={disabled}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDeleteSelectedElement();
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </>
                   ) : null}
+                </div>
               </div>
             </div>
-
           </div>
+
+          {slides.length > 1 ? (
+            <div className="mobile-slide-pagination" aria-label="Индикатор слайдов">
+              {slides.length > 9 ? (
+                <span className="mobile-slide-counter">
+                  {activeSlideOrdinal} / {slides.length}
+                </span>
+              ) : (
+                <div className="mobile-slide-dots">
+                  {slides.map((slide, index) => (
+                    <span
+                      key={slide.id}
+                      className={`mobile-slide-dot ${index === activeSlideIndex ? "active" : ""}`}
+                      aria-hidden="true"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {previewMode || hideMobileSlideTools ? null : (
             <div className="mobile-slide-tools" aria-label="Управление слайдами">
@@ -568,15 +747,18 @@ function getFloatingActionStyle(
   displayWidth: number,
   displayHeight: number,
   options?: {
+    buttonSize?: number;
     horizontalInset?: number;
     verticalInset?: number;
+    horizontalOffset?: number;
+    verticalOffset?: number;
   }
 ) {
-  const buttonSize = 28;
+  const buttonSize = options?.buttonSize ?? 28;
   const horizontalInset = options?.horizontalInset ?? 10;
   const verticalInset = options?.verticalInset ?? 8;
-  const horizontalOffset = 8;
-  const verticalOffset = 16;
+  const horizontalOffset = options?.horizontalOffset ?? 8;
+  const verticalOffset = options?.verticalOffset ?? 16;
   const right = element.x + element.width;
   const top = element.y * scale;
   const nextLeft = Math.min(

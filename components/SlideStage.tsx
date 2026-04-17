@@ -1756,12 +1756,12 @@ export function SlideStage({
                     ? ["top-center", "bottom-center"]
                     : ["top-left", "top-right", "bottom-left", "bottom-right"]
             }
-            borderStroke={UI_ACCENT}
-            borderStrokeWidth={2}
+            borderStroke={hideResizeHandles ? "transparent" : UI_ACCENT}
+            borderStrokeWidth={hideResizeHandles ? 0 : 2}
             anchorFill="#ffffff"
             anchorStroke={UI_ACCENT}
-            anchorStrokeWidth={1.5}
-            anchorSize={8}
+            anchorStrokeWidth={hideResizeHandles ? 0 : 1.5}
+            anchorSize={hideResizeHandles ? 0 : 8}
             anchorCornerRadius={2}
             boundBoxFunc={(oldBox, newBox) => {
               if (Math.abs(newBox.width) < 30 || Math.abs(newBox.height) < 24) {

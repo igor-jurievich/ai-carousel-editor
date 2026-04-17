@@ -346,39 +346,43 @@ export function SettingsPanel({
         </div>
 
         <div className="slides-list slides-list-compact custom-scroll">
-          {slides.map((item, index) => {
-            const isActive = item.id === activeSlideId;
-            return (
-              <div key={item.id} className="slides-list-row">
-                <button
-                  type="button"
-                  className={`slides-list-item ${isActive ? "active" : ""}`}
-                  onClick={() => onSelectSlide(item.id)}
-                  disabled={disabled}
-                >
-                  <span className="slides-list-index">{index + 1}</span>
-                  <span className="slides-list-copy">
-                    <strong>{item.name}</strong>
-                    <span className="slides-list-type-badge">{getSlideTypeLabel(item.slideType)}</span>
-                  </span>
-                  <span className="slides-list-arrow">
-                    <AppIcon name="chevron-right" size={14} />
-                  </span>
-                </button>
+          {slides.length ? (
+            slides.map((item, index) => {
+              const isActive = item.id === activeSlideId;
+              return (
+                <div key={item.id} className="slides-list-row">
+                  <button
+                    type="button"
+                    className={`slides-list-item ${isActive ? "active" : ""}`}
+                    onClick={() => onSelectSlide(item.id)}
+                    disabled={disabled}
+                  >
+                    <span className="slides-list-index">{index + 1}</span>
+                    <span className="slides-list-copy">
+                      <strong>{item.name}</strong>
+                      <span className="slides-list-type-badge">{getSlideTypeLabel(item.slideType)}</span>
+                    </span>
+                    <span className="slides-list-arrow">
+                      <AppIcon name="chevron-right" size={14} />
+                    </span>
+                  </button>
 
-                <button
-                  type="button"
-                  className="slides-list-delete"
-                  onClick={() => onDeleteSlide(item.id)}
-                  title="Удалить слайд"
-                  aria-label={`Удалить слайд ${index + 1}`}
-                  disabled={slides.length <= 1 || disabled}
-                >
-                  <AppIcon name="trash" size={14} />
-                </button>
-              </div>
-            );
-          })}
+                  <button
+                    type="button"
+                    className="slides-list-delete"
+                    onClick={() => onDeleteSlide(item.id)}
+                    title="Удалить слайд"
+                    aria-label={`Удалить слайд ${index + 1}`}
+                    disabled={slides.length <= 1 || disabled}
+                  >
+                    <AppIcon name="trash" size={14} />
+                  </button>
+                </div>
+              );
+            })
+          ) : (
+            <div className="settings-empty">Пока нет слайдов. Создайте первую карусель на главной.</div>
+          )}
         </div>
 
         <Popover.Root open={isAddSlidePopoverOpen} onOpenChange={setIsAddSlidePopoverOpen}>
@@ -1066,17 +1070,20 @@ export function SettingsPanel({
           ) : null}
         </div>
 
+        <label className="field-label">
+          Текст
+          <textarea
+            className={`field settings-textarea caption-main-textarea ${
+              captionResult ? "" : "caption-main-textarea-placeholder"
+            }`}
+            readOnly
+            value={captionResult?.text ?? ""}
+            placeholder="Здесь появится подпись к посту после нажатия «Сгенерировать»"
+            rows={6}
+          />
+        </label>
         {captionResult ? (
           <>
-            <label className="field-label">
-              Текст
-              <textarea
-                className="field settings-textarea caption-main-textarea"
-                readOnly
-                value={captionResult.text}
-                rows={6}
-              />
-            </label>
             <label className="field-label">
               CTA
               <textarea className="field" readOnly value={captionResult.cta} rows={2} />
@@ -1098,11 +1105,7 @@ export function SettingsPanel({
               <textarea className="field" readOnly value={captionResult.hashtags.join(" ")} rows={2} />
             </label>
           </>
-        ) : (
-          <div className="settings-hint">
-            Сначала соберите карусель, затем нажмите «Сгенерировать подпись».
-          </div>
-        )}
+        ) : null}
       </section>
     </>
   );

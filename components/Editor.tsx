@@ -3,11 +3,13 @@
 import { saveAs } from "file-saver";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
+import { Check } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type Konva from "konva";
+import { toast } from "sonner";
 import { AppIcon, type AppIconName } from "@/components/icons";
 import { CanvasEditor } from "@/components/CanvasEditor";
 import { MobileTools, type MobileToolTab } from "@/components/MobileTools";
@@ -700,6 +702,36 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     };
   }, []);
 
+  useEffect(() => {
+    const pendingScrollTimers = new Set<number>();
+
+    const handleInputFocus = (event: FocusEvent) => {
+      if (window.innerWidth > MOBILE_BREAKPOINT) {
+        return;
+      }
+
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+        return;
+      }
+
+      const timerId = window.setTimeout(() => {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        pendingScrollTimers.delete(timerId);
+      }, 300);
+
+      pendingScrollTimers.add(timerId);
+    };
+
+    document.addEventListener("focusin", handleInputFocus);
+
+    return () => {
+      document.removeEventListener("focusin", handleInputFocus);
+      pendingScrollTimers.forEach((timerId) => window.clearTimeout(timerId));
+      pendingScrollTimers.clear();
+    };
+  }, []);
+
   const slideDimensions = useMemo(
     () => SLIDE_FORMAT_DIMENSIONS[slideFormat],
     [slideFormat]
@@ -904,7 +936,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     editingTextElementIdRef.current = null;
     editingDirtyRef.current = false;
     editingValueRef.current = "";
-    setStatus("Проект загружен.");
+    setStatus(DEFAULT_STATUS);
+    toast.success("Проект загружен", {
+      duration: 2500,
+      icon: <Check size={16} />
+    });
     setIsGeneratePanelVisible(false);
     setIsProjectHydrated(true);
   }, [initialProjectId]);
@@ -1499,6 +1535,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         } else {
           setStatus(resolveUserFacingError(error, "Ошибка генерации. Попробуйте снова."));
         }
+        toast.error("Не удалось сгенерировать");
       }
     } finally {
       if (requestId === generateRequestRef.current) {
@@ -1871,6 +1908,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     }
 
     const templateName = getTemplate(templateId).name;
+    let templateApplied = false;
 
     pushHistorySnapshot(true);
     if (scope === "current" && activeSlide) {
@@ -1886,12 +1924,18 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           )
         );
         setStatus(`Шаблон «${templateName}» применён к текущему слайду.`);
+        templateApplied = true;
       }
     } else {
       setSlides((current) =>
         applyTemplateToSlides(current, templateId, slideFormat, { syncHighlightColor: true })
       );
       setStatus(`Шаблон «${templateName}» применён ко всей карусели.`);
+      templateApplied = true;
+    }
+
+    if (templateApplied) {
+      toast.success("Шаблон применён");
     }
 
     const nextTemplate = getTemplate(templateId);
@@ -2140,8 +2184,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         }
       });
       setStatus("Подпись скопирована в буфер обмена.");
+      toast.success("Скопировано");
     } catch {
       setStatus("Не удалось скопировать подпись. Попробуйте вручную.");
+      toast.error("Не удалось скопировать подпись");
     }
   };
 
@@ -3127,6 +3173,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   };
 
   const handleExport = async (requestedSlideIds?: string[]) => {
+    const notifyExportReady = () => {
+      toast.success("Экспорт готов");
+    };
+
     if (isGenerating) {
       setStatus(GENERATE_LOCK_STATUS);
       return;
@@ -3211,6 +3261,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                 }
               });
               setStatus(`${imageType.toUpperCase()} скачан.`);
+              notifyExportReady();
               return;
             }
 
@@ -3228,6 +3279,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               }
             });
             setStatus(`${imageType.toUpperCase()} экспортирован архивом (${targetSlideIds.length} шт.).`);
+            notifyExportReady();
             return;
           }
 
@@ -3258,6 +3310,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               }
             });
             setStatus(`PDF экспортирован (${targetSlideIds.length} слайд(ов)).`);
+            notifyExportReady();
             return;
           }
 
@@ -3271,6 +3324,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             }
           });
           setStatus(`Архив со слайдами скачан (${targetSlideIds.length} шт.).`);
+          notifyExportReady();
           return;
         } catch (attemptError) {
           lastAttemptError = attemptError;
@@ -3286,6 +3340,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       throw lastAttemptError ?? new Error("Экспорт не удалось завершить.");
     } catch (error) {
       setStatus(resolveUserFacingError(error, "Ошибка экспорта. Попробуйте снова."));
+      toast.error("Ошибка экспорта");
     } finally {
       setIsExportRendering(false);
       setExportSnapshot(null);
@@ -3396,6 +3451,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                 previewMode={isPreviewMode}
                 showSlideBadge={false}
                 fontsReady={fontsReady}
+                isLoading={isGenerating}
+                onNavigateToPrompt={() => router.push("/")}
               />
             </section>
 
@@ -3488,7 +3545,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
       <div className="mobile-only">
         <div className="mobile-editor-shell">
-          <header className="mobile-topbar">
+          <header className="mobile-topbar sticky-header">
             <div className="mobile-top-left">
               <span className="mobile-top-title">Редактор</span>
             </div>
@@ -3685,6 +3742,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               showSlideBadge={false}
               fontsReady={fontsReady}
               hideMobileSlideTools
+              isLoading={isGenerating}
+              onNavigateToPrompt={() => router.push("/")}
             />
           </section>
 
