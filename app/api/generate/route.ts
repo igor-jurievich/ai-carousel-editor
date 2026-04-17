@@ -211,9 +211,33 @@ export async function POST(request: Request) {
       timeoutMs
     );
 
-    const slides = generationResult.slides;
+    const slidesPayload: unknown = generationResult.slides;
 
-    if (!isValidSlidesPayload(slides)) {
+    if (!isValidSlidesPayload(slidesPayload)) {
+      console.error("Generate API returned invalid slides payload.", {
+        reason: diagnoseSlidesPayload(slidesPayload),
+        generationSource: generationResult.generationSource,
+        generationMeta: generationResult.generationMeta,
+        fallbackReason: generationResult.fallbackReason,
+        slidesShape: Array.isArray(slidesPayload)
+          ? slidesPayload.map((slide) => {
+              if (!slide || typeof slide !== "object") {
+                return { type: "invalid" };
+              }
+              const record = slide as Record<string, unknown>;
+              return {
+                type: typeof record.type === "string" ? record.type : null,
+                hasTitle: typeof record.title === "string" && record.title.trim().length > 0,
+                hasSubtitle: typeof record.subtitle === "string" && record.subtitle.trim().length > 0,
+                hasBody: typeof record.body === "string" && record.body.trim().length > 0,
+                hasText: typeof record.text === "string" && record.text.trim().length > 0,
+                bullets: Array.isArray(record.bullets) ? record.bullets.length : 0,
+                hasBefore: typeof record.before === "string" && record.before.trim().length > 0,
+                hasAfter: typeof record.after === "string" && record.after.trim().length > 0
+              };
+            })
+          : null
+      });
       return NextResponse.json(
         {
           error:
@@ -222,6 +246,7 @@ export async function POST(request: Request) {
         { status: 502 }
       );
     }
+    const slides = slidesPayload;
 
     const { data: remainingCredits, error: consumeCreditError } = await clients.serviceClient.rpc(
       "consume_generation_credit",
@@ -432,6 +457,74 @@ function isValidSlidesPayload(slides: unknown): slides is CarouselOutlineSlide[]
 
     return false;
   });
+}
+
+function diagnoseSlidesPayload(slides: unknown) {
+  if (!Array.isArray(slides)) {
+    return "slides is not an array";
+  }
+
+  if (slides.length < 8 || slides.length > 10) {
+    return `slides length is ${slides.length}`;
+  }
+
+  for (let index = 0; index < slides.length; index += 1) {
+    const slide = slides[index];
+    if (!slide || typeof slide !== "object") {
+      return `slide ${index + 1} is not an object`;
+    }
+
+    const current = slide as Record<string, unknown>;
+    const type = current.type;
+
+    if (type === "hook" || type === "cta") {
+      if (!isText(current.title, 4)) {
+        return `slide ${index + 1} (${String(type)}): invalid title`;
+      }
+      if (!isText(current.subtitle, 8)) {
+        return `slide ${index + 1} (${String(type)}): invalid subtitle`;
+      }
+      continue;
+    }
+
+    if (type === "problem" || type === "amplify") {
+      if (!isText(current.title, 4)) {
+        return `slide ${index + 1} (${String(type)}): invalid title`;
+      }
+      if (!isStringArray(current.bullets, 1)) {
+        return `slide ${index + 1} (${String(type)}): invalid bullets`;
+      }
+      continue;
+    }
+
+    if (type === "mistake" || type === "shift") {
+      if (!isText(current.title, 4)) {
+        return `slide ${index + 1} (${String(type)}): invalid title`;
+      }
+      if (!(isText(current.body, 8) || isText(current.text, 8) || isStringArray(current.bullets, 1))) {
+        return `slide ${index + 1} (${String(type)}): missing body/text/bullets`;
+      }
+      continue;
+    }
+
+    if (type === "consequence" || type === "solution") {
+      if (!isStringArray(current.bullets, 1)) {
+        return `slide ${index + 1} (${String(type)}): invalid bullets`;
+      }
+      continue;
+    }
+
+    if (type === "example") {
+      if (!isText(current.before, 4) || !isText(current.after, 4)) {
+        return `slide ${index + 1} (example): invalid before/after`;
+      }
+      continue;
+    }
+
+    return `slide ${index + 1}: unknown type "${String(type)}"`;
+  }
+
+  return "unknown validation failure";
 }
 
 function resolveFormat(value: unknown): SlideFormat {

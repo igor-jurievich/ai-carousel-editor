@@ -1573,7 +1573,12 @@ function enforceSlideQuality(
 
     if (role === "mistake") {
       const mistake = current as Extract<CarouselOutlineSlide, { type: "mistake" }>;
+      const mistakeFallback = fallback as CarouselOutlineSlide & { body?: string };
       const title = sanitizeTitleValue(mistake.title, 92);
+      const body =
+        sanitizeCopyText(normalizeText((mistake as { body?: unknown }).body, 420), 390) ||
+        mistakeFallback.body ||
+        "→ Ты даёшь общий совет, и человек не узнаёт себя в ситуации\n→ Нет конкретного примера, поэтому мысль звучит как шаблон\n→ После слайда непонятно, что менять прямо сейчас";
       const weakTitle =
         !title ||
         startsWithGenericMistakeLead(title) ||
@@ -1583,8 +1588,9 @@ function enforceSlideQuality(
 
       return {
         type: "mistake",
-        title: weakTitle ? buildRoleTitleFallback("mistake", topic, options) : title
-      };
+        title: weakTitle ? buildRoleTitleFallback("mistake", topic, options) : title,
+        body
+      } as CarouselOutlineSlide;
     }
 
     if (role === "consequence") {
@@ -1600,7 +1606,12 @@ function enforceSlideQuality(
 
     if (role === "shift") {
       const shift = current as Extract<CarouselOutlineSlide, { type: "shift" }>;
+      const shiftFallback = fallback as CarouselOutlineSlide & { body?: string };
       const title = sanitizeTitleValue(shift.title, 92);
+      const body =
+        sanitizeCopyText(normalizeText((shift as { body?: unknown }).body, 420), 390) ||
+        shiftFallback.body ||
+        "Сначала покажи конкретный факт, потом вывод. Так читатель понимает логику и доходит до действия.";
       const weakTitle =
         !title ||
         startsWithGenericMistakeLead(title) ||
@@ -1610,8 +1621,9 @@ function enforceSlideQuality(
 
       return {
         type: "shift",
-        title: weakTitle ? buildRoleTitleFallback("shift", topic, options) : title
-      };
+        title: weakTitle ? buildRoleTitleFallback("shift", topic, options) : title,
+        body
+      } as CarouselOutlineSlide;
     }
 
     if (role === "solution") {
