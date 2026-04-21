@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertCircle,
   Check,
   ChevronDown,
   Hash,
@@ -52,8 +53,18 @@ type SelectOption = {
   value: string;
   label: string;
 };
+type GenerationStatus = "idle" | "loading" | "success" | "error";
 
 const MAX_TOPIC_CHARS = 4000;
+const STATUS_ROTATION_MS = 2500;
+const GENERATION_STATUS_MESSAGES = [
+  "Придумываю крючок...",
+  "Формулирую проблему...",
+  "Усиливаю боль...",
+  "Ищу ошибку...",
+  "Собираю решение...",
+  "Пишу призыв к действию..."
+];
 
 const TONE_OPTIONS: SelectOption[] = [
   { value: "soft", label: "Мягкий" },
@@ -198,6 +209,12 @@ export default function GeneratePage() {
   const [tone, setTone] = useState("balanced");
   const [goal, setGoal] = useState("engagement");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
+  const [generationErrorMessage, setGenerationErrorMessage] = useState<string | null>(null);
+  const [statusIndex, setStatusIndex] = useState(0);
+  const [progressWidth, setProgressWidth] = useState(0);
+  const [isProgressVisible, setIsProgressVisible] = useState(false);
+  const [isProgressFading, setIsProgressFading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewSlides, setPreviewSlides] = useState<CarouselOutlineSlide[] | null>(null);
   const [generatedProjectMeta, setGeneratedProjectMeta] = useState<GenerateResponse["project"] | null>(null);
@@ -211,6 +228,9 @@ export default function GeneratePage() {
   const composerRef = useRef<HTMLDivElement | null>(null);
   const topicInputRef = useRef<HTMLTextAreaElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const previewRevealTimeoutRef = useRef<number | null>(null);
+  const hideErrorStatusTimeoutRef = useRef<number | null>(null);
+  const hideProgressTimeoutRef = useRef<number | null>(null);
 
   const slidesCountOptions = useMemo<SelectOption[]>(
     () => SLIDES_COUNT_OPTIONS.map((count) => ({ value: String(count), label: String(count) })),
@@ -219,6 +239,18 @@ export default function GeneratePage() {
 
   const normalizedTopic = topic.trim();
   const canGenerate = normalizedTopic.length >= 3 && !isGenerating;
+  const generationStatusMessage =
+    generationStatus === "loading"
+      ? GENERATION_STATUS_MESSAGES[statusIndex]
+      : generationStatus === "success"
+        ? "Готово!"
+        : generationStatus === "error"
+          ? generationErrorMessage
+          : null;
+  const progressTransition =
+    generationStatus === "loading"
+      ? "width 15s ease-out, opacity 300ms ease"
+      : "width 200ms linear, opacity 300ms ease";
 
   const previewList = useMemo(() => {
     if (!previewSlides?.length) {
@@ -288,6 +320,20 @@ export default function GeneratePage() {
       setOpenSelectId(null);
     }
   }, [isAdvancedOpen]);
+
+  useEffect(() => {
+    if (generationStatus !== "loading") {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setStatusIndex((current) => (current + 1) % GENERATION_STATUS_MESSAGES.length);
+    }, STATUS_ROTATION_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [generationStatus]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -370,9 +416,36 @@ export default function GeneratePage() {
     };
   }, [isAccountMenuOpen]);
 
+  useEffect(() => {
+    return () => {
+      if (previewRevealTimeoutRef.current !== null) {
+        window.clearTimeout(previewRevealTimeoutRef.current);
+      }
+      if (hideErrorStatusTimeoutRef.current !== null) {
+        window.clearTimeout(hideErrorStatusTimeoutRef.current);
+      }
+      if (hideProgressTimeoutRef.current !== null) {
+        window.clearTimeout(hideProgressTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleGenerate = async () => {
     if (!canGenerate) {
       return;
+    }
+
+    if (previewRevealTimeoutRef.current !== null) {
+      window.clearTimeout(previewRevealTimeoutRef.current);
+      previewRevealTimeoutRef.current = null;
+    }
+    if (hideErrorStatusTimeoutRef.current !== null) {
+      window.clearTimeout(hideErrorStatusTimeoutRef.current);
+      hideErrorStatusTimeoutRef.current = null;
+    }
+    if (hideProgressTimeoutRef.current !== null) {
+      window.clearTimeout(hideProgressTimeoutRef.current);
+      hideProgressTimeoutRef.current = null;
     }
 
     try {
@@ -380,6 +453,19 @@ export default function GeneratePage() {
       setOpenSelectId(null);
       setIsGenerating(true);
       setError(null);
+      setPreviewSlides(null);
+      setGeneratedProjectMeta(null);
+      setGenerationStatus("loading");
+      setGenerationErrorMessage(null);
+      setStatusIndex(0);
+      setIsProgressVisible(true);
+      setIsProgressFading(false);
+      setProgressWidth(0);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          setProgressWidth(85);
+        });
+      });
       trackEvent({
         name: "generate_started",
         payload: {
@@ -413,6 +499,11 @@ export default function GeneratePage() {
           setCredits(0);
           setIsNoCreditsNoticeOpen(true);
           setError(null);
+          setGenerationStatus("idle");
+          setGenerationErrorMessage(null);
+          setIsProgressVisible(false);
+          setIsProgressFading(false);
+          setProgressWidth(0);
           return;
         }
 
@@ -423,8 +514,23 @@ export default function GeneratePage() {
         throw new Error(data.error || "Не удалось сгенерировать карусель.");
       }
 
-      setPreviewSlides(data.slides);
-      setGeneratedProjectMeta(data.project ?? null);
+      setGenerationStatus("success");
+      setGenerationErrorMessage(null);
+      setProgressWidth(100);
+      setIsProgressFading(true);
+      hideProgressTimeoutRef.current = window.setTimeout(() => {
+        setIsProgressVisible(false);
+        setIsProgressFading(false);
+        setProgressWidth(0);
+        hideProgressTimeoutRef.current = null;
+      }, 300);
+      previewRevealTimeoutRef.current = window.setTimeout(() => {
+        setPreviewSlides(data.slides ?? null);
+        setGeneratedProjectMeta(data.project ?? null);
+        setGenerationStatus("idle");
+        previewRevealTimeoutRef.current = null;
+      }, 1000);
+
       if (data.generationSource === "fallback") {
         console.warn("[generate] Deterministic fallback was used.", {
           reason: data.fallbackReason ?? "error"
@@ -457,14 +563,23 @@ export default function GeneratePage() {
             generationError instanceof Error ? generationError.message.slice(0, 120) : "unknown"
         }
       });
-      setError(
+      const message =
         generationError instanceof Error
           ? generationError.message
-          : "Не смогли сгенерировать. Попробуйте переформулировать тему."
-      );
+          : "Не смогли сгенерировать. Попробуйте переформулировать тему.";
+      setGenerationStatus("error");
+      setGenerationErrorMessage(message);
+      setIsProgressVisible(false);
+      setIsProgressFading(false);
+      setProgressWidth(0);
       toast.error("Не удалось сгенерировать");
       setPreviewSlides(null);
       setGeneratedProjectMeta(null);
+      hideErrorStatusTimeoutRef.current = window.setTimeout(() => {
+        setGenerationStatus("idle");
+        setGenerationErrorMessage(null);
+        hideErrorStatusTimeoutRef.current = null;
+      }, 5000);
     } finally {
       setIsGenerating(false);
     }
@@ -634,6 +749,7 @@ export default function GeneratePage() {
                 aria-expanded={isAdvancedOpen}
                 aria-label="Уточнить генерацию"
                 title="Уточнить генерацию"
+                disabled={isGenerating}
               >
                 +
               </button>
@@ -652,6 +768,7 @@ export default function GeneratePage() {
                 rows={1}
                 maxLength={MAX_TOPIC_CHARS}
                 className={styles.chatInput}
+                disabled={isGenerating}
               />
 
               <button
@@ -662,7 +779,7 @@ export default function GeneratePage() {
                 aria-label={isGenerating ? "Генерируем" : "Сгенерировать карусель"}
                 title={isGenerating ? "Генерируем..." : "Сгенерировать карусель"}
               >
-                {isGenerating ? "…" : "→"}
+                {isGenerating ? <span className={styles.sendButtonSpinner} aria-hidden="true" /> : "→"}
               </button>
             </div>
 
@@ -764,7 +881,45 @@ export default function GeneratePage() {
                 />
               </div>
             </section>
+
+            {isProgressVisible ? (
+              <div
+                className={`${styles.generationProgress} ${isProgressFading ? styles.generationProgressFading : ""}`}
+                aria-hidden="true"
+              >
+                <span
+                  className={styles.generationProgressBar}
+                  style={{
+                    width: `${progressWidth}%`,
+                    transition: progressTransition
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
+
+          {generationStatusMessage ? (
+            <div
+              className={`${styles.generationStatus} ${
+                generationStatus === "success"
+                  ? styles.generationStatusSuccess
+                  : generationStatus === "error"
+                    ? styles.generationStatusError
+                    : styles.generationStatusLoading
+              }`}
+            >
+              {generationStatus === "loading" ? (
+                <span className={styles.generationStatusSpinner} aria-hidden="true" />
+              ) : generationStatus === "success" ? (
+                <Check size={16} aria-hidden="true" />
+              ) : (
+                <AlertCircle size={16} aria-hidden="true" />
+              )}
+              <span className={generationStatus === "loading" ? styles.statusTextAnimated : undefined}>
+                {generationStatusMessage}
+              </span>
+            </div>
+          ) : null}
 
           {error ? <div className={`${styles.status} ${styles.statusError}`}>{error}</div> : null}
         </section>
