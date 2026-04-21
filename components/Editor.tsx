@@ -3,16 +3,40 @@
 import { saveAs } from "file-saver";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
-import { Check } from "lucide-react";
+import {
+  ALargeSmall,
+  ArrowUpDown,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Download,
+  ImageIcon,
+  LayoutGrid,
+  Layers,
+  LayoutTemplate,
+  Loader2,
+  Palette,
+  Redo2,
+  Sparkles,
+  Trash2,
+  Type as TypeIcon,
+  Undo2,
+  X
+} from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
+import * as Switch from "@radix-ui/react-switch";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { HexColorPicker } from "react-colorful";
+import { useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type Konva from "konva";
 import { toast } from "sonner";
+import { AppSelect } from "@/components/AppSelect";
+import { HexColorField } from "@/components/HexColorField";
 import { AppIcon, type AppIconName } from "@/components/icons";
 import { CanvasEditor } from "@/components/CanvasEditor";
-import { MobileTools, type MobileToolTab } from "@/components/MobileTools";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SlideExportModal } from "@/components/SlideExportModal";
 import { SlideStage } from "@/components/SlideStage";
@@ -27,6 +51,7 @@ import {
   createStarterSlides,
   createTextElement,
   getTemplate,
+  getTemplatesByCategory,
   projectTitleFromTopic,
   relayoutSlidesForFormat,
   reorderSlides,
@@ -46,6 +71,7 @@ import type {
   CanvasElement,
   CarouselOutlineSlide,
   CarouselPostCaption,
+  CarouselTemplateCategory,
   CarouselTemplateId,
   ShapeElement,
   Slide,
@@ -114,7 +140,33 @@ const HEX_COLOR_INPUT_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 type EditableTextTargetRole = "title" | "body";
 type MobileColorSchemeMode = "single" | "double";
 type GridDecorationMode = "full" | "vertical" | "dots";
+type TextCaseMode = "normal" | "uppercase" | "lowercase" | "capitalize";
 type MobileStylePresetId = "mono" | "grid" | "gradient" | "notes" | "dots" | "flash";
+type MobileToolTab = "templates" | "color" | "background" | "style" | "text" | "font" | "size";
+
+const MOBILE_TAB_ITEMS: Array<{
+  id: MobileToolTab;
+  label: string;
+  icon: typeof LayoutTemplate;
+}> = [
+  { id: "templates", label: "Шаблоны", icon: LayoutTemplate },
+  { id: "color", label: "Цвет", icon: Palette },
+  { id: "background", label: "Фон", icon: ImageIcon },
+  { id: "style", label: "Стиль", icon: Sparkles },
+  { id: "text", label: "Текст", icon: TypeIcon },
+  { id: "font", label: "Шрифт", icon: ALargeSmall },
+  { id: "size", label: "Размер", icon: ArrowUpDown }
+];
+
+const MOBILE_TAB_TITLE: Record<MobileToolTab, string> = {
+  templates: "Шаблоны",
+  color: "Цвет",
+  background: "Фон",
+  style: "Стиль",
+  text: "Текст",
+  font: "Шрифт",
+  size: "Размер"
+};
 
 const MOBILE_STYLE_PRESET_CONFIG: Record<
   MobileStylePresetId,
@@ -151,6 +203,75 @@ const MOBILE_STYLE_PRESET_CONFIG: Record<
     gridMode: "vertical"
   }
 };
+
+const MOBILE_TEMPLATE_CATEGORY_ITEMS: Array<{
+  id: CarouselTemplateCategory;
+  label: string;
+}> = [
+  { id: "dark", label: "Темные" },
+  { id: "light", label: "Светлые" },
+  { id: "color", label: "Цветные" }
+];
+
+const MOBILE_BACKGROUND_COLOR_OPTIONS: Array<{ label: string; value: string }> = [
+  { label: "Белый", value: "#ffffff" },
+  { label: "Черный", value: "#111111" },
+  { label: "Светло-серый", value: "#f0f0f5" },
+  { label: "Теплый", value: "#f5e6d3" },
+  { label: "Холодный", value: "#e0eaf5" },
+  { label: "Графит", value: "#2a2a2a" }
+];
+
+const MOBILE_FONT_OPTIONS = [
+  "Inter",
+  "Manrope",
+  "Advent Pro",
+  "Fira Code",
+  "Russo One",
+  "Oswald",
+  "Space Grotesk",
+  "Playfair Display"
+];
+
+const MOBILE_TEXT_CASE_OPTIONS: Array<{ id: TextCaseMode; label: string }> = [
+  { id: "normal", label: "Aa" },
+  { id: "uppercase", label: "AA" },
+  { id: "lowercase", label: "aa" },
+  { id: "capitalize", label: "Aa" }
+];
+
+const MOBILE_STYLE_PRESET_ITEMS: Array<{
+  id: MobileStylePresetId;
+  label: string;
+  preview: string;
+}> = [
+  { id: "mono", label: "Монохром", preview: "linear-gradient(145deg, #ffffff 0%, #f4f5f7 100%)" },
+  {
+    id: "grid",
+    label: "Сетка",
+    preview:
+      "repeating-linear-gradient(90deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px), repeating-linear-gradient(180deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px), #f8f8f9"
+  },
+  { id: "gradient", label: "Градиент", preview: "linear-gradient(130deg, #f7f4f1 0%, #ece2d9 100%)" },
+  {
+    id: "notes",
+    label: "Заметки",
+    preview:
+      "repeating-linear-gradient(180deg, rgba(43,47,58,0.2) 0 1px, transparent 1px 11px), linear-gradient(180deg, #f8f9fc 0%, #eef1f7 100%)"
+  },
+  {
+    id: "dots",
+    label: "Точки",
+    preview:
+      "radial-gradient(circle, rgba(18,21,27,0.28) 1.1px, transparent 1.2px) 0 0 / 10px 10px, #f5f5f6"
+  },
+  {
+    id: "flash",
+    label: "Молнии",
+    preview:
+      "repeating-linear-gradient(135deg, rgba(56,60,70,0.15) 0 6px, transparent 6px 16px), repeating-linear-gradient(45deg, rgba(56,60,70,0.12) 0 6px, transparent 6px 18px), #e8e9ed"
+  }
+];
 
 function makeEditorElementId(prefix: string) {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -303,7 +424,7 @@ function buildGridDecorationElements(
 }
 
 function resolveGridElementOpacity(element: Pick<ShapeElement, "shape">) {
-  return element.shape === "circle" ? 0.2 : 0.12;
+  return element.shape === "circle" ? 0.65 : 1;
 }
 
 function normalizeHighlightRanges(ranges: TextHighlightRange[] | undefined, textLength: number) {
@@ -449,7 +570,13 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const [selectedExportSlideIds, setSelectedExportSlideIds] = useState<string[]>([]);
   const [exportSnapshot, setExportSnapshot] = useState<ExportSnapshot | null>(null);
   const [mobileToolTab, setMobileToolTab] = useState<MobileToolTab | null>(null);
-  const [mobileBottomOffset, setMobileBottomOffset] = useState(120);
+  const [mobileTemplateCategory, setMobileTemplateCategory] =
+    useState<CarouselTemplateCategory>("dark");
+  const [mobileColorSchemeMode, setMobileColorSchemeMode] = useState<MobileColorSchemeMode>("single");
+  const [mobileApplyBackgroundForAll, setMobileApplyBackgroundForAll] = useState(true);
+  const [mobileApplyStyleForAll, setMobileApplyStyleForAll] = useState(true);
+  const [mobileApplySizeForAll, setMobileApplySizeForAll] = useState(false);
+  const [mobileSheetDragOffset, setMobileSheetDragOffset] = useState(0);
   const [pendingImageSlideId, setPendingImageSlideId] = useState<string | null>(null);
   const [pendingBackgroundSlideId, setPendingBackgroundSlideId] = useState<string | null>(null);
   const [scrollToSlideRequest, setScrollToSlideRequest] = useState<{ id: string; token: number } | null>(null);
@@ -462,13 +589,15 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([]);
   const desktopCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const mobileCanvasHostRef = useRef<HTMLDivElement | null>(null);
-  const mobileGeneratePanelRef = useRef<HTMLDetailsElement | null>(null);
-  const mobileGenerateTopicRef = useRef<HTMLTextAreaElement | null>(null);
-  const mobileToolbarRef = useRef<HTMLElement | null>(null);
+  const mobileActionBarRef = useRef<HTMLElement | null>(null);
+  const mobileTabsRef = useRef<HTMLElement | null>(null);
   const mobileToolSheetRef = useRef<HTMLElement | null>(null);
+  const mobileSheetSwipeRef = useRef<{ startY: number; startX: number; drag: number } | null>(null);
   const rightSidebarRef = useRef<HTMLElement | null>(null);
+  const slidesSectionRef = useRef<HTMLElement | null>(null);
   const signatureSectionRef = useRef<HTMLElement | null>(null);
   const profileHandleInputRef = useRef<HTMLInputElement | null>(null);
+  const mobileTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const editingTextElementIdRef = useRef<string | null>(null);
   const editingValueRef = useRef("");
   const editingDirtyRef = useRef(false);
@@ -484,6 +613,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const autosaveSaveErrorNotifiedRef = useRef(false);
   const editorOpenedTrackedRef = useRef(false);
   const initialMobileToolAppliedRef = useRef(false);
+  const initialCanvasFormatAppliedRef = useRef(false);
   const generationLockedRef = useRef(false);
   const handleUndoRef = useRef<() => void>(() => undefined);
   const handleRedoRef = useRef<() => void>(() => undefined);
@@ -497,8 +627,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     const shouldOpenPostTool = window.innerWidth <= MOBILE_BREAKPOINT && toolFromQuery === "post";
 
     if (shouldOpenPostTool) {
-      setMobileToolTab("export");
-      setStatus("Открыта вкладка «Экспорт»: здесь можно выгрузить карусель и сделать подпись.");
+      setMobileToolTab("text");
+      setStatus("Открыта вкладка «Текст».");
     }
 
     initialMobileToolAppliedRef.current = true;
@@ -591,31 +721,17 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         const host = mobileCanvasHostRef.current;
         const hostWidth = host?.clientWidth ?? viewportWidth;
         const hostRect = host?.getBoundingClientRect();
-        const overlays = [mobileToolbarRef.current, mobileToolSheetRef.current]
-          .map((node) => node?.getBoundingClientRect())
-          .filter((rect): rect is DOMRect => Boolean(rect && rect.width > 0 && rect.height > 0));
-        const overlayTop = overlays.length
-          ? Math.min(...overlays.map((rect) => rect.top))
-          : viewportHeight;
-        const availableHeight = Math.max(220, overlayTop - (hostRect?.top ?? 0));
+        const availableHeight = Math.max(220, (hostRect?.height ?? viewportHeight * 0.52) - 16);
         const widthLimit = Math.max(
           220,
           Math.min(
             hostWidth * 0.88,
-            viewportWidth - 72,
+            viewportWidth - 56,
             MOBILE_PREVIEW_MAX_WIDTH[slideFormat]
           )
         );
-        const heightLimit = Math.max(220, availableHeight - 24) * canvasAspectRatio;
+        const heightLimit = availableHeight * canvasAspectRatio;
         const nextSize = Math.max(220, Math.min(widthLimit, heightLimit));
-        const toolbarRect = mobileToolbarRef.current?.getBoundingClientRect();
-        const nextBottomOffset = toolbarRect
-          ? Math.max(72, Math.round(viewportHeight - toolbarRect.top))
-          : 96;
-
-        setMobileBottomOffset((current) =>
-          Math.abs(current - nextBottomOffset) < 2 ? current : nextBottomOffset
-        );
         setDisplaySize((current) =>
           Math.abs(current - nextSize) < 1 ? current : Math.round(nextSize)
         );
@@ -640,8 +756,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     if (mobileCanvasHostRef.current) {
       observer.observe(mobileCanvasHostRef.current);
     }
-    if (mobileToolbarRef.current) {
-      observer.observe(mobileToolbarRef.current);
+    if (mobileActionBarRef.current) {
+      observer.observe(mobileActionBarRef.current);
+    }
+    if (mobileTabsRef.current) {
+      observer.observe(mobileTabsRef.current);
     }
     if (mobileToolSheetRef.current) {
       observer.observe(mobileToolSheetRef.current);
@@ -887,6 +1006,72 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     () => getTemplate(activeTemplateId).name,
     [activeTemplateId]
   );
+  const activeTemplateCategory = useMemo(
+    () => getTemplate(activeTemplateId).category,
+    [activeTemplateId]
+  );
+  const mobileTemplateItems = useMemo(
+    () => getTemplatesByCategory(mobileTemplateCategory),
+    [mobileTemplateCategory]
+  );
+  const mobileSelectedTextColor = useMemo(
+    () => normalizeColorForInput(effectiveSelectedTextElement?.fill, "#6366f1"),
+    [effectiveSelectedTextElement?.fill]
+  );
+  const mobileSelectedHighlightColor = useMemo(
+    () =>
+      normalizeColorForInput(
+        effectiveSelectedTextElement?.highlights?.find((range) => range.end > range.start)?.color ??
+          selectedTextHighlightColorOverride,
+        DEFAULT_HIGHLIGHT_COLOR
+      ),
+    [effectiveSelectedTextElement?.highlights, selectedTextHighlightColorOverride]
+  );
+  const activeTextCaseMode = useMemo<TextCaseMode>(
+    () => detectTextCaseMode(effectiveSelectedTextElement?.text ?? ""),
+    [effectiveSelectedTextElement?.text]
+  );
+  const mobileBackgroundColor = useMemo(
+    () => normalizeColorForInput(activeSlide?.background, "#ffffff"),
+    [activeSlide?.background]
+  );
+  const mobileBackgroundHeightPercent = useMemo(
+    () => Math.round(60 + ((activePhotoSettings.zoom - 100) / 100) * 40),
+    [activePhotoSettings.zoom]
+  );
+  const mobilePhotoPositionPercent = useMemo(
+    () => Math.round(activePhotoSettings.offsetY + 50),
+    [activePhotoSettings.offsetY]
+  );
+  const mobilePhotoAnchor = activePhotoSettings.offsetY <= 0 ? "top" : "bottom";
+  const activeStylePresetId = useMemo<MobileStylePresetId | null>(() => {
+    if (!activeSlide) {
+      return null;
+    }
+    const normalizedBackground = normalizeColorForInput(activeSlide.background, "#ffffff").toLowerCase();
+    const currentGridMode = inferGridModeFromSlide(activeSlide) ?? "full";
+    const entries = Object.entries(MOBILE_STYLE_PRESET_CONFIG) as Array<
+      [
+        MobileStylePresetId,
+        { background: string; gridVisible: boolean; gridMode: GridDecorationMode }
+      ]
+    >;
+
+    const found = entries.find(([, preset]) => {
+      const presetBackground = normalizeColorForInput(preset.background, "#ffffff").toLowerCase();
+      if (presetBackground !== normalizedBackground) {
+        return false;
+      }
+      if (preset.gridVisible !== activeGridVisible) {
+        return false;
+      }
+      if (!preset.gridVisible) {
+        return true;
+      }
+      return currentGridMode === preset.gridMode;
+    });
+    return found?.[0] ?? null;
+  }, [activeGridVisible, activeSlide]);
   const subtitlesVisibleAcrossSlides = useMemo(
     () =>
       slides.some((slide) =>
@@ -898,6 +1083,17 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const exportModeLabel = getExportModeLabel(exportMode);
   const canUndo = historyPast.length > 0;
   const canRedo = historyFuture.length > 0;
+
+  useEffect(() => {
+    if (mobileToolTab !== "templates") {
+      return;
+    }
+    setMobileTemplateCategory(activeTemplateCategory);
+  }, [activeTemplateCategory, mobileToolTab]);
+
+  useEffect(() => {
+    setMobileColorSchemeMode("single");
+  }, [activeSlideId]);
 
   useEffect(() => {
     generationLockedRef.current = generationLocked;
@@ -1023,6 +1219,15 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     pathname,
     router
   ]);
+
+  useEffect(() => {
+    if (!isProjectHydrated || initialCanvasFormatAppliedRef.current) {
+      return;
+    }
+
+    initialCanvasFormatAppliedRef.current = true;
+    setSlides((current) => relayoutSlidesForFormat(current, slideFormat, slideFormat));
+  }, [isProjectHydrated, slideFormat]);
 
   useEffect(() => {
     if (!isProjectHydrated || editorOpenedTrackedRef.current) {
@@ -1368,25 +1573,6 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     updateElementBySlide(activeSlide.id, elementId, updater, options);
   };
 
-  const openMobileGeneratePanel = (focusTopic = false) => {
-    const panel = mobileGeneratePanelRef.current;
-    if (!panel) {
-      return;
-    }
-
-    if (!panel.open) {
-      panel.open = true;
-    }
-
-    if (!focusTopic) {
-      return;
-    }
-
-    window.setTimeout(() => {
-      mobileGenerateTopicRef.current?.focus();
-    }, 20);
-  };
-
   const handleGenerate = async (options?: { openPostTool?: boolean; source?: "editor" | "mobile" }) => {
     if (isGenerating) {
       return;
@@ -1514,8 +1700,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         }
       });
       if (openPostTool && window.innerWidth <= MOBILE_BREAKPOINT) {
-        setMobileToolTab("export");
-        setStatus(`Создано ${nextSlides.length} слайдов. Открыта вкладка «Экспорт».`);
+        setMobileToolTab("text");
+        setStatus(`Создано ${nextSlides.length} слайдов. Открыта вкладка «Текст».`);
       } else {
         setStatus(`Создано ${nextSlides.length} слайдов в формате ${slideFormat}.`);
       }
@@ -1650,6 +1836,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       setSelectedElementId(null);
     }
     setStatus(`Слайд ${currentIndex + 1} удалён.`);
+    toast.success("Слайд удалён");
   };
 
   const handleDeleteElement = () => {
@@ -1976,6 +2163,18 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       profileHandleInputRef.current?.focus({ preventScroll: true });
       profileHandleInputRef.current?.select();
     }, 220);
+  };
+
+  const handleRequestSlidesSection = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const slidesSection =
+      slidesSectionRef.current ??
+      (rightSidebarRef.current?.querySelector(".settings-card-slides") as HTMLElement | null);
+
+    slidesSection?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const handleOpenSlideExportModal = () => {
@@ -2679,19 +2878,49 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   };
 
   const handleMobileToolTabChange = (nextTab: MobileToolTab | null) => {
+    setMobileSheetDragOffset(0);
     setMobileToolTab(nextTab);
-    if (!nextTab) {
+  };
+
+  const handleMobileSheetTouchStart = (event: ReactTouchEvent<HTMLElement>) => {
+    const touch = event.touches[0];
+    if (!touch) {
       return;
     }
+    mobileSheetSwipeRef.current = {
+      startY: touch.clientY,
+      startX: touch.clientX,
+      drag: 0
+    };
+  };
 
-    if (nextTab === "text" || nextTab === "style") {
-      const preferredText =
-        selectedTextTargetRole === "body"
-          ? managedBodyTextElement ?? managedTitleTextElement
-          : managedTitleTextElement ?? managedBodyTextElement;
-      if (preferredText) {
-        setSelectedElementId(preferredText.id);
-      }
+  const handleMobileSheetTouchMove = (event: ReactTouchEvent<HTMLElement>) => {
+    if (!mobileSheetSwipeRef.current) {
+      return;
+    }
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+    const deltaY = touch.clientY - mobileSheetSwipeRef.current.startY;
+    const deltaX = touch.clientX - mobileSheetSwipeRef.current.startX;
+    if (deltaY <= 0 || Math.abs(deltaX) > deltaY * 0.9) {
+      return;
+    }
+    mobileSheetSwipeRef.current.drag = deltaY;
+    setMobileSheetDragOffset(Math.min(180, deltaY));
+    event.preventDefault();
+  };
+
+  const handleMobileSheetTouchEnd = () => {
+    if (!mobileSheetSwipeRef.current) {
+      return;
+    }
+    const shouldClose = mobileSheetSwipeRef.current.drag > 100;
+    mobileSheetSwipeRef.current = null;
+    setMobileSheetDragOffset(0);
+    if (shouldClose) {
+      setMobileToolTab(null);
     }
   };
 
@@ -3348,13 +3577,669 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     }
   };
 
+  const applyTextRoleAcrossSlides = (
+    role: EditableTextTargetRole,
+    updater: (element: TextElement) => TextElement
+  ) => {
+    updateSlides(
+      (current) =>
+        current.map((slide) => {
+          const target = resolveEditableTextElementByRole(slide, role);
+          if (!target) {
+            return slide;
+          }
+          return {
+            ...slide,
+            elements: slide.elements.map((element) =>
+              element.type === "text" && element.id === target.id ? updater(element) : element
+            )
+          };
+        }),
+      { recordHistory: false }
+    );
+  };
+
+  const syncMobileTextAreaHeight = (node: HTMLTextAreaElement | null) => {
+    if (!node) {
+      return;
+    }
+    node.style.height = "auto";
+    node.style.height = `${Math.max(80, node.scrollHeight)}px`;
+  };
+
+  useEffect(() => {
+    if (mobileToolTab !== "text") {
+      return;
+    }
+    syncMobileTextAreaHeight(mobileTextAreaRef.current);
+  }, [mobileToolTab, effectiveSelectedTextElement?.id, effectiveSelectedTextElement?.text]);
+
+  const handleMobileColorSchemeModeChange = (mode: MobileColorSchemeMode) => {
+    setMobileColorSchemeMode(mode);
+    handleApplyColorScheme(mode, { applyAll: true });
+  };
+
+  const handleMobileColorSchemeColorChange = (value: string) => {
+    const normalized = normalizeColorForInput(value, DEFAULT_HIGHLIGHT_COLOR);
+    handleSelectedTextColorChange(normalized);
+    handleSelectedTextHighlightColorChange(normalized);
+    if (mobileColorSchemeMode === "single") {
+      handleApplyColorScheme("single", { applyAll: true });
+    }
+  };
+
+  const handleMobileBackgroundColorChange = (value: string) => {
+    const normalized = normalizeColorForInput(value, "#ffffff");
+    handleSlideBackgroundColorChange(normalized, { applyAll: mobileApplyBackgroundForAll });
+  };
+
+  const handleMobileBackgroundPhotoSettingsChange = (updates: Partial<SlidePhotoSettings>) => {
+    if (mobileApplyBackgroundForAll) {
+      updateSlides(
+        (current) =>
+          current.map((slide) => ({
+            ...slide,
+            photoSettings: normalizeSlidePhotoSettings({
+              ...slide.photoSettings,
+              ...updates
+            })
+          })),
+        { recordHistory: false }
+      );
+      return;
+    }
+    handleActiveSlidePhotoSettingsChange(updates);
+  };
+
+  const handleMobileStylePresetApply = (presetId: MobileStylePresetId) => {
+    handleApplyStylePreset(presetId, { applyAll: mobileApplyStyleForAll });
+  };
+
+  const handleMobileFontChangeForRole = (role: EditableTextTargetRole, value: string) => {
+    const target =
+      role === "title"
+        ? managedTitleTextElement ?? managedBodyTextElement
+        : managedBodyTextElement ?? managedTitleTextElement;
+    if (!target) {
+      setStatus("На текущем слайде нет редактируемого текстового блока.");
+      return;
+    }
+
+    setSelectedTextTargetRole(role);
+    setSelectedElementId(target.id);
+    updateElement(
+      target.id,
+      (element) => (element.type === "text" ? { ...element, fontFamily: value } : element),
+      { recordHistory: false }
+    );
+  };
+
+  const handleMobileTextCaseChange = (mode: TextCaseMode) => {
+    if (mobileApplySizeForAll) {
+      applyTextRoleAcrossSlides(selectedTextTargetRole, (element) => ({
+        ...element,
+        text: transformTextCase(element.text, mode),
+        highlights: normalizeHighlightRangesForText(
+          element.highlights,
+          transformTextCase(element.text, mode)
+        )
+      }));
+      setStatus("Регистр применён ко всем слайдам.");
+      return;
+    }
+    handleSelectedTextCaseChange(mode);
+  };
+
+  const handleMobileTextSizeChange = (value: number) => {
+    const nextSize = Math.max(14, Math.min(96, Math.round(value)));
+    if (mobileApplySizeForAll) {
+      applyTextRoleAcrossSlides(selectedTextTargetRole, (element) => ({
+        ...element,
+        fontSize: nextSize
+      }));
+      setStatus("Размер применён ко всем слайдам.");
+      return;
+    }
+    handleSelectedTextSizeChange(nextSize);
+  };
+
+  const handleMobileTextFormattingAction = (
+    action: "bold" | "italic" | "underline" | "strike" | "highlight" | "brush" | "wave"
+  ) => {
+    if (action === "highlight") {
+      handleApplyHighlightToSelection();
+      return;
+    }
+    if (action === "wave") {
+      handleClearHighlightFromSelection();
+      return;
+    }
+    if (action === "brush") {
+      setStatus("Цвет выделения меняется через круглый селектор «Цвет выделений».");
+      return;
+    }
+    setStatus("Этот формат пока доступен в desktop-редакторе. UI на мобайле уже подготовлен.");
+  };
+
+  const renderMobileToolSheetContent = () => {
+    if (!mobileToolTab) {
+      return null;
+    }
+
+    if (mobileToolTab === "templates") {
+      return (
+        <div className="mobile-v3-sheet-stack">
+          <div className="mobile-v3-chip-row">
+            {MOBILE_TEMPLATE_CATEGORY_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`mobile-v3-chip ${mobileTemplateCategory === item.id ? "active" : ""}`}
+                onClick={() => setMobileTemplateCategory(item.id)}
+                disabled={generationLocked}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="mobile-v3-template-grid">
+            {mobileTemplateItems.map((template) => {
+              const isActive = activeTemplateId === template.id;
+              return (
+                <button
+                  key={template.id}
+                  type="button"
+                  className={`mobile-v3-template-card ${isActive ? "active" : ""}`}
+                  onClick={() => handleApplyTemplate(template.id, "all")}
+                  disabled={generationLocked}
+                >
+                  <span
+                    className="mobile-v3-template-preview"
+                    style={{
+                      background: template.previewBackground ?? template.background
+                    }}
+                  >
+                    <span
+                      className="mobile-v3-template-preview-chip"
+                      style={{ background: template.accent }}
+                    />
+                    <span className="mobile-v3-template-preview-line" />
+                    <span className="mobile-v3-template-preview-line short" />
+                  </span>
+                  <span className="mobile-v3-template-name">{template.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (mobileToolTab === "color") {
+      return (
+        <div className="mobile-v3-sheet-stack">
+          <div className="mobile-v3-segment">
+            <button
+              type="button"
+              className={`mobile-v3-segment-btn ${mobileColorSchemeMode === "single" ? "active" : ""}`}
+              onClick={() => handleMobileColorSchemeModeChange("single")}
+              disabled={generationLocked}
+            >
+              Один цвет
+            </button>
+            <button
+              type="button"
+              className={`mobile-v3-segment-btn ${mobileColorSchemeMode === "double" ? "active" : ""}`}
+              onClick={() => handleMobileColorSchemeModeChange("double")}
+              disabled={generationLocked}
+            >
+              Два цвета
+            </button>
+          </div>
+
+          <div className="mobile-v3-color-control">
+            <span className="mobile-v3-row-label">
+              {mobileColorSchemeMode === "single" ? "Единый цвет" : "Цвет выделения"}
+            </span>
+            <div className="mobile-v3-color-inline">
+              <MobileColorCirclePicker
+                label="Цвет схемы"
+                value={mobileSelectedHighlightColor}
+                onChange={handleMobileColorSchemeColorChange}
+                disabled={generationLocked}
+              />
+              <HexColorField
+                className="field mobile-v3-hex-input"
+                value={mobileSelectedHighlightColor}
+                onValidChange={handleMobileColorSchemeColorChange}
+                disabled={generationLocked}
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (mobileToolTab === "background") {
+      return (
+        <div className="mobile-v3-sheet-stack">
+          <div className="mobile-v3-sheet-block">
+            <span className="mobile-v3-row-label">Цвет фона</span>
+            <AppSelect
+              value={mobileBackgroundColor.toLowerCase()}
+              onValueChange={handleMobileBackgroundColorChange}
+              disabled={generationLocked}
+              ariaLabel="Цвет фона"
+              triggerClassName="mobile-v3-select"
+              options={MOBILE_BACKGROUND_COLOR_OPTIONS.map((option) => ({
+                value: option.value.toLowerCase(),
+                label: option.label
+              }))}
+            />
+            <div className="mobile-v3-swatch-row">
+              {MOBILE_BACKGROUND_COLOR_OPTIONS.map((option) => {
+                const isActive = option.value.toLowerCase() === mobileBackgroundColor.toLowerCase();
+                return (
+                  <button
+                    key={`${option.value}-swatch`}
+                    type="button"
+                    className={`mobile-v3-swatch ${isActive ? "active" : ""}`}
+                    style={{ background: option.value }}
+                    onClick={() => handleMobileBackgroundColorChange(option.value)}
+                    disabled={generationLocked}
+                    aria-label={`Фон ${option.label}`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          <label className="mobile-v3-switch-row">
+            <span>Применить для всех слайдов</span>
+            <Switch.Root
+              checked={mobileApplyBackgroundForAll}
+              onCheckedChange={(value) => setMobileApplyBackgroundForAll(Boolean(value))}
+              className="mobile-switch-root"
+              disabled={generationLocked}
+            >
+              <Switch.Thumb className="mobile-switch-thumb" />
+            </Switch.Root>
+          </label>
+
+          <div className="mobile-v3-sheet-block">
+            <div className="mobile-v3-slider-head">
+              <span className="mobile-v3-row-label">Высота фона</span>
+              <strong>{mobileBackgroundHeightPercent}%</strong>
+            </div>
+            <input
+              type="range"
+              className="mobile-v3-slider"
+              min={60}
+              max={100}
+              step={1}
+              value={mobileBackgroundHeightPercent}
+              onChange={(event) => {
+                const nextPercent = Number(event.target.value);
+                const nextZoom = Math.round(100 + ((nextPercent - 60) / 40) * 100);
+                handleMobileBackgroundPhotoSettingsChange({ zoom: nextZoom });
+              }}
+              disabled={generationLocked || !activeSlide}
+            />
+          </div>
+
+          <div className="mobile-v3-sheet-block">
+            <span className="mobile-v3-row-label">Верхнее / Нижнее фото</span>
+            <div className="mobile-v3-segment">
+              <button
+                type="button"
+                className={`mobile-v3-segment-btn ${mobilePhotoAnchor === "top" ? "active" : ""}`}
+                onClick={() => handleMobileBackgroundPhotoSettingsChange({ offsetY: -20 })}
+                disabled={generationLocked || !activeSlide}
+              >
+                Сверху
+              </button>
+              <button
+                type="button"
+                className={`mobile-v3-segment-btn ${mobilePhotoAnchor === "bottom" ? "active" : ""}`}
+                onClick={() => handleMobileBackgroundPhotoSettingsChange({ offsetY: 20 })}
+                disabled={generationLocked || !activeSlide}
+              >
+                Снизу
+              </button>
+            </div>
+          </div>
+
+          <div className="mobile-v3-sheet-block">
+            <div className="mobile-v3-slider-head">
+              <span className="mobile-v3-row-label">Позиция фото</span>
+              <strong>{mobilePhotoPositionPercent}%</strong>
+            </div>
+            <input
+              type="range"
+              className="mobile-v3-slider"
+              min={0}
+              max={100}
+              step={1}
+              value={mobilePhotoPositionPercent}
+              onChange={(event) => {
+                const nextOffsetY = Math.round(Number(event.target.value) - 50);
+                handleMobileBackgroundPhotoSettingsChange({ offsetY: nextOffsetY });
+              }}
+              disabled={generationLocked || !activeSlide}
+            />
+          </div>
+
+          <button
+            type="button"
+            className="mobile-v3-photo-button"
+            onClick={() => handleAddBackgroundImage(activeSlide?.id)}
+            disabled={generationLocked || !activeSlide}
+          >
+            + Фото
+          </button>
+        </div>
+      );
+    }
+
+    if (mobileToolTab === "style") {
+      return (
+        <div className="mobile-v3-sheet-stack">
+          <label className="mobile-v3-switch-row">
+            <span>Применить для всех слайдов</span>
+            <Switch.Root
+              checked={mobileApplyStyleForAll}
+              onCheckedChange={(value) => setMobileApplyStyleForAll(Boolean(value))}
+              className="mobile-switch-root"
+              disabled={generationLocked}
+            >
+              <Switch.Thumb className="mobile-switch-thumb" />
+            </Switch.Root>
+          </label>
+
+          <div className="mobile-v3-style-row">
+            {MOBILE_STYLE_PRESET_ITEMS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={`mobile-v3-style-card ${activeStylePresetId === preset.id ? "active" : ""}`}
+                onClick={() => handleMobileStylePresetApply(preset.id)}
+                disabled={generationLocked}
+              >
+                <span
+                  className="mobile-v3-style-preview"
+                  style={{ background: preset.preview }}
+                />
+                <span className="mobile-v3-style-label">{preset.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (mobileToolTab === "text") {
+      const textValue = effectiveSelectedTextElement?.text ?? "";
+
+      return (
+        <div className="mobile-v3-sheet-stack">
+          <div className="mobile-v3-segment">
+            <button
+              type="button"
+              className={`mobile-v3-segment-btn ${selectedTextTargetRole === "title" ? "active" : ""}`}
+              onClick={() => handleSelectedTextTargetRoleChange("title")}
+              disabled={generationLocked}
+            >
+              Заголовок
+            </button>
+            <button
+              type="button"
+              className={`mobile-v3-segment-btn ${selectedTextTargetRole === "body" ? "active" : ""}`}
+              onClick={() => handleSelectedTextTargetRoleChange("body")}
+              disabled={generationLocked}
+            >
+              Описание
+            </button>
+          </div>
+
+          <div className="mobile-v3-color-pair-row">
+            <div className="mobile-v3-color-pair-item">
+              <span className="mobile-v3-row-label">Цвет текста</span>
+              <MobileColorCirclePicker
+                label="Цвет текста"
+                value={mobileSelectedTextColor}
+                onChange={handleSelectedTextColorChange}
+                disabled={generationLocked || !effectiveSelectedTextElement}
+              />
+            </div>
+            <div className="mobile-v3-color-pair-item">
+              <span className="mobile-v3-row-label">Цвет выделений</span>
+              <MobileColorCirclePicker
+                label="Цвет выделений"
+                value={mobileSelectedHighlightColor}
+                onChange={handleSelectedTextHighlightColorChange}
+                disabled={generationLocked || !effectiveSelectedTextElement}
+              />
+            </div>
+          </div>
+
+          <div className="mobile-v3-format-row">
+            <button
+              type="button"
+              className="mobile-v3-format-btn"
+              onClick={() => handleMobileTextFormattingAction("bold")}
+              disabled={generationLocked}
+            >
+              B
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-format-btn"
+              onClick={() => handleMobileTextFormattingAction("italic")}
+              disabled={generationLocked}
+            >
+              I
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-format-btn"
+              onClick={() => handleMobileTextFormattingAction("underline")}
+              disabled={generationLocked}
+            >
+              U
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-format-btn"
+              onClick={() => handleMobileTextFormattingAction("strike")}
+              disabled={generationLocked}
+            >
+              S
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-format-btn"
+              onClick={() => handleMobileTextFormattingAction("highlight")}
+              disabled={generationLocked || !effectiveSelectedTextElement}
+            >
+              H
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-format-btn"
+              onClick={() => handleMobileTextFormattingAction("brush")}
+              disabled={generationLocked}
+            >
+              кисть
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-format-btn"
+              onClick={() => handleMobileTextFormattingAction("wave")}
+              disabled={generationLocked || !effectiveSelectedTextElement}
+            >
+              ~
+            </button>
+          </div>
+
+          <textarea
+            ref={mobileTextAreaRef}
+            className="mobile-v3-textarea"
+            value={textValue}
+            placeholder="Текст элемента"
+            onChange={(event) => {
+              handleSelectedTextChange(event.target.value);
+              syncMobileTextAreaHeight(event.currentTarget);
+            }}
+            onSelect={(event) => {
+              const target = event.currentTarget;
+              handleSelectedTextSelectionChange(target.selectionStart ?? 0, target.selectionEnd ?? 0);
+            }}
+            onInput={(event) => syncMobileTextAreaHeight(event.currentTarget)}
+            disabled={generationLocked || !effectiveSelectedTextElement}
+          />
+          <p className="mobile-v3-sheet-hint">
+            Разметка: <code>@@текст@@</code> = выделение, <code>**текст**</code> = жирный.
+          </p>
+        </div>
+      );
+    }
+
+    if (mobileToolTab === "font") {
+      const titleFont = managedTitleTextElement?.fontFamily ?? MOBILE_FONT_OPTIONS[0];
+      const bodyFont = managedBodyTextElement?.fontFamily ?? titleFont;
+
+      return (
+        <div className="mobile-v3-sheet-stack">
+          <div className="mobile-v3-sheet-block">
+            <span className="mobile-v3-row-label">Заголовок</span>
+            <div className="mobile-v3-font-row">
+              {MOBILE_FONT_OPTIONS.map((font) => (
+                <button
+                  key={`title-${font}`}
+                  type="button"
+                  className={`mobile-v3-font-pill ${titleFont === font ? "active" : ""}`}
+                  style={{ fontFamily: `"${font}", Inter, sans-serif` }}
+                  onClick={() => handleMobileFontChangeForRole("title", font)}
+                  disabled={generationLocked}
+                >
+                  {font}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mobile-v3-sheet-block">
+            <span className="mobile-v3-row-label">Описание</span>
+            <div className="mobile-v3-font-row">
+              {MOBILE_FONT_OPTIONS.map((font) => (
+                <button
+                  key={`body-${font}`}
+                  type="button"
+                  className={`mobile-v3-font-pill ${bodyFont === font ? "active" : ""}`}
+                  style={{ fontFamily: `"${font}", Inter, sans-serif` }}
+                  onClick={() => handleMobileFontChangeForRole("body", font)}
+                  disabled={generationLocked}
+                >
+                  {font}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="mobile-v3-add-font-btn"
+            onClick={() => setStatus("Подключение новых шрифтов откроем следующим этапом.")}
+            disabled={generationLocked}
+          >
+            + Добавить шрифт
+          </button>
+
+          <p className="mobile-v3-sheet-hint">
+            Проверяйте лицензию перед коммерческим использованием.{" "}
+            <a href="https://fonts.google.com/" target="_blank" rel="noreferrer">
+              Сайт с бесплатными шрифтами
+            </a>
+          </p>
+        </div>
+      );
+    }
+
+    if (mobileToolTab === "size") {
+      const currentSize = Math.round(effectiveSelectedTextElement?.fontSize ?? 28);
+
+      return (
+        <div className="mobile-v3-sheet-stack">
+          <div className="mobile-v3-segment">
+            <button
+              type="button"
+              className={`mobile-v3-segment-btn ${selectedTextTargetRole === "title" ? "active" : ""}`}
+              onClick={() => handleSelectedTextTargetRoleChange("title")}
+              disabled={generationLocked}
+            >
+              Заголовок
+            </button>
+            <button
+              type="button"
+              className={`mobile-v3-segment-btn ${selectedTextTargetRole === "body" ? "active" : ""}`}
+              onClick={() => handleSelectedTextTargetRoleChange("body")}
+              disabled={generationLocked}
+            >
+              Описание
+            </button>
+          </div>
+
+          <div className="mobile-v3-case-row">
+            {MOBILE_TEXT_CASE_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`mobile-v3-case-btn ${activeTextCaseMode === option.id ? "active" : ""}`}
+                onClick={() => handleMobileTextCaseChange(option.id)}
+                disabled={generationLocked || !effectiveSelectedTextElement}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mobile-v3-sheet-block">
+            <div className="mobile-v3-slider-head">
+              <span className="mobile-v3-row-label">Размер</span>
+              <strong>{currentSize}px</strong>
+            </div>
+            <input
+              type="range"
+              className="mobile-v3-slider"
+              min={14}
+              max={96}
+              step={1}
+              value={currentSize}
+              onChange={(event) => handleMobileTextSizeChange(Number(event.target.value))}
+              disabled={generationLocked || !effectiveSelectedTextElement}
+            />
+          </div>
+
+          <label className="mobile-v3-switch-row">
+            <span>Применить для всех слайдов</span>
+            <Switch.Root
+              checked={mobileApplySizeForAll}
+              onCheckedChange={(value) => setMobileApplySizeForAll(Boolean(value))}
+              className="mobile-switch-root"
+              disabled={generationLocked}
+            >
+              <Switch.Thumb className="mobile-switch-thumb" />
+            </Switch.Root>
+          </label>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
-    <main
-      className="page-shell"
-      style={{
-        ["--mobile-bottom-offset" as string]: `${mobileBottomOffset}px`
-      }}
-    >
+    <main className="page-shell">
       <div className="desktop-only">
         <div className="editor-shell editor-shell-redesigned">
           {isGeneratePanelVisible ? (
@@ -3375,20 +4260,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             <aside className="action-rail" aria-label="Инструменты редактора">
               <Tooltip.Provider delayDuration={400}>
                 <RailIconButton
-                  icon="history-back"
-                  tooltip="Отменить (Ctrl/Cmd + Z)"
-                  onClick={handleUndo}
-                  disabled={!canUndo || generationLocked}
+                  icon="select"
+                  tooltip="Слайды"
+                  onClick={handleRequestSlidesSection}
+                  disabled={generationLocked}
                 />
-                <RailIconButton
-                  icon="history-forward"
-                  tooltip="Повторить (Ctrl/Cmd + Shift + Z)"
-                  onClick={handleRedo}
-                  disabled={!canRedo || generationLocked}
-                />
-
-                <div className="rail-divider" aria-hidden="true" />
-
                 <RailIconButton
                   icon="templates"
                   tooltip="Шаблоны"
@@ -3397,8 +4273,15 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   isActive={isTemplateModalOpen}
                 />
                 <RailIconButton
+                  icon="layers"
+                  tooltip="Сетка"
+                  onClick={() => handleGridVisibilityChange(!activeGridVisible)}
+                  disabled={generationLocked}
+                  isActive={activeGridVisible}
+                />
+                <RailIconButton
                   icon={isPreviewMode ? "eye-off" : "eye"}
-                  tooltip={isPreviewMode ? "Режим редактирования" : "Предпросмотр"}
+                  tooltip="Предпросмотр"
                   onClick={() => setIsPreviewMode((value) => !value)}
                   disabled={generationLocked}
                   isActive={isPreviewMode}
@@ -3532,6 +4415,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                   onApplyHighlightColorToAllSlides={handleApplyHighlightColorToAllSlides}
                   selectedTextHighlightColor={selectedHighlightColor}
                   selectedTextHighlightOpacity={selectedHighlightOpacity}
+                  slidesSectionRef={slidesSectionRef}
                   signatureSectionRef={signatureSectionRef}
                   profileHandleInputRef={profileHandleInputRef}
                   disabled={generationLocked}
@@ -3544,164 +4428,70 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       </div>
 
       <div className="mobile-only">
-        <div className="mobile-editor-shell">
-          <header className="mobile-topbar sticky-header">
-            <div className="mobile-top-left">
-              <span className="mobile-top-title">Редактор</span>
+        <div className="mobile-editor-shell mobile-v3-shell">
+          <header className="mobile-v3-topbar top-bar">
+            <div className="mobile-v3-topbar-left">
+              <button
+                type="button"
+                className="mobile-v3-topbar-icon"
+                title="Отменить"
+                onClick={handleUndo}
+                disabled={!canUndo || generationLocked}
+              >
+                <Undo2 size={16} />
+              </button>
+              <button
+                type="button"
+                className="mobile-v3-topbar-icon"
+                title="Повторить"
+                onClick={handleRedo}
+                disabled={!canRedo || generationLocked}
+              >
+                <Redo2 size={16} />
+              </button>
             </div>
 
-            <div className="mobile-top-center">
-              <select
-                className="mobile-compact-select"
-                value={slideFormat}
-                onChange={(event) => handleFormatChange(event.target.value as SlideFormat)}
-                aria-label="Формат"
-                disabled={generationLocked}
-              >
-                <option value="1:1">1:1</option>
-                <option value="4:5">4:5</option>
-                <option value="9:16">9:16</option>
-              </select>
-            </div>
+            <Popover.Root>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  className="mobile-v3-format-trigger"
+                  aria-label="Формат слайда"
+                  disabled={generationLocked}
+                >
+                  <span>{slideFormat}</span>
+                  <ChevronDown size={14} />
+                </button>
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content className="mobile-v3-format-menu" side="bottom" sideOffset={8} align="center">
+                  {(["1:1", "4:5", "9:16"] as const).map((format) => (
+                    <button
+                      key={format}
+                      type="button"
+                      className={`mobile-v3-format-option ${slideFormat === format ? "active" : ""}`}
+                      onClick={() => handleFormatChange(format)}
+                    >
+                      {format}
+                    </button>
+                  ))}
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
 
             <button
-              className="mobile-export-button"
+              className="mobile-v3-export-button"
               type="button"
               onClick={handleOpenSlideExportModal}
               disabled={isExportRendering || isGenerating}
               title={`Экспорт в ${exportModeLabel}`}
             >
-              <AppIcon name="download" size={16} />
+              {isExportRendering ? <Loader2 size={15} className="spinner-icon" /> : <Download size={15} />}
               <span>{isExportRendering ? "Экспорт..." : "Экспорт"}</span>
             </button>
           </header>
 
-          {activeSlide ? (
-            <div className="mobile-slide-mini-bar" aria-label="Управление слайдами">
-              <div className="mobile-slide-mini-left">
-                <button
-                  className="mobile-slide-mini-button"
-                  type="button"
-                  title="Отменить"
-                  onClick={handleUndo}
-                  disabled={!canUndo || generationLocked}
-                >
-                  <AppIcon name="history-back" size={15} />
-                </button>
-                <button
-                  className="mobile-slide-mini-button"
-                  type="button"
-                  title="Повторить"
-                  onClick={handleRedo}
-                  disabled={!canRedo || generationLocked}
-                >
-                  <AppIcon name="history-forward" size={15} />
-                </button>
-              </div>
-
-              <div className="mobile-slide-mini-center">
-                Слайд {Math.max(1, activeSlideIndex + 1)} / {slides.length}
-              </div>
-
-              <Popover.Root>
-                <Popover.Trigger asChild>
-                  <button
-                    className="mobile-slide-mini-menu-trigger"
-                    type="button"
-                    aria-label="Действия со слайдом"
-                    disabled={generationLocked}
-                  >
-                    …
-                  </button>
-                </Popover.Trigger>
-                <Popover.Portal>
-                  <Popover.Content
-                    className="mobile-slide-mini-menu"
-                    align="end"
-                    side="bottom"
-                    sideOffset={8}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleInsertSlideAt(activeSlideIndex + 1, "text")}
-                      disabled={generationLocked}
-                    >
-                      Добавить слайд
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDuplicateSlide(activeSlide.id)}
-                      disabled={generationLocked}
-                    >
-                      Дублировать
-                    </button>
-                    <button
-                      type="button"
-                      className="is-danger"
-                      onClick={() => handleDeleteSlide(activeSlide.id)}
-                      disabled={generationLocked || slides.length <= 1}
-                    >
-                      Удалить слайд
-                    </button>
-                  </Popover.Content>
-                </Popover.Portal>
-              </Popover.Root>
-            </div>
-          ) : null}
-
-          {isGeneratePanelVisible ? (
-            <details className="mobile-generate-panel" ref={mobileGeneratePanelRef}>
-              <summary>Создать новую карусель</summary>
-              <div className="mobile-generate-body">
-                <textarea
-                  ref={mobileGenerateTopicRef}
-                  value={topic}
-                  onChange={(event) => setTopic(event.target.value)}
-                  placeholder="Например: «Как эксперту получать заявки через Instagram-карусели»"
-                  rows={3}
-                  maxLength={MAX_TOPIC_CHARS}
-                  title={`Максимум ${MAX_TOPIC_CHARS} символов`}
-                  disabled={generationLocked}
-                />
-                <div className="mobile-generate-row">
-                  <label className="mobile-count-label">
-                    Карточек
-                    <select
-                      value={slidesCount}
-                      onChange={(event) => setSlidesCount(clampSlidesCount(Number(event.target.value)))}
-                      disabled={generationLocked}
-                    >
-                      {SLIDES_COUNT_OPTIONS.map((count) => (
-                        <option key={count} value={count}>
-                          {count}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="mobile-generate-actions">
-                    <button
-                      className="btn"
-                      type="button"
-                      onClick={() => void handleGenerate({ source: "mobile" })}
-                      disabled={generationLocked}
-                    >
-                      {isGenerating ? "Генерирую..." : "Сгенерировать"}
-                    </button>
-                    <button
-                      className="btn secondary"
-                      type="button"
-                      onClick={() => void handleGenerate({ source: "mobile", openPostTool: true })}
-                      disabled={generationLocked}
-                    >
-                      {isGenerating ? "Подождите..." : "Сгенерировать + пост"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </details>
-          ) : null}
-
-          <section className="mobile-canvas-zone" ref={mobileCanvasHostRef}>
+          <section className="mobile-canvas-zone mobile-v3-canvas-zone" ref={mobileCanvasHostRef}>
             <CanvasEditor
               mode="single"
               slides={slides}
@@ -3747,82 +4537,144 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             />
           </section>
 
-          {activeSlide ? (
-            <MobileTools
-              activeTab={mobileToolTab}
-              onTabChange={handleMobileToolTabChange}
-              slides={slides}
-              activeSlideId={activeSlideId}
-              selectedElement={selectedElement}
-              selectedTextElement={effectiveSelectedTextElement}
-              selectedTextTargetRole={selectedTextTargetRole}
-              activeTemplateName={activeTemplateName}
-              profileHandle={activeSlide.profileHandle ?? ""}
-              profileSubtitle={normalizeProfileSubtitleForUi(activeSlide.profileSubtitle ?? "")}
-              subtitlesVisibleAcrossSlides={subtitlesVisibleAcrossSlides}
-              photoSlotEnabled={activePhotoSlotEnabled}
-              hasBackgroundImage={activeHasBackgroundImage}
-              gridVisible={activeGridVisible}
-              captionResult={captionResult}
-              isGenerating={isGenerating}
-              isGeneratingCaption={isGeneratingCaption}
-              isExporting={isExportRendering}
-              onGenerateCaption={handleGenerateCaption}
-              onCopyCaption={handleCopyCaption}
-              onOpenExportModal={handleOpenSlideExportModal}
-              onSelectSlide={(slideId) => handleSelectSlide(slideId, { source: "list" })}
-              onInsertSlideAt={handleInsertSlideAt}
-              onDuplicateSlide={handleDuplicateSlide}
-              onMoveSlide={handleMoveSlide}
-              onDeleteSlide={handleDeleteSlide}
-              onPhotoSlotEnabledChange={(value) => handlePhotoSlotToggle(value, activeSlide.id)}
-              slideBackground={activeSlide.background}
-              onUploadBackgroundImage={() => handleAddBackgroundImage(activeSlide.id)}
-              onRemoveBackgroundImage={() => {
-                if (activeSlideIndex === -1) {
-                  return;
-                }
-                updateSlide(activeSlide.id, (slide) =>
-                  setSlideBackgroundImage(slide, null, activeSlideIndex, slides.length, slideFormat)
-                );
-                setSelectedElementId(null);
-                setEditingTextElementId(null);
-                setStatus("Фоновое изображение удалено.");
-              }}
-              onOpenTemplateModal={handleOpenTemplateModal}
-              onProfileHandleChange={(value) => handleUpdateFooter({ profileHandle: value })}
-              onProfileSubtitleChange={(value) =>
-                handleUpdateFooter({ profileSubtitle: normalizeProfileSubtitleForUi(value) })
+          <section className="mobile-v3-action-bar action-bar" ref={mobileActionBarRef} aria-label="Action bar">
+            <button
+              type="button"
+              className="mobile-v3-action-btn"
+              onClick={() =>
+                handleMobileToolTabChange(mobileToolTab === "templates" ? null : "templates")
               }
-              onToggleSubtitleAcrossSlides={handleToggleSubtitleAcrossSlides}
-              onSlideBackgroundChange={handleSlideBackgroundColorChange}
-              photoSettings={activePhotoSettings}
-              onSlidePhotoSettingsChange={handleActiveSlidePhotoSettingsChange}
-              onApplyStylePreset={handleApplyStylePreset}
-              onGridVisibilityChange={handleGridVisibilityChange}
-              onSelectedTextChange={handleSelectedTextChange}
-              onSelectedTextColorChange={handleSelectedTextColorChange}
-              onSelectedTextHighlightColorChange={handleSelectedTextHighlightColorChange}
-              onSelectedTextHighlightOpacityChange={handleSelectedTextHighlightOpacityChange}
-              onSelectedTextSelectionChange={handleSelectedTextSelectionChange}
-              onSelectedTextFontChange={handleSelectedTextFontChange}
-              onSelectedTextSizeChange={handleSelectedTextSizeChange}
-              onSelectedTextCaseChange={handleSelectedTextCaseChange}
-              onSelectedTextAlignChange={handleSelectedTextAlignChange}
-              onCenterSelectedTextHorizontally={handleCenterSelectedTextHorizontally}
-              onSelectedTextTargetRoleChange={handleSelectedTextTargetRoleChange}
-              onApplyColorScheme={handleApplyColorScheme}
-              onApplyHighlightToSelection={handleApplyHighlightToSelection}
-              onClearHighlightFromSelection={handleClearHighlightFromSelection}
-              onClearAllHighlights={handleClearAllHighlights}
-              onApplyHighlightColorToAllSlides={handleApplyHighlightColorToAllSlides}
-              selectedTextHighlightColor={selectedHighlightColor}
-              selectedTextHighlightOpacity={selectedHighlightOpacity}
-              toolbarRef={mobileToolbarRef}
-              toolSheetRef={mobileToolSheetRef}
               disabled={generationLocked}
-              previewMode={isPreviewMode}
-            />
+              title="Управление слайдами"
+            >
+              <LayoutGrid size={20} />
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-action-btn"
+              onClick={() => setStatus("Порядок слоёв появится в следующей части.")}
+              disabled={generationLocked}
+              title="Порядок слоёв"
+            >
+              <Layers size={20} />
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-action-btn"
+              onClick={() => {
+                if (activeSlide) {
+                  handleDuplicateSlide(activeSlide.id);
+                }
+              }}
+              disabled={generationLocked || !activeSlide}
+              title="Дублировать слайд"
+            >
+              <Copy size={20} />
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-action-btn"
+              onClick={() => {
+                if (activeSlideIndex > 0) {
+                  handleSelectSlide(slides[activeSlideIndex - 1].id, { source: "tools" });
+                }
+              }}
+              disabled={generationLocked || activeSlideIndex <= 0}
+              title="Предыдущий слайд"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-action-btn"
+              onClick={() => {
+                if (activeSlideIndex >= 0 && activeSlideIndex < slides.length - 1) {
+                  handleSelectSlide(slides[activeSlideIndex + 1].id, { source: "tools" });
+                }
+              }}
+              disabled={generationLocked || activeSlideIndex < 0 || activeSlideIndex >= slides.length - 1}
+              title="Следующий слайд"
+            >
+              <ChevronRight size={20} />
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-action-btn is-danger"
+              onClick={() => {
+                if (activeSlide) {
+                  handleDeleteSlide(activeSlide.id);
+                }
+              }}
+              disabled={generationLocked || !activeSlide || slides.length <= 1}
+              title="Удалить слайд"
+            >
+              <Trash2 size={20} />
+            </button>
+          </section>
+
+          <nav
+            ref={mobileTabsRef}
+            className={`mobile-v3-bottom-tabs bottom-tabs ${mobileToolTab ? "is-sheet-open" : ""}`}
+            aria-label="Нижняя навигация"
+          >
+            {MOBILE_TAB_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = mobileToolTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`mobile-v3-tab ${isActive ? "active" : ""}`}
+                  onClick={() => handleMobileToolTabChange(isActive ? null : item.id)}
+                  disabled={generationLocked}
+                >
+                  <span className="mobile-v3-tab-icon">
+                    <Icon size={20} />
+                  </span>
+                  <span className="mobile-v3-tab-label">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {mobileToolTab ? (
+            <>
+              <button
+                type="button"
+                className="mobile-v3-sheet-backdrop"
+                aria-label="Закрыть панель"
+                onClick={() => handleMobileToolTabChange(null)}
+              />
+              <section
+                ref={mobileToolSheetRef}
+                className={`mobile-v3-sheet bottom-sheet ${mobileSheetDragOffset > 0 ? "is-dragging" : ""}`}
+                role="dialog"
+                aria-label={MOBILE_TAB_TITLE[mobileToolTab]}
+                onTouchStart={handleMobileSheetTouchStart}
+                onTouchMove={handleMobileSheetTouchMove}
+                onTouchEnd={handleMobileSheetTouchEnd}
+                onTouchCancel={handleMobileSheetTouchEnd}
+                style={{
+                  transform: mobileSheetDragOffset
+                    ? `translateY(${mobileSheetDragOffset}px)`
+                    : undefined
+                }}
+              >
+                <div className="mobile-v3-sheet-handle" aria-hidden="true" />
+                <header className="mobile-v3-sheet-header">
+                  <h3>{MOBILE_TAB_TITLE[mobileToolTab]}</h3>
+                  <button
+                    type="button"
+                    className="mobile-v3-sheet-close"
+                    onClick={() => handleMobileToolTabChange(null)}
+                    aria-label="Закрыть панель"
+                  >
+                    <X size={18} />
+                  </button>
+                </header>
+                <div className="mobile-v3-sheet-body custom-scroll">{renderMobileToolSheetContent()}</div>
+              </section>
+            </>
           ) : null}
         </div>
       </div>
@@ -3918,6 +4770,102 @@ function RailIconButton({
       </Tooltip.Portal>
     </Tooltip.Root>
   );
+}
+
+function MobileColorCirclePicker({
+  value,
+  onChange,
+  disabled,
+  label
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  label: string;
+}) {
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className="mobile-v3-color-circle"
+          style={{ background: value }}
+          disabled={disabled}
+          aria-label={label}
+        />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content className="mobile-v3-color-popover" side="top" sideOffset={8} align="start">
+          <HexColorPicker color={value} onChange={onChange} />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+function resolveEditableTextElementByRole(
+  slide: Slide,
+  role: EditableTextTargetRole
+) {
+  const targetMetaKey = role === "title" ? MANAGED_TITLE_META_KEY : MANAGED_BODY_META_KEY;
+  const explicit = resolvePreferredManagedTextByMeta(slide, targetMetaKey);
+  if (explicit) {
+    return explicit;
+  }
+
+  const editable = slide.elements
+    .filter(
+      (element): element is TextElement =>
+        element.type === "text" && !NON_CONTENT_TEXT_META_KEYS.has(element.metaKey ?? "")
+    )
+    .sort((left, right) => left.y - right.y);
+
+  if (!editable.length) {
+    return null;
+  }
+
+  if (role === "title") {
+    return editable[0];
+  }
+
+  return editable.find((element) => element.id !== editable[0].id) ?? editable[0];
+}
+
+function detectTextCaseMode(value: string): TextCaseMode {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return "normal";
+  }
+
+  const hasLetters = /[A-Za-zА-Яа-яЁё]/.test(normalized);
+  if (!hasLetters) {
+    return "normal";
+  }
+
+  if (normalized === normalized.toUpperCase() && normalized !== normalized.toLowerCase()) {
+    return "uppercase";
+  }
+
+  if (normalized === normalized.toLowerCase() && normalized !== normalized.toUpperCase()) {
+    return "lowercase";
+  }
+
+  const titleCased = normalized
+    .split(" ")
+    .map((word) => {
+      if (!word) {
+        return word;
+      }
+      const [first, ...rest] = word;
+      return `${first.toLocaleUpperCase("ru-RU")}${rest.join("").toLocaleLowerCase("ru-RU")}`;
+    })
+    .join(" ");
+
+  if (normalized === titleCased) {
+    return "capitalize";
+  }
+
+  return "normal";
 }
 
 function isTextEntryElement(element: Element | null) {
