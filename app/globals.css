@@ -5034,8 +5034,8 @@ button:disabled {
 }
 
 .editor-shell .rail-button.is-active {
-  background: var(--color-primary-light) !important;
-  color: var(--color-primary) !important;
+  background: rgba(99, 102, 241, 0.1) !important;
+  color: #6366f1 !important;
 }
 
 .editor-shell .rail-divider {
@@ -7191,8 +7191,8 @@ button:disabled {
 }
 
 .editor-shell .rail-button.is-active {
-  background: var(--color-primary-light) !important;
-  color: var(--color-primary) !important;
+  background: rgba(99, 102, 241, 0.1) !important;
+  color: #6366f1 !important;
 }
 
 .editor-shell .canvas-column {
