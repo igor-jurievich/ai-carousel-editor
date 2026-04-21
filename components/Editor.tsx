@@ -646,6 +646,20 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   }, [pathname, router, searchParams]);
 
   useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    document.documentElement.classList.add("editor-route-active");
+    document.body.classList.add("editor-route-active");
+
+    return () => {
+      document.documentElement.classList.remove("editor-route-active");
+      document.body.classList.remove("editor-route-active");
+    };
+  }, []);
+
+  useEffect(() => {
     editingTextElementIdRef.current = editingTextElementId;
   }, [editingTextElementId]);
 
@@ -721,7 +735,12 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         const host = mobileCanvasHostRef.current;
         const hostWidth = host?.clientWidth ?? viewportWidth;
         const hostRect = host?.getBoundingClientRect();
-        const availableHeight = Math.max(220, (hostRect?.height ?? viewportHeight * 0.52) - 16);
+        const paginationHeight =
+          (host?.querySelector(".mobile-slide-pagination") as HTMLElement | null)?.offsetHeight ?? 0;
+        const availableHeight = Math.max(
+          220,
+          (hostRect?.height ?? viewportHeight * 0.52) - paginationHeight - 24
+        );
         const widthLimit = Math.max(
           220,
           Math.min(
@@ -834,8 +853,14 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         return;
       }
 
+      const inMobileSheet = Boolean(target.closest(".mobile-v3-sheet-body"));
+      const inDesktopSidebar = Boolean(target.closest(".right-sidebar"));
+      if (!inMobileSheet && !inDesktopSidebar) {
+        return;
+      }
+
       const timerId = window.setTimeout(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
         pendingScrollTimers.delete(timerId);
       }, 300);
 
@@ -4239,7 +4264,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   };
 
   return (
-    <main className="page-shell">
+    <main className="page-shell editor-page-shell">
       <div className="desktop-only">
         <div className="editor-shell editor-shell-redesigned">
           {isGeneratePanelVisible ? (
@@ -4429,7 +4454,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
       <div className="mobile-only">
         <div className="mobile-editor-shell mobile-v3-shell">
-          <header className="mobile-v3-topbar top-bar">
+          <header className="mobile-v3-topbar">
             <div className="mobile-v3-topbar-left">
               <button
                 type="button"
@@ -4491,130 +4516,132 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             </button>
           </header>
 
-          <section className="mobile-canvas-zone mobile-v3-canvas-zone" ref={mobileCanvasHostRef}>
-            <CanvasEditor
-              mode="single"
-              slides={slides}
-              activeSlideId={activeSlideId}
-              activeFormat={slideFormat}
-              displayWidth={displaySize}
-              displayHeight={displayHeight}
-              canvasWidth={slideDimensions.width}
-              canvasHeight={slideDimensions.height}
-              selectedElementId={selectedElementId}
-              selectedElement={selectedElement}
-              editingTextElementId={editingTextElementId}
-              editingTextElement={editingTextElement}
-              editingValue={editingValue}
-              onEditingValueChange={handleEditingValueChange}
-              onEditingSelectionChange={handleSelectedTextSelectionChange}
-              onCommitTextEditing={handleCommitTextEditing}
-              onCancelTextEditing={handleCancelTextEditing}
-              onStartTextEditing={handleStartTextEditing}
-              onSelectSlide={(slideId) => handleSelectSlide(slideId, { source: "canvas" })}
-              onVisibleSlideChange={handleVisibleSlideChange}
-              scrollToSlideRequest={scrollToSlideRequest}
-              onSelectElement={handleSelectElement}
-              onUpdateElementPosition={handleUpdateElementPositionBySlide}
-              onTransformElement={handleTransformElementBySlide}
-              onInsertSlideAt={handleInsertSlideAt}
-              onAddTextToSlide={handleAddText}
-              onAddImageToSlide={handleAddImage}
-              onAddBackgroundImageToSlide={handleAddBackgroundImage}
-              onDeleteSelectedElement={handleDeleteElement}
-              onDuplicateSlide={handleDuplicateSlide}
-              onMoveSlide={handleMoveSlide}
-              onDeleteSlide={handleDeleteSlide}
-              onOpenTemplateModal={handleOpenTemplateModal}
-              onRequestProfileHandleEdit={handleRequestProfileHandleEdit}
-              disabled={generationLocked}
-              previewMode={isPreviewMode}
-              showSlideBadge={false}
-              fontsReady={fontsReady}
-              hideMobileSlideTools
-              isLoading={isGenerating}
-              onNavigateToPrompt={() => router.push("/")}
-            />
-          </section>
+          <section className="mobile-v3-workspace">
+            <section className="mobile-v3-canvas-zone" ref={mobileCanvasHostRef}>
+              <CanvasEditor
+                mode="single"
+                slides={slides}
+                activeSlideId={activeSlideId}
+                activeFormat={slideFormat}
+                displayWidth={displaySize}
+                displayHeight={displayHeight}
+                canvasWidth={slideDimensions.width}
+                canvasHeight={slideDimensions.height}
+                selectedElementId={selectedElementId}
+                selectedElement={selectedElement}
+                editingTextElementId={editingTextElementId}
+                editingTextElement={editingTextElement}
+                editingValue={editingValue}
+                onEditingValueChange={handleEditingValueChange}
+                onEditingSelectionChange={handleSelectedTextSelectionChange}
+                onCommitTextEditing={handleCommitTextEditing}
+                onCancelTextEditing={handleCancelTextEditing}
+                onStartTextEditing={handleStartTextEditing}
+                onSelectSlide={(slideId) => handleSelectSlide(slideId, { source: "canvas" })}
+                onVisibleSlideChange={handleVisibleSlideChange}
+                scrollToSlideRequest={scrollToSlideRequest}
+                onSelectElement={handleSelectElement}
+                onUpdateElementPosition={handleUpdateElementPositionBySlide}
+                onTransformElement={handleTransformElementBySlide}
+                onInsertSlideAt={handleInsertSlideAt}
+                onAddTextToSlide={handleAddText}
+                onAddImageToSlide={handleAddImage}
+                onAddBackgroundImageToSlide={handleAddBackgroundImage}
+                onDeleteSelectedElement={handleDeleteElement}
+                onDuplicateSlide={handleDuplicateSlide}
+                onMoveSlide={handleMoveSlide}
+                onDeleteSlide={handleDeleteSlide}
+                onOpenTemplateModal={handleOpenTemplateModal}
+                onRequestProfileHandleEdit={handleRequestProfileHandleEdit}
+                disabled={generationLocked}
+                previewMode={isPreviewMode}
+                showSlideBadge={false}
+                fontsReady={fontsReady}
+                hideMobileSlideTools
+                isLoading={isGenerating}
+                onNavigateToPrompt={() => router.push("/")}
+              />
+            </section>
 
-          <section className="mobile-v3-action-bar action-bar" ref={mobileActionBarRef} aria-label="Action bar">
-            <button
-              type="button"
-              className="mobile-v3-action-btn"
-              onClick={() =>
-                handleMobileToolTabChange(mobileToolTab === "templates" ? null : "templates")
-              }
-              disabled={generationLocked}
-              title="Управление слайдами"
-            >
-              <LayoutGrid size={20} />
-            </button>
-            <button
-              type="button"
-              className="mobile-v3-action-btn"
-              onClick={() => setStatus("Порядок слоёв появится в следующей части.")}
-              disabled={generationLocked}
-              title="Порядок слоёв"
-            >
-              <Layers size={20} />
-            </button>
-            <button
-              type="button"
-              className="mobile-v3-action-btn"
-              onClick={() => {
-                if (activeSlide) {
-                  handleDuplicateSlide(activeSlide.id);
+            <section className="mobile-v3-action-bar" ref={mobileActionBarRef} aria-label="Action bar">
+              <button
+                type="button"
+                className="mobile-v3-action-btn"
+                onClick={() =>
+                  handleMobileToolTabChange(mobileToolTab === "templates" ? null : "templates")
                 }
-              }}
-              disabled={generationLocked || !activeSlide}
-              title="Дублировать слайд"
-            >
-              <Copy size={20} />
-            </button>
-            <button
-              type="button"
-              className="mobile-v3-action-btn"
-              onClick={() => {
-                if (activeSlideIndex > 0) {
-                  handleSelectSlide(slides[activeSlideIndex - 1].id, { source: "tools" });
-                }
-              }}
-              disabled={generationLocked || activeSlideIndex <= 0}
-              title="Предыдущий слайд"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              type="button"
-              className="mobile-v3-action-btn"
-              onClick={() => {
-                if (activeSlideIndex >= 0 && activeSlideIndex < slides.length - 1) {
-                  handleSelectSlide(slides[activeSlideIndex + 1].id, { source: "tools" });
-                }
-              }}
-              disabled={generationLocked || activeSlideIndex < 0 || activeSlideIndex >= slides.length - 1}
-              title="Следующий слайд"
-            >
-              <ChevronRight size={20} />
-            </button>
-            <button
-              type="button"
-              className="mobile-v3-action-btn is-danger"
-              onClick={() => {
-                if (activeSlide) {
-                  handleDeleteSlide(activeSlide.id);
-                }
-              }}
-              disabled={generationLocked || !activeSlide || slides.length <= 1}
-              title="Удалить слайд"
-            >
-              <Trash2 size={20} />
-            </button>
+                disabled={generationLocked}
+                title="Управление слайдами"
+              >
+                <LayoutGrid size={20} />
+              </button>
+              <button
+                type="button"
+                className="mobile-v3-action-btn"
+                onClick={() => setStatus("Порядок слоёв появится в следующей части.")}
+                disabled={generationLocked}
+                title="Порядок слоёв"
+              >
+                <Layers size={20} />
+              </button>
+              <button
+                type="button"
+                className="mobile-v3-action-btn"
+                onClick={() => {
+                  if (activeSlide) {
+                    handleDuplicateSlide(activeSlide.id);
+                  }
+                }}
+                disabled={generationLocked || !activeSlide}
+                title="Дублировать слайд"
+              >
+                <Copy size={20} />
+              </button>
+              <button
+                type="button"
+                className="mobile-v3-action-btn"
+                onClick={() => {
+                  if (activeSlideIndex > 0) {
+                    handleSelectSlide(slides[activeSlideIndex - 1].id, { source: "tools" });
+                  }
+                }}
+                disabled={generationLocked || activeSlideIndex <= 0}
+                title="Предыдущий слайд"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <button
+                type="button"
+                className="mobile-v3-action-btn"
+                onClick={() => {
+                  if (activeSlideIndex >= 0 && activeSlideIndex < slides.length - 1) {
+                    handleSelectSlide(slides[activeSlideIndex + 1].id, { source: "tools" });
+                  }
+                }}
+                disabled={generationLocked || activeSlideIndex < 0 || activeSlideIndex >= slides.length - 1}
+                title="Следующий слайд"
+              >
+                <ChevronRight size={20} />
+              </button>
+              <button
+                type="button"
+                className="mobile-v3-action-btn is-danger"
+                onClick={() => {
+                  if (activeSlide) {
+                    handleDeleteSlide(activeSlide.id);
+                  }
+                }}
+                disabled={generationLocked || !activeSlide || slides.length <= 1}
+                title="Удалить слайд"
+              >
+                <Trash2 size={20} />
+              </button>
+            </section>
           </section>
 
           <nav
             ref={mobileTabsRef}
-            className={`mobile-v3-bottom-tabs bottom-tabs ${mobileToolTab ? "is-sheet-open" : ""}`}
+            className={`mobile-v3-bottom-tabs ${mobileToolTab ? "is-sheet-open" : ""}`}
             aria-label="Нижняя навигация"
           >
             {MOBILE_TAB_ITEMS.map((item) => {
@@ -4647,7 +4674,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               />
               <section
                 ref={mobileToolSheetRef}
-                className={`mobile-v3-sheet bottom-sheet ${mobileSheetDragOffset > 0 ? "is-dragging" : ""}`}
+                className={`mobile-v3-sheet ${mobileSheetDragOffset > 0 ? "is-dragging" : ""}`}
                 role="dialog"
                 aria-label={MOBILE_TAB_TITLE[mobileToolTab]}
                 onTouchStart={handleMobileSheetTouchStart}

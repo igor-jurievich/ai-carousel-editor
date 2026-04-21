@@ -396,92 +396,121 @@ export function CanvasEditor({
     };
 
     const activeSlideOrdinal = Math.max(1, activeSlideIndex + 1);
+    const nextSlide = canGoNext ? slides[activeSlideIndex + 1] : null;
 
     return (
       <section className="panel canvas-panel canvas-panel-mobile">
-        <div className="mobile-canvas-root">
-          <div
-            className="mobile-canvas-frame"
-            onTouchStartCapture={handleSwipeStart}
-            onTouchMoveCapture={handleSwipeMove}
-            onTouchEndCapture={handleSwipeEnd}
-            onTouchCancelCapture={handleSwipeEnd}
-          >
-            <div
-              className="mobile-slide-shell-motion"
-              style={{
-                transform: `translateX(${swipeOffsetX}px)`,
-                transition: swipeTransitionEnabled ? `transform ${SWIPE_TRANSITION_MS}ms ease` : undefined
-              }}
-            >
-              <div className="slide-stack-shell active mobile-slide-shell mobile-preview-shell">
-                {showSlideBadge ? (
-                  <div className="active-slide-pill">
-                    Слайд {activeSlideIndex + 1} • {formatLabel}
-                  </div>
-                ) : null}
+        <div className="mobile-canvas-root-v3">
+          <div className="mobile-canvas-frame-v3">
+            <div className="mobile-canvas-carousel">
+              {nextSlide ? (
+                <div className="mobile-next-slide-peek" aria-hidden="true">
+                  <SlideStage
+                    slide={nextSlide}
+                    width={displayWidth}
+                    height={displayHeight}
+                    canvasWidth={canvasWidth}
+                    canvasHeight={canvasHeight}
+                    interactive={false}
+                    hideResizeHandles
+                    showSlideBadge={false}
+                  />
+                </div>
+              ) : null}
 
-                <div className="canvas-stage canvas-stage-editor mobile-stage-editor">
-                  <div
-                    className={`canvas-stage-center mobile-stage-surface ${
-                      fontsReady ? "" : "is-loading-fonts"
-                    }`}
-                  >
-                    <SlideStage
-                      slide={activeSlide}
-                      width={displayWidth}
-                      height={displayHeight}
-                      canvasWidth={canvasWidth}
-                      canvasHeight={canvasHeight}
-                      hiddenElementId={hiddenEditingElementId}
-                      selectedElementId={selectedElementId}
-                      interactive={!disabled && !previewMode}
-                      onSelectElement={(elementId) => onSelectElement(activeSlide.id, elementId)}
-                      onUpdateElementPosition={(elementId, x, y) =>
-                        onUpdateElementPosition(activeSlide.id, elementId, x, y)
-                      }
-                      onTransformElement={(elementId, updates) =>
-                        onTransformElement(activeSlide.id, elementId, updates)
-                      }
-                      onStartTextEditing={(elementId) => onStartTextEditing(activeSlide.id, elementId)}
-                      onRequestSlidePhotoUpload={() =>
-                        onAddBackgroundImageToSlide?.(activeSlide.id) ?? onAddImageToSlide(activeSlide.id)
-                      }
-                      onRequestProfileHandleEdit={onRequestProfileHandleEdit}
-                      hideResizeHandles
-                      showSlideBadge={showSlideBadge}
-                    />
-                  </div>
-
-                  {!previewMode && selectedElement && selectedElementStyle ? (
-                    <>
-                      <div
-                        className="mobile-selection-outline"
-                        aria-hidden="true"
-                        style={{
-                          left: `${selectedElement.x * scale}px`,
-                          top: `${selectedElement.y * scale}px`,
-                          width: `${Math.max(8, selectedElement.width * scale)}px`,
-                          height: `${Math.max(8, selectedElement.height * scale)}px`
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="floating-element-action floating-element-action-mobile"
-                        title="Удалить выбранный элемент"
-                        style={selectedElementStyle}
-                        disabled={disabled}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onDeleteSelectedElement();
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </>
+              <div
+                className="mobile-slide-shell-motion"
+                onTouchStartCapture={handleSwipeStart}
+                onTouchMoveCapture={handleSwipeMove}
+                onTouchEndCapture={handleSwipeEnd}
+                onTouchCancelCapture={handleSwipeEnd}
+                style={{
+                  transform: `translateX(${swipeOffsetX}px)`,
+                  transition: swipeTransitionEnabled ? `transform ${SWIPE_TRANSITION_MS}ms ease` : undefined
+                }}
+              >
+                <div className="slide-stack-shell active mobile-slide-shell mobile-preview-shell">
+                  {showSlideBadge ? (
+                    <div className="active-slide-pill">
+                      Слайд {activeSlideIndex + 1} • {formatLabel}
+                    </div>
                   ) : null}
+
+                  <div className="canvas-stage canvas-stage-editor mobile-stage-editor">
+                    <div
+                      className={`canvas-stage-center mobile-stage-surface ${
+                        fontsReady ? "" : "is-loading-fonts"
+                      }`}
+                    >
+                      <SlideStage
+                        slide={activeSlide}
+                        width={displayWidth}
+                        height={displayHeight}
+                        canvasWidth={canvasWidth}
+                        canvasHeight={canvasHeight}
+                        hiddenElementId={hiddenEditingElementId}
+                        selectedElementId={selectedElementId}
+                        interactive={!disabled && !previewMode}
+                        onSelectElement={(elementId) => onSelectElement(activeSlide.id, elementId)}
+                        onUpdateElementPosition={(elementId, x, y) =>
+                          onUpdateElementPosition(activeSlide.id, elementId, x, y)
+                        }
+                        onTransformElement={(elementId, updates) =>
+                          onTransformElement(activeSlide.id, elementId, updates)
+                        }
+                        onStartTextEditing={(elementId) => onStartTextEditing(activeSlide.id, elementId)}
+                        onRequestSlidePhotoUpload={() =>
+                          onAddBackgroundImageToSlide?.(activeSlide.id) ?? onAddImageToSlide(activeSlide.id)
+                        }
+                        onRequestProfileHandleEdit={onRequestProfileHandleEdit}
+                        hideResizeHandles
+                        showSlideBadge={showSlideBadge}
+                      />
+                    </div>
+
+                    {!previewMode && selectedElement && selectedElementStyle ? (
+                      <>
+                        <div
+                          className="mobile-selection-outline"
+                          aria-hidden="true"
+                          style={{
+                            left: `${selectedElement.x * scale}px`,
+                            top: `${selectedElement.y * scale}px`,
+                            width: `${Math.max(8, selectedElement.width * scale)}px`,
+                            height: `${Math.max(8, selectedElement.height * scale)}px`
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="floating-element-action floating-element-action-mobile"
+                          title="Удалить выбранный элемент"
+                          style={selectedElementStyle}
+                          disabled={disabled}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onDeleteSelectedElement();
+                          }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
               </div>
+
+              {!previewMode && hideMobileSlideTools ? (
+                <button
+                  type="button"
+                  className="mobile-add-slide-button-v3"
+                  onClick={() => onInsertSlideAt(activeSlideIndex + 1, "text")}
+                  disabled={disabled}
+                  aria-label="Добавить слайд"
+                  title="Добавить слайд"
+                >
+                  <AppIcon name="plus" size={18} />
+                </button>
+              ) : null}
             </div>
           </div>
 

@@ -7471,3 +7471,169 @@ button:disabled {
   font-size: 12px;
   background: #f8f8fb;
 }
+
+/* ==========================================================================
+   Mobile Editor Layout Stabilization Pass (route-scoped, v3 shell only)
+   ========================================================================== */
+@media (max-width: 768px) {
+  html.editor-route-active,
+  body.editor-route-active {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .editor-page-shell {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    overscroll-behavior: none;
+  }
+
+  .editor-page-shell .mobile-only {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .mobile-editor-shell.mobile-v3-shell {
+    --mobile-v3-topbar-height: calc(44px + env(safe-area-inset-top));
+    --mobile-v3-bottom-tabs-height: calc(56px + max(0px, env(safe-area-inset-bottom)));
+    --mobile-v3-action-bar-height: 50px;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    overscroll-behavior: none;
+  }
+
+  .mobile-v3-topbar {
+    min-height: var(--mobile-v3-topbar-height);
+    max-height: var(--mobile-v3-topbar-height);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 30;
+  }
+
+  .mobile-v3-workspace {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    max-height: calc(100dvh - var(--mobile-v3-topbar-height) - var(--mobile-v3-bottom-tabs-height));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .mobile-v3-canvas-zone {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px 10px 6px;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    overscroll-behavior: none;
+  }
+
+  .canvas-panel-mobile {
+    width: 100%;
+    height: 100% !important;
+    min-height: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .mobile-canvas-root-v3 {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+
+  .mobile-canvas-frame-v3 {
+    position: relative;
+    min-height: 0;
+    width: 100%;
+    display: grid;
+    place-items: center;
+    padding: 0 10px;
+    overflow: hidden;
+  }
+
+  .mobile-canvas-carousel {
+    position: relative;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .mobile-slide-shell-motion {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-next-slide-peek {
+    right: -10px;
+    width: 20px;
+  }
+
+  .mobile-add-slide-button-v3 {
+    right: -34px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .mobile-slide-pagination {
+    flex-shrink: 0;
+    min-height: 24px;
+    padding: 8px 0 6px;
+  }
+
+  .mobile-v3-action-bar {
+    min-height: var(--mobile-v3-action-bar-height);
+    max-height: var(--mobile-v3-action-bar-height);
+    flex-shrink: 0;
+    padding: 0 8px;
+    overflow: hidden;
+  }
+
+  .mobile-v3-bottom-tabs {
+    min-height: var(--mobile-v3-bottom-tabs-height);
+    max-height: var(--mobile-v3-bottom-tabs-height);
+    flex-shrink: 0;
+    width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .mobile-v3-sheet {
+    left: max(0px, env(safe-area-inset-left));
+    right: max(0px, env(safe-area-inset-right));
+    overscroll-behavior: none;
+  }
+
+  .mobile-v3-sheet-body {
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
