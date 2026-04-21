@@ -710,7 +710,6 @@ export default function GeneratePage() {
               {isAccountMenuOpen ? (
                 <div className={styles.accountDropdown} role="menu">
                   <p className={styles.accountGreeting}>Привет, {accountName}!</p>
-                  <div className={styles.accountDivider} />
                   <button
                     type="button"
                     className={styles.accountSignOut}
