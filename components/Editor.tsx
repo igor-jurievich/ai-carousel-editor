@@ -326,7 +326,7 @@ function resolveGridColorForBackground(background: string) {
   }
 
   const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
-  return luminance < 0.48 ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.04)";
+  return luminance < 0.5 ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.04)";
 }
 
 function inferGridModeFromSlide(slide: Slide): GridDecorationMode | null {
