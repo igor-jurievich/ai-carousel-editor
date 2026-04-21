@@ -234,6 +234,7 @@
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
+  overflow: visible;
   border-top: 1px solid var(--color-border);
   margin-top: 12px;
   padding-top: 16px;
