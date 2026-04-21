@@ -79,6 +79,12 @@ function getErrorMessage(error: unknown) {
   return "Что-то пошло не так. Попробуй ещё раз";
 }
 
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -205,42 +211,75 @@ export default function OnboardingPage() {
         throw error;
       }
 
+      if (!data.session) {
+        let signInError: Error | null = null;
+
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          if (attempt > 1) {
+            await wait(250 * attempt);
+          }
+
+          const { error: currentSignInError } = await supabase.auth.signInWithPassword({
+            email: authEmail,
+            password: finalDraft.password
+          });
+
+          if (!currentSignInError) {
+            signInError = null;
+            break;
+          }
+
+          const errorText = currentSignInError.message.toLowerCase();
+          if (errorText.includes("email not confirmed")) {
+            signInError = null;
+            break;
+          }
+
+          signInError = currentSignInError;
+          if (errorText.includes("invalid login credentials") && attempt < 3) {
+            continue;
+          }
+
+          break;
+        }
+
+        if (signInError) {
+          throw signInError;
+        }
+      }
+
       if (data.user?.id) {
+        await wait(200);
         const { error: profileError } = await supabase.from("profiles").upsert(
           {
             id: data.user.id,
             name: finalDraft.name,
             role: finalDraft.role,
-            topic: finalDraft.topic
+            topic: finalDraft.topic,
+            login: finalDraft.login
           },
           {
             onConflict: "id"
           }
         );
 
-        if (
-          profileError &&
-          !profileError.message.toLowerCase().includes("row-level security") &&
-          !profileError.message.toLowerCase().includes("permission denied")
-        ) {
-          throw profileError;
-        }
-      }
+        if (profileError) {
+          const profileErrorText = profileError.message.toLowerCase();
+          const isSafeProfileError =
+            profileErrorText.includes("row-level security") ||
+            profileErrorText.includes("permission denied") ||
+            profileErrorText.includes("duplicate key value");
 
-      if (!data.session) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: authEmail,
-          password: finalDraft.password
-        });
-
-        if (signInError && !signInError.message.toLowerCase().includes("email not confirmed")) {
-          throw signInError;
+          if (!isSafeProfileError) {
+            throw profileError;
+          }
         }
       }
 
       router.replace("/generate");
       router.refresh();
     } catch (error) {
+      console.error("Onboarding error details:", error);
       stopLoadingMessage();
       const message = getErrorMessage(error);
       addBotMessage(message);
