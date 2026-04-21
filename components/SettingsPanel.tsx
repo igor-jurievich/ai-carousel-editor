@@ -1,6 +1,7 @@
 "use client";
 
 import * as Popover from "@radix-ui/react-popover";
+import * as Switch from "@radix-ui/react-switch";
 import {
   AlignCenter,
   AlignJustify,
@@ -8,10 +9,12 @@ import {
   AlignRight,
   ChevronDown,
   ImageIcon,
+  Loader2,
   Sparkles,
   Type as TypeIcon
 } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { AppSelect } from "@/components/AppSelect";
 import { AppIcon } from "@/components/icons";
 import { HexColorField } from "@/components/HexColorField";
 import { HexColorPicker } from "react-colorful";
@@ -26,6 +29,7 @@ import type {
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
 type StylePresetId = "mono" | "grid" | "gradient" | "notes" | "dots" | "flash";
 type TextCaseMode = "normal" | "uppercase" | "lowercase" | "capitalize";
+type BackgroundStylePreset = { id: StylePresetId; label: string; background: string; preview: string };
 
 type SettingsPanelProps = {
   slides: Slide[];
@@ -87,6 +91,7 @@ type SettingsPanelProps = {
   onApplyHighlightColorToAllSlides: () => void;
   selectedTextHighlightColor: string;
   selectedTextHighlightOpacity: number;
+  slidesSectionRef?: RefObject<HTMLElement | null>;
   signatureSectionRef?: RefObject<HTMLElement | null>;
   profileHandleInputRef?: RefObject<HTMLInputElement | null>;
   disabled?: boolean;
@@ -239,18 +244,52 @@ export function SettingsPanel({
   onApplyHighlightColorToAllSlides,
   selectedTextHighlightColor,
   selectedTextHighlightOpacity,
+  slidesSectionRef,
   signatureSectionRef,
   profileHandleInputRef,
   disabled = false,
   previewMode = false
 }: SettingsPanelProps) {
-  const stylePresets: Array<{ id: StylePresetId; label: string; background: string }> = [
-    { id: "mono", label: "Монохром", background: "#ffffff" },
-    { id: "grid", label: "Сетка", background: "#f1f3f7" },
-    { id: "gradient", label: "Градиент", background: "#e9f3ff" },
-    { id: "notes", label: "Заметки", background: "#f6f2ed" },
-    { id: "dots", label: "Точки", background: "#ffeb0a" },
-    { id: "flash", label: "Молнии", background: "#090d16" }
+  const stylePresets: BackgroundStylePreset[] = [
+    {
+      id: "mono",
+      label: "Монохром",
+      background: "#ffffff",
+      preview: "linear-gradient(145deg, #ffffff 0%, #f4f5f7 100%)"
+    },
+    {
+      id: "grid",
+      label: "Сетка",
+      background: "#f1f3f7",
+      preview:
+        "repeating-linear-gradient(90deg, rgba(17,24,39,0.12) 0 1px, transparent 1px 12px), repeating-linear-gradient(180deg, rgba(17,24,39,0.12) 0 1px, transparent 1px 12px), #f1f3f7"
+    },
+    {
+      id: "gradient",
+      label: "Градиент",
+      background: "#e9f3ff",
+      preview: "linear-gradient(140deg, #f4e9ff 0%, #e9f3ff 100%)"
+    },
+    {
+      id: "notes",
+      label: "Заметки",
+      background: "#f6f2ed",
+      preview:
+        "repeating-linear-gradient(180deg, rgba(86,96,112,0.14) 0 1px, transparent 1px 12px), #f6f2ed"
+    },
+    {
+      id: "dots",
+      label: "Точки",
+      background: "#ffeb0a",
+      preview: "radial-gradient(circle at 25% 25%, rgba(17,24,39,0.16) 0 2px, transparent 3px), #ffeb0a"
+    },
+    {
+      id: "flash",
+      label: "Молнии",
+      background: "#090d16",
+      preview:
+        "linear-gradient(135deg, #090d16 0%, #1a2440 100%), repeating-linear-gradient(120deg, rgba(99,102,241,0.45) 0 1px, transparent 1px 10px)"
+    }
   ];
   const activeIndex = Math.max(
     0,
@@ -289,11 +328,23 @@ export function SettingsPanel({
   const normalizedBackgroundColor = normalizeColorForInput(slideBackground, "#ffffff");
   const [isAddSlidePopoverOpen, setIsAddSlidePopoverOpen] = useState(false);
   const [isBackgroundPickerOpen, setIsBackgroundPickerOpen] = useState(false);
+  const [isHighlightPickerOpen, setIsHighlightPickerOpen] = useState(false);
+  const [isTextColorPickerOpen, setIsTextColorPickerOpen] = useState(false);
   const [isFontPopoverOpen, setIsFontPopoverOpen] = useState(false);
   const [isCaptionCopied, setIsCaptionCopied] = useState(false);
+  const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const captionCopyResetTimeoutRef = useRef<number | null>(null);
   const selectedTextCaseMode = detectTextCaseMode(activeTextElement?.text ?? "");
   const selectedTextHighlightOpacityPercent = Math.round(selectedTextHighlightOpacity * 100);
+
+  const syncTextAreaHeight = () => {
+    const node = textAreaRef.current;
+    if (!node) {
+      return;
+    }
+    node.style.height = "0px";
+    node.style.height = `${Math.max(80, node.scrollHeight)}px`;
+  };
 
   useEffect(() => {
     return () => {
@@ -306,6 +357,10 @@ export function SettingsPanel({
   useEffect(() => {
     setIsCaptionCopied(false);
   }, [captionResult]);
+
+  useEffect(() => {
+    syncTextAreaHeight();
+  }, [activeTextElement?.id, activeTextElement?.text]);
 
   const handleCopyCaptionClick = () => {
     if (!captionResult || disabled) {
@@ -337,7 +392,7 @@ export function SettingsPanel({
 
   return (
     <>
-      <section className="settings-card">
+      <section className="settings-card settings-card-slides" ref={slidesSectionRef}>
         <div className="settings-card-header">
           <h2 className="settings-title">Слайды</h2>
           <span className="status-pill">
@@ -452,22 +507,21 @@ export function SettingsPanel({
       </section>
 
       <section className="settings-card settings-card-template">
-        <div className="settings-inline-head">
-          <h3>Шаблон</h3>
-          <span className="status-pill">{activeTemplateName}</span>
-        </div>
         <button
           type="button"
-          className="template-library-trigger"
+          className="template-library-card"
           onClick={onOpenTemplateModal}
           disabled={disabled}
         >
-          <span className="template-library-trigger-icon">
-            <AppIcon name="templates" size={16} />
+          <span className="template-library-preview" style={{ background: normalizedBackgroundColor }}>
+            <span className="template-library-preview-chip" />
+            <span className="template-library-preview-title" />
+            <span className="template-library-preview-body" />
           </span>
-          <span className="template-library-trigger-copy">
-            <strong>Открыть библиотеку шаблонов</strong>
-            <small>Применяется ко всей карусели</small>
+          <span className="template-library-card-copy">
+            <h3>Шаблон</h3>
+            <strong>{activeTemplateName}</strong>
+            <small>Нажми чтобы сменить</small>
           </span>
           <AppIcon name="chevron-right" size={14} />
         </button>
@@ -491,24 +545,40 @@ export function SettingsPanel({
       </section>
 
       <section className="settings-card settings-card-style">
-        <h3>Стиль</h3>
-        <div className="mobile-style-grid desktop-style-grid">
+        <h3>Стиль фона</h3>
+        <div className="desktop-style-row">
           {stylePresets.map((preset) => (
             <button
               key={preset.id}
               type="button"
-              className={`mobile-style-chip ${
+              className={`desktop-style-card ${
                 slideBackground.toLowerCase() === preset.background.toLowerCase() ? "active" : ""
               }`}
               onClick={() => onApplyStylePreset(preset.id, { applyAll: true })}
               disabled={disabled}
             >
-              {preset.label}
+              <span className="desktop-style-preview" style={{ background: preset.preview }} />
+              <span className="desktop-style-label">{preset.label}</span>
             </button>
           ))}
         </div>
+        <label className="settings-switch-row">
+          <span>Показывать сетку</span>
+          <Switch.Root
+            className="settings-switch-root"
+            checked={gridVisible}
+            onCheckedChange={(value) => onGridVisibilityChange(Boolean(value))}
+            disabled={disabled}
+          >
+            <Switch.Thumb className="settings-switch-thumb" />
+          </Switch.Root>
+        </label>
+      </section>
+
+      <section className="settings-card settings-card-background">
+        <h3>Цвет фона</h3>
         <label className="field-label">
-          Цвет фона (HEX)
+          Цвет (HEX)
           <div className="color-row color-row-inline">
             <Popover.Root open={isBackgroundPickerOpen} onOpenChange={setIsBackgroundPickerOpen}>
               <Popover.Trigger asChild>
@@ -544,8 +614,8 @@ export function SettingsPanel({
           </div>
         </label>
         <label className="field-label">
-          Быстрые пресеты
-          <div className="color-swatches-row">
+          Пресеты
+          <div className="color-swatches-row color-swatches-row-single-line">
             {BACKGROUND_COLOR_PRESETS.map((preset) => (
               <button
                 key={preset.value}
@@ -562,133 +632,72 @@ export function SettingsPanel({
             ))}
           </div>
         </label>
-        <label className="mobile-switch-row">
-          <span>Показывать сетку</span>
-          <input
-            type="checkbox"
-            checked={gridVisible}
-            onChange={(event) => onGridVisibilityChange(event.target.checked)}
-            disabled={disabled}
-          />
-        </label>
       </section>
 
       <section className="settings-card settings-card-photo">
         <h3>Фото</h3>
-        <label className="mobile-switch-row">
+        <label className="settings-switch-row">
           <span>Фото-блок</span>
-          <input
-            type="checkbox"
+          <Switch.Root
+            className="settings-switch-root"
             checked={photoSlotEnabled}
-            onChange={(event) => onPhotoSlotEnabledChange(event.target.checked)}
+            onCheckedChange={(value) => onPhotoSlotEnabledChange(Boolean(value))}
             disabled={disabled || !canUsePhotoSlot}
-          />
+          >
+            <Switch.Thumb className="settings-switch-thumb" />
+          </Switch.Root>
         </label>
-        <div className="field-row field-row-actions">
+        <div className="field-row field-row-export">
           <button
             type="button"
-            className="ghost-chip"
-            onClick={onAddSlidePhoto}
-            disabled={disabled}
-          >
-            + Фото
-          </button>
-          <button
-            type="button"
-            className="ghost-chip"
+            className="btn secondary desktop-photo-upload-btn"
             onClick={onUploadBackgroundImage}
-            disabled={disabled}
+            disabled={disabled || !photoSlotEnabled}
           >
-            Загрузить
+            Загрузить фото
           </button>
           <button
             type="button"
             className="ghost-chip ghost-chip-muted"
             onClick={onRemoveBackgroundImage}
-            disabled={!hasBackgroundImage || disabled}
+            disabled={!hasBackgroundImage || disabled || !photoSlotEnabled}
           >
-            Удалить
+            Очистить
           </button>
         </div>
-        {hasBackgroundImage ? (
-          <div className="field-grid">
-            <label className="field-label">
-              Зум ({photoSettings.zoom}%)
-              <input
-                className="range"
-                type="range"
-                min={100}
-                max={200}
-                step={1}
-                value={photoSettings.zoom}
-                onChange={(event) =>
-                  onSlidePhotoSettingsChange({ zoom: Number(event.target.value) })
-                }
-                disabled={disabled}
-              />
-            </label>
-            <label className="field-label">
-              Позиция X ({photoSettings.offsetX}%)
-              <input
-                className="range"
-                type="range"
-                min={-50}
-                max={50}
-                step={1}
-                value={photoSettings.offsetX}
-                onChange={(event) =>
-                  onSlidePhotoSettingsChange({ offsetX: Number(event.target.value) })
-                }
-                disabled={disabled}
-              />
-            </label>
-            <label className="field-label">
-              Позиция Y ({photoSettings.offsetY}%)
-              <input
-                className="range"
-                type="range"
-                min={-50}
-                max={50}
-                step={1}
-                value={photoSettings.offsetY}
-                onChange={(event) =>
-                  onSlidePhotoSettingsChange({ offsetY: Number(event.target.value) })
-                }
-                disabled={disabled}
-              />
-            </label>
-            <label className="field-label">
-              Затемнение ({photoSettings.overlay}%)
-              <input
-                className="range"
-                type="range"
-                min={0}
-                max={80}
-                step={1}
-                value={photoSettings.overlay}
-                onChange={(event) =>
-                  onSlidePhotoSettingsChange({ overlay: Number(event.target.value) })
-                }
-                disabled={disabled}
-              />
-            </label>
-          </div>
-        ) : null}
-        <div className="settings-hint">
-          Если фото-блок выключен, контентный блок автоматически расширится.
+        <div className="desktop-photo-preview-row">
+          {hasBackgroundImage && slide.backgroundImage ? (
+            <img
+              src={slide.backgroundImage}
+              alt="Превью фото"
+              className="desktop-photo-preview"
+            />
+          ) : (
+            <div className="desktop-photo-preview desktop-photo-preview-empty">Нет фото</div>
+          )}
+          <button
+            type="button"
+            className="ghost-chip"
+            onClick={onAddSlidePhoto}
+            disabled={disabled || !photoSlotEnabled}
+          >
+            + Фото
+          </button>
         </div>
       </section>
 
       <section className="settings-card settings-card-signature" ref={signatureSectionRef}>
         <h3>Подпись</h3>
-        <label className="mobile-switch-row">
+        <label className="settings-switch-row">
           <span>Показывать подпись на всех слайдах</span>
-          <input
-            type="checkbox"
+          <Switch.Root
+            className="settings-switch-root"
             checked={subtitlesVisibleAcrossSlides}
-            onChange={(event) => onToggleSubtitleAcrossSlides(event.target.checked)}
+            onCheckedChange={(value) => onToggleSubtitleAcrossSlides(Boolean(value))}
             disabled={disabled}
-          />
+          >
+            <Switch.Thumb className="settings-switch-thumb" />
+          </Switch.Root>
         </label>
         <label className="field-label">
           Ник
@@ -698,16 +707,6 @@ export function SettingsPanel({
             value={profileHandle}
             onChange={(event) => onProfileHandleChange(event.target.value)}
             placeholder="@username"
-            disabled={disabled}
-          />
-        </label>
-        <label className="field-label">
-          Подпись
-          <input
-            className="field"
-            value={profileSubtitle}
-            onChange={(event) => onProfileSubtitleChange(event.target.value)}
-            placeholder="Подпись (необязательно)"
             disabled={disabled}
           />
         </label>
@@ -745,10 +744,15 @@ export function SettingsPanel({
             <label className="field-label">
               Текст элемента
               <textarea
+                ref={textAreaRef}
                 className="field settings-textarea"
                 value={activeTextElement.text}
-                rows={4}
-                onChange={(event) => onSelectedTextChange(event.target.value)}
+                rows={1}
+                onChange={(event) => {
+                  onSelectedTextChange(event.target.value);
+                  syncTextAreaHeight();
+                }}
+                onInput={syncTextAreaHeight}
                 onSelect={(event) =>
                   onSelectedTextSelectionChange(
                     event.currentTarget.selectionStart ?? 0,
@@ -778,23 +782,43 @@ export function SettingsPanel({
             </label>
 
             <div className="field-row field-row-inline">
-              <label className="field-label" style={{ width: 136 }}>
+              <label className="field-label" style={{ flex: 1 }}>
                 Цвет выделения
-                <input
-                  className="field"
-                  type="color"
-                  value={normalizedHighlightColor}
-                  onChange={(event) => onSelectedTextHighlightColorChange(event.target.value)}
-                  disabled={disabled}
-                />
-                <HexColorField
-                  value={normalizedHighlightColor}
-                  onValidChange={onSelectedTextHighlightColorChange}
-                  disabled={disabled}
-                  className="field"
-                />
+                <div className="color-row color-row-inline">
+                  <Popover.Root open={isHighlightPickerOpen} onOpenChange={setIsHighlightPickerOpen}>
+                    <Popover.Trigger asChild>
+                      <button
+                        type="button"
+                        className="color-preview-trigger color-preview-circle"
+                        style={{ backgroundColor: normalizedHighlightColor }}
+                        aria-label="Открыть выбор цвета выделения"
+                        disabled={disabled}
+                      />
+                    </Popover.Trigger>
+                    <Popover.Portal>
+                      <Popover.Content
+                        className="settings-popover color-picker-popover"
+                        align="start"
+                        side="bottom"
+                        sideOffset={8}
+                      >
+                        <HexColorPicker
+                          color={normalizedHighlightColor}
+                          onChange={onSelectedTextHighlightColorChange}
+                          className="background-color-picker"
+                        />
+                      </Popover.Content>
+                    </Popover.Portal>
+                  </Popover.Root>
+                  <HexColorField
+                    value={normalizedHighlightColor}
+                    onValidChange={onSelectedTextHighlightColorChange}
+                    disabled={disabled}
+                    className="field color-hex-input"
+                  />
+                </div>
               </label>
-              <div className="field-row field-row-actions" style={{ flex: 1 }}>
+              <div className="field-row field-row-actions highlight-selection-actions" style={{ flex: 1 }}>
                 <button
                   type="button"
                   className="ghost-chip"
@@ -816,7 +840,7 @@ export function SettingsPanel({
               </div>
             </div>
 
-            <div className="field-row field-row-balanced-actions">
+            <div className="field-row field-row-balanced-actions highlight-bulk-actions">
               <button
                 type="button"
                 className="ghost-chip ghost-chip-muted balanced-action-button"
@@ -990,19 +1014,39 @@ export function SettingsPanel({
 
             <label className="field-label">
               Цвет текста
-              <input
-                className="field"
-                type="color"
-                value={normalizedTextColor}
-                onChange={(event) => onSelectedTextColorChange(event.target.value)}
-                disabled={disabled}
-              />
-              <HexColorField
-                value={normalizedTextColor}
-                onValidChange={onSelectedTextColorChange}
-                disabled={disabled}
-                className="field"
-              />
+              <div className="color-row color-row-inline">
+                <Popover.Root open={isTextColorPickerOpen} onOpenChange={setIsTextColorPickerOpen}>
+                  <Popover.Trigger asChild>
+                    <button
+                      type="button"
+                      className="color-preview-trigger color-preview-circle"
+                      style={{ backgroundColor: normalizedTextColor }}
+                      aria-label="Открыть выбор цвета текста"
+                      disabled={disabled}
+                    />
+                  </Popover.Trigger>
+                  <Popover.Portal>
+                    <Popover.Content
+                      className="settings-popover color-picker-popover"
+                      align="start"
+                      side="bottom"
+                      sideOffset={8}
+                    >
+                      <HexColorPicker
+                        color={normalizedTextColor}
+                        onChange={onSelectedTextColorChange}
+                        className="background-color-picker"
+                      />
+                    </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
+                <HexColorField
+                  value={normalizedTextColor}
+                  onValidChange={onSelectedTextColorChange}
+                  disabled={disabled}
+                  className="field color-hex-input"
+                />
+              </div>
             </label>
           </>
         ) : (
@@ -1020,21 +1064,23 @@ export function SettingsPanel({
           onClick={onOpenExportModal}
           disabled={disabled || isExporting || isGenerating}
         >
-          <AppIcon name="download" size={16} />
+          {isExporting ? <Loader2 size={16} className="spinner-icon" /> : <AppIcon name="download" size={16} />}
           <span>{isExporting ? "Экспорт..." : "Экспортировать карусель"}</span>
         </button>
         <div className="field-row field-row-export export-secondary-row">
-          <select
-            className="select export-mode-select"
+          <AppSelect
             value={exportMode}
-            onChange={(event) => onExportModeChange(event.target.value as ExportMode)}
+            onValueChange={(value) => onExportModeChange(value as ExportMode)}
             disabled={disabled || isExporting}
-          >
-            <option value="zip">ZIP (PNG)</option>
-            <option value="png">PNG</option>
-            <option value="jpg">JPG</option>
-            <option value="pdf">PDF</option>
-          </select>
+            ariaLabel="Формат экспорта"
+            triggerClassName="select export-mode-select"
+            options={[
+              { value: "zip", label: "ZIP (PNG)" },
+              { value: "png", label: "PNG" },
+              { value: "jpg", label: "JPG" },
+              { value: "pdf", label: "PDF" }
+            ]}
+          />
           <button
             type="button"
             className="ghost-chip ghost-chip-muted export-slides-button"
@@ -1078,7 +1124,7 @@ export function SettingsPanel({
             }`}
             readOnly
             value={captionResult?.text ?? ""}
-            placeholder="Здесь появится подпись к посту после нажатия «Сгенерировать»"
+            placeholder="Здесь появится подпись после генерации"
             rows={6}
           />
         </label>
