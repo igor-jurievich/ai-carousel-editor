@@ -136,6 +136,7 @@
   background: var(--color-surface);
   box-shadow: var(--shadow-md);
   padding: 8px;
+  overflow: visible;
   transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 
@@ -258,7 +259,7 @@
 }
 
 .advancedPanelOpen {
-  max-height: 600px;
+  max-height: 760px;
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -300,6 +301,10 @@
   gap: 12px;
 }
 
+.fieldGenerationMode {
+  grid-column: span 6;
+}
+
 .fieldNiche,
 .fieldAudience {
   grid-column: span 3;
@@ -308,6 +313,10 @@
 .fieldTone,
 .fieldGoal,
 .fieldFormat {
+  grid-column: span 2;
+}
+
+.fieldContentMode {
   grid-column: span 2;
 }
 
@@ -334,6 +343,73 @@
   color: var(--color-text-secondary);
   display: inline-flex;
   align-items: center;
+}
+
+.modeSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  background: #ffffff;
+}
+
+.modeSwitchOption {
+  border: none;
+  background: #ffffff;
+  color: var(--color-text);
+  min-height: 64px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  text-align: left;
+  border-right: 1px solid var(--color-border);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.modeSwitchOption:last-child {
+  border-right: none;
+}
+
+.modeSwitchOption:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--color-primary-light);
+}
+
+.modeSwitchOption:disabled {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.modeSwitchOptionActive {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.modeSwitchOptionActive .modeSwitchCredits {
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.modeSwitchTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.modeSwitchCredits {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.modeSwitchHint {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .field {
@@ -400,6 +476,8 @@
   left: 0;
   right: 0;
   z-index: 12;
+  max-height: min(320px, calc(100vh - 140px));
+  overflow-y: auto;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: #ffffff;
@@ -610,7 +688,7 @@
 
 .previewItem {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   gap: 12px;
   padding: 14px 16px;
@@ -625,6 +703,12 @@
   transform: scale(0.98);
 }
 
+.previewIndexMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .previewIndex {
   width: 32px;
   height: 32px;
@@ -636,6 +720,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.previewImageBadge {
+  font-size: 14px;
+  line-height: 1;
 }
 
 .previewCopy {
@@ -833,8 +922,10 @@
 
   .fieldNiche,
   .fieldAudience,
+  .fieldGenerationMode,
   .fieldTone,
   .fieldGoal,
+  .fieldContentMode,
   .fieldFormat,
   .fieldTheme,
   .fieldCount {

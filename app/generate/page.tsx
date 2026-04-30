@@ -7,12 +7,15 @@ import {
   Check,
   ChevronDown,
   Hash,
+  ImagePlus,
   Info,
   LayoutGrid,
   Palette,
   Rocket,
+  Sparkles,
   SunMoon,
   Target,
+  Type,
   Users,
   Zap
 } from "lucide-react";
@@ -22,24 +25,61 @@ import { clampSlidesCount, DEFAULT_SLIDES_COUNT, SLIDES_COUNT_OPTIONS } from "@/
 import { saveLocalProject } from "@/lib/projects";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { trackEvent } from "@/lib/telemetry";
-import type { CarouselOutlineSlide, CarouselTemplateId, SlideFormat } from "@/types/editor";
+import type {
+  CarouselOutlineSlide,
+  CarouselTemplateId,
+  ContentModeInput,
+  SlideFormat
+} from "@/types/editor";
 import styles from "./generate-page.module.css";
 
+type GeneratedPreviewSlide = CarouselOutlineSlide & {
+  image?: string | null;
+  hasImage?: boolean;
+};
+
 type GenerateResponse = {
-  slides?: CarouselOutlineSlide[];
+  slides?: GeneratedPreviewSlide[];
   generationSource?: "model" | "fallback";
   fallbackReason?: "quota" | "error" | "timeout";
+  generationMeta?: {
+    model?: string;
+    imageModel?: string | null;
+    imagesGenerated?: number;
+    tokensUsed?: number;
+    creditsCharged?: number;
+    [key: string]: unknown;
+  };
+  generationProfile?: {
+    modeDetected?: ContentModeInput;
+    modeEffective?: ContentModeInput;
+    modeSource?: "auto" | "manual";
+    modeConfidence?: number;
+    flowTemplate?: string;
+    ctaType?: "direct" | "soft";
+    bulletStyle?: "clean" | "numbers" | "dots" | "compact";
+    firstSlideRepairs?: number;
+    toneViolations?: number;
+    modeValidationPassed?: boolean;
+    modeValidationErrors?: string[];
+    modeReasonCodes?: string[];
+    fallbackUsed?: boolean;
+  };
   project?: {
     title?: string;
     topic?: string;
     format?: SlideFormat;
     theme?: CarouselTemplateId;
     promptVariant?: "A" | "B";
+    contentMode?: ContentModeInput;
     language?: "ru";
     version?: number;
   };
   message?: string;
   remainingCredits?: number;
+  withImages?: boolean;
+  requiredCredits?: number;
+  currentCredits?: number;
   error?: string;
 };
 
@@ -57,14 +97,68 @@ type GenerationStatus = "idle" | "loading" | "success" | "error";
 
 const MAX_TOPIC_CHARS = 4000;
 const STATUS_ROTATION_MS = 2500;
-const GENERATION_STATUS_MESSAGES = [
-  "Придумываю крючок...",
-  "Формулирую проблему...",
-  "Усиливаю боль...",
-  "Ищу ошибку...",
-  "Собираю решение...",
-  "Пишу призыв к действию..."
-];
+const STATUS_MESSAGES_BY_MODE: Record<ContentModeInput, string[]> = {
+  auto: [
+    "Определяю структуру темы...",
+    "Формулирую ключевые причины...",
+    "Уточняю практические шаги...",
+    "Проверяю тон и ясность...",
+    "Собираю финальную версию..."
+  ],
+  sales: [
+    "Придумываю крючок...",
+    "Формулирую проблему...",
+    "Усиливаю боль...",
+    "Ищу ошибку...",
+    "Собираю решение...",
+    "Пишу призыв к действию..."
+  ],
+  expert: [
+    "Называю тему без воды...",
+    "Разбираю симптомы и причины...",
+    "Объясняю механизм...",
+    "Собираю рабочие шаги...",
+    "Проверяю спокойный экспертный тон..."
+  ],
+  instruction: [
+    "Формулирую цель инструкции...",
+    "Собираю последовательность шагов...",
+    "Проверяю условия и тайминг...",
+    "Добавляю блок частых ошибок...",
+    "Делаю краткий итог..."
+  ],
+  diagnostic: [
+    "Определяю симптомы сбоя...",
+    "Проверяю типичные ошибки...",
+    "Раскладываю причины...",
+    "Собираю коррекцию...",
+    "Проверяю ясный вывод..."
+  ],
+  case: [
+    "Описываю контекст кейса...",
+    "Фиксирую точку «до»...",
+    "Собираю действия...",
+    "Показываю результат «после»...",
+    "Формирую вывод..."
+  ],
+  social: [
+    "Собираю живой заход...",
+    "Уточняю бытовые триггеры...",
+    "Добавляю практичные шаги...",
+    "Смягчаю тон...",
+    "Формирую мягкий финал..."
+  ]
+};
+
+const IMAGE_STATUS_INSERTS_BY_MODE: Partial<Record<ContentModeInput, string[]>> = {
+  sales: ["Генерирую фото для обложки...", "Генерирую фото для ошибки...", "Рисую кейс..."],
+  expert: ["Генерирую фото для темы...", "Генерирую фото для разбора...", "Генерирую фото для примера..."],
+  instruction: ["Генерирую фото для цели...", "Генерирую фото для шагов...", "Генерирую фото для результата..."],
+  diagnostic: ["Генерирую фото симптома...", "Генерирую фото ошибки...", "Генерирую фото исправления..."],
+  case: ["Генерирую фото контекста...", "Генерирую фото действий...", "Генерирую фото результата..."],
+  social: ["Генерирую фото ситуации...", "Генерирую фото поворота...", "Генерирую фото итога..."],
+  auto: ["Генерирую фото для обложки...", "Генерирую фото для середины...", "Генерирую фото для примера..."]
+};
 
 const TONE_OPTIONS: SelectOption[] = [
   { value: "soft", label: "Мягкий" },
@@ -88,6 +182,16 @@ const THEME_OPTIONS: SelectOption[] = [
   { value: "light", label: "Светлая" },
   { value: "dark", label: "Тёмная" },
   { value: "color", label: "Цветная" }
+];
+
+const CONTENT_MODE_OPTIONS: SelectOption[] = [
+  { value: "auto", label: "Авто (по теме)" },
+  { value: "sales", label: "Продажи / лиды" },
+  { value: "expert", label: "Экспертный разбор" },
+  { value: "instruction", label: "Пошаговая инструкция" },
+  { value: "diagnostic", label: "Диагностика / ошибки" },
+  { value: "case", label: "Кейс / до-после" },
+  { value: "social", label: "Социальный / life" }
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -204,10 +308,12 @@ export default function GeneratePage() {
   const [slidesCount, setSlidesCount] = useState(DEFAULT_SLIDES_COUNT);
   const [format, setFormat] = useState<SlideFormat>("1:1");
   const [theme, setTheme] = useState<CarouselTemplateId>("light");
+  const [withImages, setWithImages] = useState(false);
   const [niche, setNiche] = useState("");
   const [audience, setAudience] = useState("");
   const [tone, setTone] = useState("balanced");
   const [goal, setGoal] = useState("engagement");
+  const [contentMode, setContentMode] = useState<ContentModeInput>("auto");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
   const [generationErrorMessage, setGenerationErrorMessage] = useState<string | null>(null);
@@ -216,7 +322,7 @@ export default function GeneratePage() {
   const [isProgressVisible, setIsProgressVisible] = useState(false);
   const [isProgressFading, setIsProgressFading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewSlides, setPreviewSlides] = useState<CarouselOutlineSlide[] | null>(null);
+  const [previewSlides, setPreviewSlides] = useState<GeneratedPreviewSlide[] | null>(null);
   const [generatedProjectMeta, setGeneratedProjectMeta] = useState<GenerateResponse["project"] | null>(null);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [openSelectId, setOpenSelectId] = useState<string | null>(null);
@@ -239,11 +345,27 @@ export default function GeneratePage() {
 
   const normalizedTopic = topic.trim();
   const canGenerate = normalizedTopic.length >= 3 && !isGenerating;
+  const requiredCredits = withImages ? 5 : 1;
+  const statusMessages = useMemo(() => {
+    const base = STATUS_MESSAGES_BY_MODE[contentMode] ?? STATUS_MESSAGES_BY_MODE.auto;
+    if (!withImages) {
+      return base;
+    }
+
+    const inserts = IMAGE_STATUS_INSERTS_BY_MODE[contentMode] ?? IMAGE_STATUS_INSERTS_BY_MODE.auto ?? [];
+    if (!inserts.length) {
+      return base;
+    }
+
+    const next = [...base];
+    next.splice(1, 0, ...inserts);
+    return next;
+  }, [contentMode, withImages]);
   const generationStatusMessage =
     generationStatus === "loading"
-      ? GENERATION_STATUS_MESSAGES[statusIndex]
+      ? statusMessages[statusIndex]
       : generationStatus === "success"
-        ? "Готово!"
+        ? "Готово! ✓"
         : generationStatus === "error"
           ? generationErrorMessage
           : null;
@@ -254,23 +376,26 @@ export default function GeneratePage() {
 
   const previewList = useMemo(() => {
     if (!previewSlides?.length) {
-      return [] as Array<{ type: string; title: string }>;
+      return [] as Array<{ type: string; title: string; hasImage: boolean }>;
     }
 
     return previewSlides.map((slide) => {
+      const hasImage =
+        slide.hasImage === true || (typeof slide.image === "string" && slide.image.trim().length > 0);
+
       if ("title" in slide && slide.title) {
-        return { type: slide.type, title: slide.title };
+        return { type: slide.type, title: slide.title, hasImage };
       }
 
       if ("before" in slide && slide.before) {
-        return { type: slide.type, title: slide.before };
+        return { type: slide.type, title: slide.before, hasImage };
       }
 
       if ("bullets" in slide && slide.bullets?.[0]) {
-        return { type: slide.type, title: slide.bullets[0] };
+        return { type: slide.type, title: slide.bullets[0], hasImage };
       }
 
-      return { type: slide.type, title: "Слайд без заголовка" };
+      return { type: slide.type, title: "Слайд без заголовка", hasImage };
     });
   }, [previewSlides]);
 
@@ -327,13 +452,13 @@ export default function GeneratePage() {
     }
 
     const intervalId = window.setInterval(() => {
-      setStatusIndex((current) => (current + 1) % GENERATION_STATUS_MESSAGES.length);
+      setStatusIndex((current) => (current + 1) % statusMessages.length);
     }, STATUS_ROTATION_MS);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [generationStatus]);
+  }, [generationStatus, statusMessages]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -435,6 +560,11 @@ export default function GeneratePage() {
       return;
     }
 
+    if (typeof credits === "number" && credits < requiredCredits) {
+      toast.error(`Недостаточно кредитов. Нужно ${requiredCredits}, у вас ${credits}.`);
+      return;
+    }
+
     if (previewRevealTimeoutRef.current !== null) {
       window.clearTimeout(previewRevealTimeoutRef.current);
       previewRevealTimeoutRef.current = null;
@@ -472,7 +602,10 @@ export default function GeneratePage() {
           source: "generate_page",
           format,
           slidesCount: clampSlidesCount(slidesCount),
-          theme
+          theme,
+          contentMode,
+          withImages,
+          requiredCredits
         }
       });
 
@@ -488,16 +621,32 @@ export default function GeneratePage() {
           audience,
           tone,
           goal,
+          contentMode,
           format,
-          theme
+          theme,
+          withImages
         })
       });
 
       const data = (await response.json()) as GenerateResponse;
       if (!response.ok) {
         if (response.status === 403 && data.error === "no_credits") {
-          setCredits(0);
-          setIsNoCreditsNoticeOpen(true);
+          const needed =
+            typeof data.requiredCredits === "number" && Number.isFinite(data.requiredCredits)
+              ? Math.max(1, Math.trunc(data.requiredCredits))
+              : requiredCredits;
+          const available =
+            typeof data.currentCredits === "number" && Number.isFinite(data.currentCredits)
+              ? Math.max(0, Math.trunc(data.currentCredits))
+              : typeof credits === "number"
+                ? Math.max(0, Math.trunc(credits))
+                : 0;
+
+          setCredits(available);
+          toast.error(`Недостаточно кредитов. Нужно ${needed}, у вас ${available}.`);
+          if (available <= 0) {
+            setIsNoCreditsNoticeOpen(true);
+          }
           setError(null);
           setGenerationStatus("idle");
           setGenerationErrorMessage(null);
@@ -539,8 +688,12 @@ export default function GeneratePage() {
       if (typeof data.remainingCredits === "number" && Number.isFinite(data.remainingCredits)) {
         setCredits(Math.max(0, Math.trunc(data.remainingCredits)));
       } else {
+        const creditsCharged =
+          typeof data.generationMeta?.creditsCharged === "number" && Number.isFinite(data.generationMeta.creditsCharged)
+            ? Math.max(1, Math.trunc(data.generationMeta.creditsCharged))
+            : requiredCredits;
         setCredits((current) =>
-          typeof current === "number" ? Math.max(0, current - 1) : current
+          typeof current === "number" ? Math.max(0, current - creditsCharged) : current
         );
       }
       trackEvent({
@@ -550,7 +703,25 @@ export default function GeneratePage() {
           format: data.project?.format ?? format,
           slidesCount: data.slides.length,
           theme: data.project?.theme ?? theme,
-          promptVariant: data.project?.promptVariant ?? "B"
+          promptVariant: data.project?.promptVariant ?? "B",
+          contentMode: data.project?.contentMode ?? contentMode,
+          modeDetected: data.generationProfile?.modeDetected ?? null,
+          modeEffective:
+            data.generationProfile?.modeEffective ?? data.project?.contentMode ?? contentMode,
+          modeSource: data.generationProfile?.modeSource ?? null,
+          modeConfidence: data.generationProfile?.modeConfidence ?? null,
+          flowTemplate: data.generationProfile?.flowTemplate ?? null,
+          ctaType: data.generationProfile?.ctaType ?? null,
+          toneViolations: data.generationProfile?.toneViolations ?? null,
+          modeValidationPassed: data.generationProfile?.modeValidationPassed ?? null,
+          modeValidationErrorsCount: Array.isArray(data.generationProfile?.modeValidationErrors)
+            ? data.generationProfile.modeValidationErrors.length
+            : null,
+          withImages,
+          imagesGenerated:
+            typeof data.generationMeta?.imagesGenerated === "number"
+              ? Math.max(0, Math.trunc(data.generationMeta.imagesGenerated))
+              : 0
         }
       });
     } catch (generationError) {
@@ -559,6 +730,7 @@ export default function GeneratePage() {
         payload: {
           source: "generate_page",
           format,
+          contentMode,
           reason:
             generationError instanceof Error ? generationError.message.slice(0, 120) : "unknown"
         }
@@ -607,6 +779,7 @@ export default function GeneratePage() {
         format: resolvedFormat,
         theme: resolvedTheme,
         promptVariant: generatedProjectMeta?.promptVariant ?? "B",
+        contentMode: generatedProjectMeta?.contentMode ?? contentMode,
         niche: niche.trim() || undefined,
         audience: audience.trim() || undefined,
         tone,
@@ -788,6 +961,51 @@ export default function GeneratePage() {
               aria-hidden={!isAdvancedOpen}
             >
               <div className={styles.advancedGrid}>
+                <div className={`${styles.fieldLabel} ${styles.fieldGenerationMode}`}>
+                  <span className={styles.fieldLabelText}>
+                    <ImagePlus size={14} className={styles.fieldLabelIcon} aria-hidden="true" />
+                    <span>Режим генерации</span>
+                  </span>
+
+                  <div className={styles.modeSwitch} role="radiogroup" aria-label="Режим генерации">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={!withImages}
+                      className={`${styles.modeSwitchOption} ${!withImages ? styles.modeSwitchOptionActive : ""}`}
+                      onClick={() => setWithImages(false)}
+                      disabled={isGenerating}
+                    >
+                      <span className={styles.modeSwitchTitle}>
+                        <Type size={14} aria-hidden="true" />
+                        <span>Текст</span>
+                      </span>
+                      <small className={styles.modeSwitchCredits}>1 кредит</small>
+                    </button>
+
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={withImages}
+                      className={`${styles.modeSwitchOption} ${withImages ? styles.modeSwitchOptionActive : ""}`}
+                      onClick={() => setWithImages(true)}
+                      disabled={isGenerating}
+                    >
+                      <span className={styles.modeSwitchTitle}>
+                        <Sparkles size={14} aria-hidden="true" />
+                        <span>Текст + AI фото</span>
+                      </span>
+                      <small className={styles.modeSwitchCredits}>5 кредитов</small>
+                    </button>
+                  </div>
+
+                  {withImages ? (
+                    <span className={styles.modeSwitchHint}>
+                      AI сгенерирует уникальные фото для обложки, ошибки и кейса
+                    </span>
+                  ) : null}
+                </div>
+
                 <label className={`${styles.fieldLabel} ${styles.fieldNiche}`}>
                   <span className={styles.fieldLabelText}>
                     <Target size={14} className={styles.fieldLabelIcon} aria-hidden="true" />
@@ -825,6 +1043,19 @@ export default function GeneratePage() {
                   onToggle={(fieldId) => setOpenSelectId((current) => (current === fieldId ? null : fieldId))}
                   options={TONE_OPTIONS}
                   value={tone}
+                />
+
+                <GenerateSelectField
+                  className={styles.fieldContentMode}
+                  icon={<Target size={14} />}
+                  id="content-mode"
+                  isOpen={openSelectId === "content-mode"}
+                  label="Контентный режим"
+                  onChange={(nextValue) => setContentMode(nextValue as ContentModeInput)}
+                  onClose={() => setOpenSelectId(null)}
+                  onToggle={(fieldId) => setOpenSelectId((current) => (current === fieldId ? null : fieldId))}
+                  options={CONTENT_MODE_OPTIONS}
+                  value={contentMode}
                 />
 
                 <GenerateSelectField
@@ -935,7 +1166,14 @@ export default function GeneratePage() {
             <div className={styles.previewList}>
               {previewList.map((item, index) => (
                 <div key={`${item.type}-${index}`} className={`${styles.previewItem} tap-feedback`}>
-                  <span className={styles.previewIndex}>{index + 1}</span>
+                  <span className={styles.previewIndexMeta}>
+                    <span className={styles.previewIndex}>{index + 1}</span>
+                    {item.hasImage ? (
+                      <span className={styles.previewImageBadge} role="img" aria-label="На слайде есть AI-фото">
+                        🖼
+                      </span>
+                    ) : null}
+                  </span>
                   <span className={styles.previewCopy}>
                     <strong>{item.title}</strong>
                     <span className={styles.previewRole}>{ROLE_LABELS[item.type] ?? item.type}</span>

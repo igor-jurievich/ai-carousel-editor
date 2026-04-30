@@ -264,22 +264,15 @@ export default function OnboardingPage() {
         );
 
         if (profileError) {
-          const profileErrorText = profileError.message.toLowerCase();
-          const isSafeProfileError =
-            profileErrorText.includes("row-level security") ||
-            profileErrorText.includes("permission denied") ||
-            profileErrorText.includes("duplicate key value");
-
-          if (!isSafeProfileError) {
-            throw profileError;
-          }
+          console.error("Onboarding profile upsert error:", profileError);
         }
       }
 
+      stopLoadingMessage();
       router.replace("/generate");
       router.refresh();
     } catch (error) {
-      console.error("Onboarding error details:", error);
+      console.error("Onboarding error:", error);
       stopLoadingMessage();
       const message = getErrorMessage(error);
       addBotMessage(message);
