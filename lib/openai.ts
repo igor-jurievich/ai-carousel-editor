@@ -3,7 +3,9 @@ import { clampSlidesCount } from "@/lib/slides";
 import type {
   CarouselOutlineSlide,
   CarouselPostCaption,
-  CarouselSlideRole
+  CarouselSlideRole,
+  ContentMode,
+  ContentModeInput
 } from "@/types/editor";
 
 export type PromptVariant = "A" | "B";
@@ -26,6 +28,7 @@ type GenerationOptions = {
   tone?: string;
   goal?: string;
   promptVariant?: PromptVariant;
+  contentMode?: ContentModeInput;
 };
 
 type CaptionGenerationInput = {
@@ -35,6 +38,8 @@ type CaptionGenerationInput = {
   audience?: string;
   tone?: string;
   goal?: string;
+  contentMode?: ContentModeInput;
+  resolvedMode?: ContentMode;
 };
 
 type CarouselGenerationMeta = {
@@ -50,8 +55,33 @@ type CarouselGenerationResult = {
   promptVariant: PromptVariant;
   generationSource: CarouselGenerationSource;
   generationMeta: CarouselGenerationMeta;
+  generationProfile: {
+    modeDetected: ContentMode;
+    modeEffective: ContentMode;
+    modeSource: "auto" | "manual";
+    modeConfidence: number;
+    flowTemplate: string;
+    ctaType: "direct" | "soft";
+    bulletStyle: "clean" | "numbers" | "dots" | "compact";
+    firstSlideRepairs: number;
+    toneViolations: number;
+    modeValidationPassed: boolean;
+    modeValidationErrors: string[];
+    modeReasonCodes: string[];
+    fallbackUsed: boolean;
+  };
   fallbackReason?: CarouselFallbackReason;
 };
+
+type ModeDecision = {
+  modeDetected: ContentMode;
+  modeEffective: ContentMode;
+  modeSource: "auto" | "manual";
+  confidence: number;
+  reasonCodes: string[];
+};
+
+type TonePreference = "soft" | "balanced" | "sharp";
 
 const CANONICAL_FLOW: CarouselSlideRole[] = [
   "hook",
@@ -82,6 +112,80 @@ const FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
   ]
 };
 
+type ModeSlidePlanStep = {
+  role: CarouselSlideRole;
+  intent: string;
+};
+
+const MODE_SLIDE_PLANS: Record<ContentMode, ModeSlidePlanStep[]> = {
+  sales: [
+    { role: "hook", intent: "сильный захват внимания" },
+    { role: "problem", intent: "узнаваемые симптомы боли" },
+    { role: "amplify", intent: "усиление цены бездействия" },
+    { role: "mistake", intent: "ключевая ошибка аудитории" },
+    { role: "consequence", intent: "чем это заканчивается" },
+    { role: "shift", intent: "поворот мышления" },
+    { role: "solution", intent: "практические действия" },
+    { role: "example", intent: "мини-кейс или до/после" },
+    { role: "cta", intent: "прямой следующий шаг" }
+  ],
+  expert: [
+    { role: "hook", intent: "прямо назвать тему и пользу" },
+    { role: "problem", intent: "описать симптомы ситуации" },
+    { role: "amplify", intent: "раскрыть ключевые причины" },
+    { role: "mistake", intent: "показать типичную ошибку" },
+    { role: "shift", intent: "объяснить механизм: как работает на деле" },
+    { role: "solution", intent: "дать рабочие шаги" },
+    { role: "example", intent: "короткий пример применения" },
+    { role: "consequence", intent: "какой результат получим при внедрении" },
+    { role: "cta", intent: "мягкий вывод/следующий шаг" }
+  ],
+  instruction: [
+    { role: "hook", intent: "какую задачу решаем" },
+    { role: "problem", intent: "исходная точка и ограничения" },
+    { role: "shift", intent: "главный принцип выполнения" },
+    { role: "solution", intent: "пошаговый алгоритм действий" },
+    { role: "mistake", intent: "типичные ошибки при выполнении" },
+    { role: "amplify", intent: "условия, тайминг, важные нюансы" },
+    { role: "example", intent: "как это выглядит на практике" },
+    { role: "consequence", intent: "критерии, что все идет правильно" },
+    { role: "cta", intent: "сделать первый шаг сегодня" }
+  ],
+  diagnostic: [
+    { role: "hook", intent: "какой сбой разбираем" },
+    { role: "problem", intent: "внешние симптомы" },
+    { role: "mistake", intent: "частая неверная реакция" },
+    { role: "consequence", intent: "к чему ведет текущий сценарий" },
+    { role: "amplify", intent: "почему сбой закрепляется" },
+    { role: "shift", intent: "что меняем в понимании" },
+    { role: "solution", intent: "корректирующие действия" },
+    { role: "example", intent: "мини-диагностика на примере" },
+    { role: "cta", intent: "проверка у себя без давления" }
+  ],
+  case: [
+    { role: "hook", intent: "контекст кейса" },
+    { role: "problem", intent: "исходная проблема" },
+    { role: "example", intent: "точка до: факты и цифры" },
+    { role: "amplify", intent: "ключевые ограничения" },
+    { role: "shift", intent: "гипотеза и поворот подхода" },
+    { role: "solution", intent: "что конкретно сделали" },
+    { role: "mistake", intent: "что убрали/исправили" },
+    { role: "consequence", intent: "результат после изменений" },
+    { role: "cta", intent: "вывод и мягкий следующий шаг" }
+  ],
+  social: [
+    { role: "hook", intent: "узнаваемая бытовая ситуация" },
+    { role: "problem", intent: "что мешает и раздражает" },
+    { role: "amplify", intent: "почему это затягивается" },
+    { role: "mistake", intent: "неочевидная ошибка" },
+    { role: "shift", intent: "спокойный разворот мысли" },
+    { role: "solution", intent: "что реально помогает" },
+    { role: "example", intent: "живой короткий пример" },
+    { role: "consequence", intent: "как меняется повседневность" },
+    { role: "cta", intent: "мягкое вовлечение без дожима" }
+  ]
+};
+
 const DEFAULT_MODEL_CANDIDATES = [
   "gpt-5.1",
   "gpt-4o"
@@ -89,8 +193,13 @@ const DEFAULT_MODEL_CANDIDATES = [
 
 const HOOK_SUBTITLE_INPUT_MAX = 154;
 const HOOK_SUBTITLE_OUTPUT_MAX = 148;
-const CTA_SUBTITLE_INPUT_MAX = 172;
-const CTA_SUBTITLE_OUTPUT_MAX = 164;
+const CTA_SUBTITLE_INPUT_MAX = 160;
+const CTA_SUBTITLE_OUTPUT_MAX = 152;
+const BODY_BLOCK_INPUT_MAX = 380;
+const BODY_BLOCK_OUTPUT_MAX = 330;
+const BULLET_INPUT_MAX = 112;
+const BULLET_OUTPUT_MAX = 92;
+const MAX_BULLETS_PER_SLIDE = 3;
 const DEFAULT_MODEL_ATTEMPTS = 1;
 const DEFAULT_MODEL_CANDIDATE_LIMIT = 3;
 
@@ -136,11 +245,82 @@ const FALLBACK_TITLES: Record<CarouselSlideRole, string[]> = {
     "Как это сработало"
   ],
   cta: [
-    "Сохрани и примени",
-    "Напиши в директ — пришлю шаблон",
-    "Попробуй и напиши что получилось"
+    "Сохраните и примените",
+    "Проверьте это у себя",
+    "Сделайте первый шаг сегодня"
   ]
 };
+
+const CONTENT_MODE_LIST: ContentMode[] = [
+  "sales",
+  "expert",
+  "instruction",
+  "diagnostic",
+  "case",
+  "social"
+];
+
+const META_HOOK_PATTERNS: RegExp[] = [
+  /(?:^|[^\p{L}])(дочитыва|досматрива|сохраня[а-яё]*|пересыла|вовлечени|удержани)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(узк[а-яё]*\s+мест[а-яё]*|результат\s+буксует|шаги\s+есть,\s*а\s+результат)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(покажу,\s*как\s+раскрыть|чтобы\s+люди\s+дочитывали|раскрыть\s+тему\s+так)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(карусел[ьи]|контент)(?=$|[^\p{L}])/iu
+];
+
+const NON_SALES_TONE_PATTERNS: RegExp[] = [
+  /(?:^|[^\p{L}])ты\s+делаешь\s+неправильно(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])у\s+тебя\s+вс[её]\s+плохо(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])дом\s+превращается\s+в\s+собачий\s+туалет(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])это\s+не\s+пройдет\s+само(?:\s+по\s+себе)?(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])ты\s+учишь\s+через\s+страх\s+и\s+случай(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])стыдно\s+показывать(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])вечно(?:й|го)\s+(?:запах|хаос)(?=$|[^\p{L}])/iu,
+  /!{2,}/u
+];
+
+type NonSalesToneReplacement = {
+  detect: RegExp;
+  replace: RegExp;
+  value: string;
+};
+
+const NON_SALES_TONE_REPLACEMENTS: NonSalesToneReplacement[] = [
+  {
+    detect: /дом\s+превращается\s+в\s+собачий\s+туалет/iu,
+    replace: /дом\s+превращается\s+в\s+собачий\s+туалет/giu,
+    value: "дома регулярно появляются лужи"
+  },
+  {
+    detect: /это\s+не\s+пройдет\s+само(?:\s+по\s+себе)?/iu,
+    replace: /это\s+не\s+пройдет\s+само(?:\s+по\s+себе)?/giu,
+    value: "само по себе это редко стабилизируется"
+  },
+  {
+    detect: /ты\s+учишь\s+через\s+страх\s+и\s+случай/iu,
+    replace: /ты\s+учишь\s+через\s+страх\s+и\s+случай/giu,
+    value: "обучение получается непоследовательным"
+  },
+  {
+    detect: /ты\s+делаешь\s+неправильно/iu,
+    replace: /ты\s+делаешь\s+неправильно/giu,
+    value: "этот подход обычно не срабатывает"
+  },
+  {
+    detect: /у\s+тебя\s+вс[её]\s+плохо/iu,
+    replace: /у\s+тебя\s+вс[её]\s+плохо/giu,
+    value: "в этой точке часто возникает сбой"
+  },
+  {
+    detect: /стыдно\s+показывать/iu,
+    replace: /стыдно\s+показывать/giu,
+    value: "некомфортно показывать"
+  },
+  {
+    detect: /вечно(?:й|го)\s+(?:запах|хаос)/iu,
+    replace: /вечно(?:й|го)\s+(?:запах|хаос)/giu,
+    value: "постоянный запах и беспорядок"
+  }
+];
 
 const CAROUSEL_SYSTEM_PROMPT = `Ты — топовый Instagram-копирайтер. Пишешь карусели которые люди сохраняют, пересылают друзьям и комментируют "блин, это про меня".
 
@@ -161,7 +341,7 @@ const CAROUSEL_SYSTEM_PROMPT = `Ты — топовый Instagram-копирай
 
 Слайд 2 — PROBLEM (проблема):
 - Заголовок называет боль аудитории конкретно
-- Описание: 3 пункта-симптома (начинаются с →)
+- Описание: 3 пункта-симптома (каждый с новой строки, без спецсимволов в начале)
 - Пункты — это то, что человек УЗНАЁТ у себя
 - Каждый пункт: конкретная ситуация, не абстракция
 
@@ -180,7 +360,7 @@ const CAROUSEL_SYSTEM_PROMPT = `Ты — топовый Instagram-копирай
 Слайд 5 — CONSEQUENCE (последствие):
 - Заголовок: цена этой ошибки
 - Описание: 3 последствия с конкретикой (цифры, сроки, деньги)
-- Каждый пункт начинается с →
+- Каждый пункт с новой строки, без спецсимволов в начале
 - Должно быть больно читать
 
 Слайд 6 — SHIFT (поворот):
@@ -191,7 +371,7 @@ const CAROUSEL_SYSTEM_PROMPT = `Ты — топовый Instagram-копирай
 
 Слайд 7 — SOLUTION (решение):
 - Заголовок: "Вот что работает" или подобный
-- Описание: 3 конкретных действия (начинаются с →)
+- Описание: 3 конкретных действия (каждое с новой строки)
 - Каждое действие — что КОНКРЕТНО делать, не "будьте лучше"
 - Читатель должен смочь применить это завтра
 
@@ -228,7 +408,7 @@ const CAROUSEL_SYSTEM_PROMPT = `Ты — топовый Instagram-копирай
 ОПИСАНИЯ (body текст):
 - Максимум 3 пункта на слайд (не 4, не 5 — ровно 3)
 - Каждый пункт — ОДНО предложение, максимум 15 слов
-- Пункты начинаются с → (стрелка)
+- Пункты пиши с новой строки, без префиксов вроде →, •, -
 - Если слайд без списка — максимум 2 предложения
 
 ЗАПРЕЩЕНО:
@@ -269,7 +449,7 @@ const CAROUSEL_SYSTEM_PROMPT = `Ты — топовый Instagram-копирай
     {
       "role": "problem",
       "title": "Заголовок максимум 6 слов",
-      "body": "→ Пункт раз максимум 15 слов\n→ Пункт два максимум 15 слов\n→ Пункт три максимум 15 слов"
+      "body": "Пункт раз максимум 15 слов\nПункт два максимум 15 слов\nПункт три максимум 15 слов"
     }
   ],
   "caption": "Подпись к посту для Instagram. 3-4 абзаца. Без хештегов."
@@ -284,6 +464,62 @@ const CAROUSEL_SYSTEM_PROMPT = `Ты — топовый Instagram-копирай
 ✓ Слайды mistake и shift ИМЕЮТ body-текст (не только заголовок!)
 ✓ Роли идут строго: hook → problem → amplify → mistake → consequence → shift → solution → example → cta
 ✓ Валидный JSON без markdown`;
+
+const CAROUSEL_SYSTEM_PROMPT_EXPERT = `Ты — редактор экспертных и образовательных каруселей.
+
+Цель:
+- дать читателю ясное объяснение темы и применимый следующий шаг;
+- писать спокойно, по делу, без продажного давления.
+
+Базовые правила:
+- слайд 1 сразу называет тему и пользу;
+- текст предметный: симптомы, причины, механизм, решение, пример;
+- без мета-хуков про дочитывание, без манипуляций и драмы;
+- без обвинений читателя;
+- CTA мягкий или отсутствует;
+- пункты на новых строках, без символов в начале.
+
+Примеры первого слайда:
+- ПЛОХО: «Шаги есть, а результат буксует: где узкое место?»
+- ПЛОХО: «Покажу, как раскрыть тему, чтобы дочитывали»
+- ХОРОШО: «Почему щенок писает дома и как это исправить»
+- ХОРОШО: «Почему спорят о качестве заявок и как синхронизировать критерии»
+
+Тон и подача:
+- объясняй причину через механизм: «почему происходит -> что изменить -> какой эффект ожидать»;
+- допустима спокойная встряска, но не токсичное давление;
+- избегай драматизации ради удержания и оценочных формулировок про читателя.
+
+Формат:
+- JSON only;
+- роли слайдов и структура строго по запросу пользователя.`;
+
+const CAROUSEL_SYSTEM_PROMPT_INSTRUCTION = `Ты — методист и редактор пошаговых инструкций.
+
+Цель:
+- собрать карусель-инструкцию, где читатель понимает что делать сразу после чтения.
+
+Базовые правила:
+- слайд 1 называет задачу напрямую;
+- приоритет: порядок действий и условия выполнения;
+- каждый шаг конкретный и проверяемый;
+- отдельно обозначай типичные ошибки;
+- без драматизации и без продавливания CTA;
+- в конце — мягкий призыв применить первый шаг.
+
+Правила шагов:
+- каждый шаг начинается с действия (сделайте/проверьте/зафиксируйте/сравните);
+- шаг должен быть операциональным: что сделать, когда, по какому критерию понять результат;
+- если шаги неочевидны, добавь условие «если/когда».
+
+Примеры:
+- ПЛОХО: «Нужно быть последовательным и внимательным»
+- ХОРОШО: «Сначала зафиксируйте текущую точку: сколько попыток и в какие часы»
+- ХОРОШО: «Затем проверьте 1 переменную и сравните результат через 3 дня»
+
+Формат:
+- JSON only;
+- роли слайдов и структура строго по запросу пользователя.`;
 
 const BANNED_TEMPLATE_PATTERNS: RegExp[] = [
   /(?:^|[^\p{L}])в\s+современном\s+мире(?=$|[^\p{L}])/iu,
@@ -356,7 +592,14 @@ const WEAK_BULLET_PATTERNS: RegExp[] = [
   /(?:^|[^\p{L}])(делать\s+контент|вести\s+соцсети|развивать\s+блог)\s*(?:регулярно)?(?=$|[^\p{L}])/iu
 ];
 
-function resolveModelCandidates() {
+const OPENING_STYLE_RISK_PATTERNS: RegExp[] = [
+  /(?:^|[^\p{L}])(необходимо|следует|требуется|важно)\s+(обеспечить|осуществить|реализовать|проводить|формировать)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(эффективн[а-яё]*|качественн[а-яё]*|оптимальн[а-яё]*)\s+(подход|решени[ея]|процесс|взаимодействи[ея]|механизм)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(улучшить|повысить|оптимизировать)\s+(эффективность|процесс)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(в\s+целом|в\s+общем|как\s+правило)(?=$|[^\p{L}])/iu
+];
+
+function resolveModelCandidates(mode: ContentMode = "expert") {
   const uniqueCandidates = [
     process.env.OPENAI_GENERATION_MODEL?.trim(),
     ...DEFAULT_MODEL_CANDIDATES,
@@ -367,9 +610,10 @@ function resolveModelCandidates() {
 
   const requestedLimit = Number(process.env.OPENAI_MODEL_CANDIDATE_LIMIT);
   const limit = Number.isFinite(requestedLimit)
-    ? Math.max(3, Math.min(4, Math.round(requestedLimit)))
+    ? Math.max(1, Math.min(4, Math.round(requestedLimit)))
     : DEFAULT_MODEL_CANDIDATE_LIMIT;
 
+  void mode;
   return uniqueCandidates.slice(0, limit);
 }
 
@@ -380,6 +624,16 @@ function resolveModelAttemptsPerCandidate() {
   }
 
   return Math.max(1, Math.min(3, Math.round(raw)));
+}
+
+function shouldRetryInvalidSchema(mode: ContentMode) {
+  void mode;
+  return true;
+}
+
+function shouldRetryWithAnotherModelAfterQualityFailure(mode: ContentMode) {
+  void mode;
+  return true;
 }
 
 let client: OpenAI | null = null;
@@ -399,6 +653,7 @@ function getOpenAIClient() {
 async function requestCarouselCompletion(
   openai: OpenAI,
   model: string,
+  systemPrompt: string,
   userMessage: string,
   slidesCount: number
 ) {
@@ -411,7 +666,7 @@ async function requestCarouselCompletion(
         content: [
           {
             type: "input_text",
-            text: CAROUSEL_SYSTEM_PROMPT
+            text: systemPrompt
           }
         ]
       },
@@ -515,20 +770,26 @@ function validateCarouselResponse(
   return { valid: errors.length === 0, errors };
 }
 
-function mapModelSlidesToLegacyShape(rawSlides: unknown, expectedFlow: CarouselSlideRole[]) {
+function mapModelSlidesToLegacyShape(
+  rawSlides: unknown,
+  expectedFlow: CarouselSlideRole[],
+  mode: ContentMode = "expert"
+) {
   const source = Array.isArray(rawSlides) ? rawSlides : [];
 
   return expectedFlow.map((role, index) => {
     const record = toRecord(source[index]);
     const title = normalizeText(record.title, 180);
-    const body = normalizeText(record.body, 1200);
+    const body = normalizeBodyText(record.body, 1200);
     const bullets = extractBodyBullets(body);
 
     if (role === "hook") {
       return {
         type: "hook",
         title,
-        subtitle: body
+        subtitle:
+          sanitizeCopyText(normalizeText(body, HOOK_SUBTITLE_INPUT_MAX), HOOK_SUBTITLE_OUTPUT_MAX) ||
+          buildHookFallbackSubtitle("вашей теме", mode)
       };
     }
 
@@ -560,7 +821,7 @@ function mapModelSlidesToLegacyShape(rawSlides: unknown, expectedFlow: CarouselS
       return {
         type: "shift",
         title,
-        body
+        body: body || formatBulletsBody(bullets)
       };
     }
 
@@ -584,7 +845,9 @@ function mapModelSlidesToLegacyShape(rawSlides: unknown, expectedFlow: CarouselS
     return {
       type: "cta",
       title,
-      subtitle: body
+      subtitle:
+        sanitizeCopyText(normalizeText(body, CTA_SUBTITLE_INPUT_MAX), CTA_SUBTITLE_OUTPUT_MAX) ||
+        buildGoalAwareCta(undefined)
     };
   });
 }
@@ -594,33 +857,79 @@ function extractBodyBullets(body: string) {
     return [] as string[];
   }
 
-  const normalizedLines = body
-    .replace(/\r/g, "")
+  const normalizedLines = normalizeBodyText(body, 1200)
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const arrowLines = normalizedLines
-    .map((line) => line.replace(/^(?:→|-|•)\s*/u, "").trim())
+  const markerLines = normalizedLines
+    .filter((line) => /^(?:→|[-•·]|(?:\d+[.)]))\s*/u.test(line))
+    .map((line) => line.replace(/^(?:→|[-•·]|(?:\d+[.)]))\s*/u, "").trim())
     .filter(Boolean);
+  if (markerLines.length >= 2) {
+    return dedupeBullets(markerLines);
+  }
 
-  if (arrowLines.length) {
-    return arrowLines.slice(0, 3);
+  const inlineArrowBullets = normalizedLines.flatMap((line) => {
+    if (!line.includes("→")) {
+      return [] as string[];
+    }
+
+    return line
+      .split(/\s*→\s*/u)
+      .map((part) => part.trim())
+      .filter(Boolean);
+  });
+  if (inlineArrowBullets.length >= 2) {
+    return dedupeBullets(inlineArrowBullets);
+  }
+
+  if (normalizedLines.length >= 2) {
+    return dedupeBullets(normalizedLines);
   }
 
   const sentenceBullets = body
+    .replace(/\s*→\s*/gu, ". ")
     .split(/[.!?]+/u)
     .map((part) => part.replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
-  return sentenceBullets.slice(0, 3);
+  return dedupeBullets(sentenceBullets);
+}
+
+function dedupeBullets(items: string[]) {
+  const dedupe = new Set<string>();
+  const cleaned: string[] = [];
+
+  for (const item of items) {
+    const normalized = sanitizeCopyText(normalizeText(item, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX)
+      .replace(/^[•·\-–—→\s]+/u, "")
+      .replace(/[.!?]+\s*$/u, "")
+      .trim();
+    if (!normalized) {
+      continue;
+    }
+
+    const fingerprint = normalizeWordTokens(normalized).join(" ");
+    if (!fingerprint || dedupe.has(fingerprint)) {
+      continue;
+    }
+
+    dedupe.add(fingerprint);
+    cleaned.push(normalized);
+    if (cleaned.length >= MAX_BULLETS_PER_SLIDE) {
+      break;
+    }
+  }
+
+  return cleaned;
 }
 
 function formatBulletsBody(bullets: string[]) {
   return bullets
     .filter(Boolean)
-    .slice(0, 3)
-    .map((item) => `→ ${item}`)
+    .slice(0, MAX_BULLETS_PER_SLIDE)
+    .map((item) => item)
     .join("\n");
 }
 
@@ -659,19 +968,1065 @@ function dedupeErrors(errors: string[]) {
   return result;
 }
 
+function resolveDefaultBulletStyle(mode: ContentMode) {
+  if (mode === "instruction") {
+    return "numbers" as const;
+  }
+
+  if (mode === "sales") {
+    return "compact" as const;
+  }
+
+  return "clean" as const;
+}
+
+function resolveDefaultCtaType(mode: ContentMode, goal?: string) {
+  if (mode === "sales" && isLeadsGoal(normalizeText(goal ?? "", 40).toLowerCase())) {
+    return "direct" as const;
+  }
+
+  return "soft" as const;
+}
+
+function resolveFlowTemplateName(mode: ContentMode) {
+  if (mode === "sales") {
+    return "sales_funnel_v1";
+  }
+  if (mode === "instruction") {
+    return "instruction_steps_v1";
+  }
+  if (mode === "diagnostic") {
+    return "diagnostic_explain_v1";
+  }
+  if (mode === "case") {
+    return "case_story_v1";
+  }
+  if (mode === "social") {
+    return "social_relatable_v1";
+  }
+  return "expert_explain_v1";
+}
+
+function buildGenerationProfile(input: {
+  modeDecision: ModeDecision;
+  goal?: string;
+  firstSlideRepairs: number;
+  toneViolations: number;
+  modeValidationErrors: string[];
+  fallbackUsed: boolean;
+}) {
+  return {
+    modeDetected: input.modeDecision.modeDetected,
+    modeEffective: input.modeDecision.modeEffective,
+    modeSource: input.modeDecision.modeSource,
+    modeConfidence: Number(input.modeDecision.confidence.toFixed(2)),
+    flowTemplate: resolveFlowTemplateName(input.modeDecision.modeEffective),
+    ctaType: resolveDefaultCtaType(input.modeDecision.modeEffective, input.goal),
+    bulletStyle: resolveDefaultBulletStyle(input.modeDecision.modeEffective),
+    firstSlideRepairs: input.firstSlideRepairs,
+    toneViolations: input.toneViolations,
+    modeValidationPassed: input.modeValidationErrors.length === 0,
+    modeValidationErrors: input.modeValidationErrors,
+    modeReasonCodes: input.modeDecision.reasonCodes,
+    fallbackUsed: input.fallbackUsed
+  };
+}
+
+function resolveModeFromOptions(options?: GenerationOptions): ContentMode {
+  const resolved = resolveContentMode(options?.contentMode);
+  if (resolved !== "auto") {
+    return resolved;
+  }
+
+  return isLeadsGoal(normalizeText(options?.goal ?? "", 40).toLowerCase()) ? "sales" : "expert";
+}
+
+function buildSystemPrompt(mode: ContentMode, topic: string, options?: GenerationOptions) {
+  const domainHints = buildDomainPromptAddendum(resolveTopicDomain(topic, options))
+    .map((line) => `- ${line}`)
+    .join("\n");
+  const basePrompt =
+    mode === "sales"
+      ? CAROUSEL_SYSTEM_PROMPT
+      : mode === "instruction"
+        ? CAROUSEL_SYSTEM_PROMPT_INSTRUCTION
+        : CAROUSEL_SYSTEM_PROMPT_EXPERT;
+
+  if (mode === "sales") {
+    return `${basePrompt}\n\nDOMAIN CONTEXT:\n${domainHints}`;
+  }
+
+  const nonSalesOverrides = [
+    "ПРИОРИТЕТНЫЕ ПРАВИЛА ДЛЯ NON-SALES (важнее базовых правил выше):",
+    "- Никакой воронки дожима. Удержание через ясность и пользу, а не через страх.",
+    "- Слайд 1 обязан прямо назвать предмет темы. Запрещены мета-хуки про дочитывание/сохранение.",
+    "- Избегай формулировок: «узкое место», «результат буксует», «покажу как раскрыть тему».",
+    "- Не обвиняй читателя. Нельзя токсичный тон и давление через стыд.",
+    "- Не усиливай драму искусственно. Допустима только реалистичная конкретика.",
+    "- CTA только мягкий или отсутствует. Нельзя «напиши слово в директ» и двойные CTA.",
+    "- Пункты списка без символов в начале строки (без →, •, -)."
+  ];
+
+  if (mode === "instruction") {
+    nonSalesOverrides.push(
+      "- Логика контента: цель -> шаги -> условия -> частые ошибки -> итог.",
+      "- Каждый шаг практичный и применимый сразу."
+    );
+  } else if (mode === "diagnostic") {
+    nonSalesOverrides.push(
+      "- Логика контента: симптомы -> причины -> механизм -> как исправить.",
+      "- Не запугивай последствиями, объясняй причинно-следственно."
+    );
+  } else if (mode === "case") {
+    nonSalesOverrides.push(
+      "- Логика контента: контекст -> действия -> результат -> вывод.",
+      "- Цифры и факты допускаются только реалистичные и проверяемые."
+    );
+  } else if (mode === "social") {
+    nonSalesOverrides.push(
+      "- Допускается более живой тон, но без крика, продавливания и агрессивного дожима."
+    );
+  } else {
+    nonSalesOverrides.push(
+      "- Логика контента: объяснение -> причины -> механизм -> решение -> пример -> краткий итог."
+    );
+  }
+
+  const modeExamples = buildModePromptExamples(mode);
+
+  return [
+    basePrompt,
+    nonSalesOverrides.join("\n"),
+    modeExamples ? `MODE EXAMPLES:\n${modeExamples}` : "",
+    `DOMAIN CONTEXT:\n${domainHints}`
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function buildModePromptExamples(mode: ContentMode) {
+  if (mode === "instruction") {
+    return [
+      "- GOOD TITLE: «План выгула щенка: пошаговая схема»",
+      "- BAD TITLE: «Как наладить щенка к туалету»",
+      "- GOOD STEP: «Сначала зафиксируйте текущий режим: 6 выходов в день по таймеру»",
+      "- BAD STEP: «Будьте последовательны и терпеливы»"
+    ].join("\n");
+  }
+
+  if (mode === "expert") {
+    return [
+      "- GOOD TITLE: «Почему щенок писает дома: ключевые причины»",
+      "- BAD TITLE: «Шаги есть, а результат буксует»",
+      "- GOOD EXPLANATION: «Щенок закрепляет действие по ближайшему поощрению, поэтому важен тайминг 2-3 секунды»",
+      "- BAD EXPLANATION: «Это не пройдет само, всё станет хуже»"
+    ].join("\n");
+  }
+
+  return "";
+}
+
+function containsMetaHookLanguage(value: string) {
+  const normalized = normalizeText(value, 320).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return META_HOOK_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function buildFirstSlideTitleForMode(topic: string, mode: ContentMode) {
+  const focus = buildCompactTopicFocus(sanitizeTopic(topic), 34);
+  const capitalizedFocus = upperFirst(focus);
+
+  if (mode === "instruction") {
+    return trimToWordBoundary(`«${capitalizedFocus}»: пошаговый план`, 84);
+  }
+
+  if (mode === "diagnostic") {
+    return trimToWordBoundary(`«${capitalizedFocus}»: где возникает сбой`, 84);
+  }
+
+  if (mode === "case") {
+    return trimToWordBoundary(`Кейс: «${capitalizedFocus}» и рабочее решение`, 84);
+  }
+
+  if (mode === "social") {
+    return trimToWordBoundary(`«${capitalizedFocus}»: спокойный план без хаоса`, 84);
+  }
+
+  return trimToWordBoundary(`«${capitalizedFocus}»: почему нет стабильного результата`, 84);
+}
+
+function buildFirstSlideSubtitleForMode(topic: string, mode: ContentMode) {
+  const focus = buildCompactTopicFocus(sanitizeTopic(topic), 42);
+
+  if (mode === "instruction") {
+    return trimToWordBoundary(
+      `Дам пошаговый план для «${focus}»: что сделать сегодня и на что смотреть дальше.`,
+      148
+    );
+  }
+
+  if (mode === "diagnostic") {
+    return trimToWordBoundary(
+      `Разберём причины срывов в «${focus}» и покажем, как их исправить без перегруза.`,
+      148
+    );
+  }
+
+  if (mode === "case") {
+    return trimToWordBoundary(
+      `Покажу, что было до, какие действия сработали и какой результат получили в «${focus}».`,
+      148
+    );
+  }
+
+  if (mode === "social") {
+    return trimToWordBoundary(
+      `Коротко и по делу: почему вокруг «${focus}» бывает хаос и что реально помогает.`,
+      148
+    );
+  }
+
+  return trimToWordBoundary(
+    "Большинство делает это неправильно — и не понимает почему результата нет. Разберём по шагам.",
+    148
+  );
+}
+
+function enforceFirstSlidePolicy(
+  slides: CarouselOutlineSlide[],
+  expectedFlow: CarouselSlideRole[],
+  topic: string,
+  mode: ContentMode
+) {
+  if (mode === "sales") {
+    return {
+      slides,
+      repairs: 0
+    };
+  }
+
+  const hookIndex = expectedFlow.findIndex((role) => role === "hook");
+  if (hookIndex < 0 || hookIndex >= slides.length) {
+    return {
+      slides,
+      repairs: 0
+    };
+  }
+
+  const nextSlides = slides.map((slide) => ({ ...slide })) as CarouselOutlineSlide[];
+  const currentHook = nextSlides[hookIndex];
+  let repairs = 0;
+
+  let hook: Extract<CarouselOutlineSlide, { type: "hook" }>;
+
+  if (currentHook?.type === "hook") {
+    hook = { ...currentHook };
+  } else {
+    hook = {
+      type: "hook",
+      title: "",
+      subtitle: ""
+    };
+    repairs += 1;
+  }
+
+  const title = sanitizeTitleValue(hook.title, 84);
+  const subtitle = sanitizeCopyText(
+    normalizeText(hook.subtitle, HOOK_SUBTITLE_INPUT_MAX),
+    HOOK_SUBTITLE_OUTPUT_MAX
+  );
+  const combinedCopy = [title, subtitle].filter(Boolean).join(" ").trim();
+
+  const lacksTopicAnchor =
+    !hasPrimaryTopicAnchor(combinedCopy, topic) && !isCopyTopicAligned(combinedCopy, topic);
+  const hasMetaHook = containsMetaHookLanguage(combinedCopy);
+  const weakTitle =
+    !title ||
+    countWords(title) < 3 ||
+    hasDanglingTail(title) ||
+    startsWithGenericMistakeLead(title) ||
+    hasNonSalesGrammarRisk(title) ||
+    hasAwkwardHookTitle(title);
+  const weakSubtitle = !subtitle || containsMetaHookLanguage(subtitle);
+
+  if (weakTitle || hasMetaHook || lacksTopicAnchor) {
+    hook.title = buildFirstSlideTitleForMode(topic, mode);
+    repairs += 1;
+  } else {
+    hook.title = title;
+  }
+
+  if (weakSubtitle || hasMetaHook) {
+    hook.subtitle = buildFirstSlideSubtitleForMode(topic, mode);
+    repairs += 1;
+  } else {
+    hook.subtitle = subtitle;
+  }
+
+  const finalHookText = `${hook.title} ${hook.subtitle}`.trim();
+  if (!hasPrimaryTopicAnchor(finalHookText, topic)) {
+    hook.title = addTopicAnchorToTitle(hook.title, buildTopicAnchorLabel(topic));
+    repairs += 1;
+  }
+
+  nextSlides[hookIndex] = hook;
+
+  return {
+    slides: nextSlides,
+    repairs
+  };
+}
+
+function polishQuotedTopicFragments(value: string, maxLength: number) {
+  const source = sanitizeCopyText(normalizeText(value, maxLength + 40), maxLength);
+  if (!source) {
+    return "";
+  }
+
+  let next = source.replace(/«([^»]+)»/gu, (_, inner: string) => {
+    const cleanedInner = removeDanglingTail(
+      inner
+        .replace(/^[\s"'`«»“”„:;,.!?—–-]+/gu, "")
+        .replace(/^(по|в|на|для|про|о|об)\s+/iu, "")
+        .replace(/[,:;—–-]+\s*$/u, "")
+        .trim()
+    );
+
+    if (!cleanedInner) {
+      return "";
+    }
+
+    return `«${upperFirst(cleanedInner)}»`;
+  });
+
+  next = next.replace(/«\s*»/gu, "").replace(/\s{2,}/gu, " ").trim();
+
+  return sanitizeCopyText(normalizeText(next, maxLength), maxLength);
+}
+
+function hasHookSubtitleStyleRisk(value: string) {
+  const normalized = sanitizeCopyText(
+    normalizeText(value, HOOK_SUBTITLE_OUTPUT_MAX),
+    HOOK_SUBTITLE_OUTPUT_MAX
+  );
+  if (!normalized) {
+    return true;
+  }
+
+  const words = countWords(normalized);
+  const punctuationCount = (normalized.match(/[,:;.!?]/gu) ?? []).length;
+  const clauseCueCount = (
+    normalized.match(/\b(что|как|какие|какой|почему|где|когда|чтобы|которые|который)\b/giu) ?? []
+  ).length;
+  const hasUpperCaseQuoteWord = /«[А-ЯЁ][а-яё]{2,}»/u.test(normalized);
+  const hasDenseCueChain =
+    clauseCueCount >= 3 && punctuationCount < 2 && words >= 15;
+
+  return words > 28 || hasUpperCaseQuoteWord || hasDenseCueChain;
+}
+
+function polishHookSubtitleStyle(value: string, mode: ContentMode, topic: string) {
+  let next = polishQuotedTopicFragments(value, HOOK_SUBTITLE_OUTPUT_MAX);
+  if (!next) {
+    return buildFirstSlideSubtitleForMode(topic, mode);
+  }
+
+  next = next
+    .replace(/«([А-ЯЁ])([а-яё]{2,})»/gu, (_, head: string, tail: string) => `«${head.toLowerCase()}${tail}»`)
+    .replace(/»\s+(какие|какой|как|почему|где|когда|что)\b/giu, "», $1")
+    .replace(/\s{2,}/gu, " ")
+    .trim();
+
+  if (!/[.!?]$/u.test(next)) {
+    next = `${next}.`;
+  }
+
+  next = sanitizeCopyText(normalizeText(next, HOOK_SUBTITLE_OUTPUT_MAX), HOOK_SUBTITLE_OUTPUT_MAX);
+  if (!next || hasHookSubtitleStyleRisk(next) || containsMetaHookLanguage(next)) {
+    return buildFirstSlideSubtitleForMode(topic, mode);
+  }
+
+  return next;
+}
+
+function applyHookEditorialPolish(
+  slides: CarouselOutlineSlide[],
+  mode: ContentMode,
+  topic: string
+) {
+  if (mode === "sales") {
+    return slides;
+  }
+
+  const nextSlides = slides.map((slide) => ({ ...slide })) as CarouselOutlineSlide[];
+  const hookIndex = nextSlides.findIndex((slide) => slide.type === "hook");
+  if (hookIndex < 0 || nextSlides[hookIndex]?.type !== "hook") {
+    return nextSlides;
+  }
+
+  const hook = nextSlides[hookIndex] as Extract<CarouselOutlineSlide, { type: "hook" }>;
+  const polishedTitle = polishQuotedTopicFragments(hook.title, 84);
+  const polishedSubtitle = polishHookSubtitleStyle(hook.subtitle, mode, topic);
+
+  hook.title = polishedTitle || buildFirstSlideTitleForMode(topic, mode);
+  hook.subtitle = polishedSubtitle || buildFirstSlideSubtitleForMode(topic, mode);
+
+  if (hasNonSalesGrammarRisk(hook.title) || hasDanglingTail(hook.title) || countWords(hook.title) < 3) {
+    hook.title = buildFirstSlideTitleForMode(topic, mode);
+  }
+
+  if (!hook.subtitle || containsMetaHookLanguage(hook.subtitle)) {
+    hook.subtitle = buildFirstSlideSubtitleForMode(topic, mode);
+  }
+
+  const combined = `${hook.title} ${hook.subtitle}`.trim();
+  if (!hasPrimaryTopicAnchor(combined, topic)) {
+    hook.title = addTopicAnchorToTitle(hook.title, buildTopicAnchorLabel(topic));
+  }
+
+  nextSlides[hookIndex] = hook;
+  return nextSlides;
+}
+
+function hasOpeningStyleRisk(value: string) {
+  const normalized = sanitizeCopyText(normalizeText(value, 260), 240).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (hasLegacyTemplatePhrase(normalized) || WEAK_BULLET_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return true;
+  }
+
+  return OPENING_STYLE_RISK_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function applyNonSalesOpeningStyleGuardrails(
+  slides: CarouselOutlineSlide[],
+  mode: ContentMode,
+  topic: string,
+  options?: GenerationOptions
+) {
+  if (mode === "sales") {
+    return slides;
+  }
+
+  const nextSlides = slides.map((slide) => ({ ...slide })) as CarouselOutlineSlide[];
+  const openingCount = Math.min(3, nextSlides.length);
+
+  for (let index = 0; index < openingCount; index += 1) {
+    const slide = nextSlides[index];
+    if (!slide) {
+      continue;
+    }
+
+    if (slide.type === "hook") {
+      const title = sanitizeTitleValue(slide.title, 84);
+      const subtitle = sanitizeCopyText(
+        normalizeText(slide.subtitle, HOOK_SUBTITLE_INPUT_MAX),
+        HOOK_SUBTITLE_OUTPUT_MAX
+      );
+
+      slide.title =
+        !title || hasOpeningStyleRisk(title) || hasNonSalesGrammarRisk(title)
+          ? buildFirstSlideTitleForMode(topic, mode)
+          : title;
+      slide.subtitle =
+        !subtitle || hasOpeningStyleRisk(subtitle) || !hasConcreteAnchorInCopy(subtitle)
+          ? buildFirstSlideSubtitleForMode(topic, mode)
+          : subtitle;
+      continue;
+    }
+
+    if (
+      slide.type === "problem" ||
+      slide.type === "amplify" ||
+      slide.type === "consequence" ||
+      slide.type === "solution"
+    ) {
+      const fallbackBullets = buildRoleBulletsFallback(slide.type, topic, options);
+      const normalizedBullets = (slide.bullets ?? [])
+        .map((item) => sanitizeCopyText(normalizeText(item, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX))
+        .filter(Boolean)
+        .slice(0, MAX_BULLETS_PER_SLIDE);
+      const polishedBullets = normalizedBullets.map((item, bulletIndex) => {
+        if (hasOpeningStyleRisk(item) && !hasConcreteAnchorInCopy(item)) {
+          return fallbackBullets[bulletIndex] ?? fallbackBullets[0] ?? item;
+        }
+        return item;
+      });
+      slide.bullets = pickStrongBullets(polishedBullets, fallbackBullets);
+      continue;
+    }
+
+    if (slide.type === "mistake" || slide.type === "shift") {
+      const title = sanitizeTitleValue(slide.title, 92);
+      const body = sanitizeCopyText(
+        normalizeText(slide.body ?? "", BODY_BLOCK_INPUT_MAX),
+        BODY_BLOCK_OUTPUT_MAX
+      );
+
+      slide.title =
+        !title || hasOpeningStyleRisk(title) ? buildRoleTitleFallback(slide.type, topic, options) : title;
+      if (!body || (hasOpeningStyleRisk(body) && !hasConcreteAnchorInCopy(body))) {
+        slide.body =
+          mode === "instruction"
+            ? "Сначала зафиксируйте исходную точку, затем измените один шаг и проверьте результат через 3 дня."
+            : "Покажите причину на конкретном примере, затем дайте один шаг, который можно сделать сегодня.";
+      } else {
+        slide.body = body;
+      }
+    }
+  }
+
+  return nextSlides;
+}
+
+function resolveTonePreference(tone?: string): TonePreference {
+  const normalized = normalizeText(tone, 20).toLowerCase();
+  if (normalized === "soft" || normalized === "sharp") {
+    return normalized;
+  }
+
+  return "balanced";
+}
+
+function softenNonSalesText(value: string, maxLength: number, tonePreference: TonePreference = "balanced") {
+  const source = sanitizeCopyText(normalizeText(value, maxLength * 2), maxLength);
+  if (!source) {
+    return { text: "", violations: 0 };
+  }
+
+  let next = source;
+  let violations = 0;
+
+  for (const pattern of NON_SALES_TONE_PATTERNS) {
+    if (pattern.test(source)) {
+      violations += 1;
+    }
+  }
+
+  for (const replacement of NON_SALES_TONE_REPLACEMENTS) {
+    if (!replacement.detect.test(next)) {
+      continue;
+    }
+
+    next = next.replace(replacement.replace, replacement.value);
+  }
+
+  if (/!{2,}/u.test(next)) {
+    next = next.replace(/!{2,}/gu, "!");
+  }
+
+  if (tonePreference === "soft") {
+    next = next
+      .replace(/\b(срочно|немедленно)\b/giu, "лучше")
+      .replace(/\b(должен|должны|обязан|обязаны)\b/giu, "лучше")
+      .replace(/\b(катастрофа|провал)\b/giu, "сбой")
+      .replace(/!/gu, ".");
+  }
+
+  next = next
+    .replace(/\bвсегда\b/giu, "часто")
+    .replace(/\bникогда\b/giu, "редко")
+    .replace(/\s{2,}/gu, " ")
+    .trim();
+
+  return {
+    text: sanitizeCopyText(normalizeText(next, maxLength), maxLength),
+    violations
+  };
+}
+
+function applyToneGuardrails(
+  slides: CarouselOutlineSlide[],
+  mode: ContentMode,
+  tonePreference: TonePreference = "balanced"
+) {
+  if (mode === "sales") {
+    return {
+      slides,
+      violations: 0
+    };
+  }
+
+  let violations = 0;
+  const nextSlides = slides.map((slide) => ({ ...slide })) as CarouselOutlineSlide[];
+
+  for (let index = 0; index < nextSlides.length; index += 1) {
+    const current = nextSlides[index];
+    if (!current) {
+      continue;
+    }
+
+    if (current.type === "hook") {
+      const softenedTitle = softenNonSalesText(current.title, 84, tonePreference);
+      const softenedSubtitle = softenNonSalesText(
+        current.subtitle,
+        HOOK_SUBTITLE_OUTPUT_MAX,
+        tonePreference
+      );
+      violations += softenedTitle.violations + softenedSubtitle.violations;
+      current.title = sanitizeTitleValue(softenedTitle.text, 84);
+      current.subtitle = softenedSubtitle.text;
+      continue;
+    }
+
+    if (
+      current.type === "problem" ||
+      current.type === "amplify" ||
+      current.type === "consequence" ||
+      current.type === "solution"
+    ) {
+      const softenedTitle = softenNonSalesText(current.title ?? "", 84, tonePreference);
+      violations += softenedTitle.violations;
+      current.title = sanitizeTitleValue(softenedTitle.text, 84);
+      current.bullets = current.bullets
+        .map((item) => {
+          const softened = softenNonSalesText(item, BULLET_OUTPUT_MAX, tonePreference);
+          violations += softened.violations;
+          return softened.text;
+        })
+        .filter(Boolean)
+        .slice(0, MAX_BULLETS_PER_SLIDE);
+      continue;
+    }
+
+    if (current.type === "mistake" || current.type === "shift") {
+      const softenedTitle = softenNonSalesText(current.title, 92, tonePreference);
+      const softenedBody = softenNonSalesText(current.body ?? "", BODY_BLOCK_OUTPUT_MAX, tonePreference);
+      violations += softenedTitle.violations + softenedBody.violations;
+      const previousTitle = sanitizeTitleValue(current.title, 92);
+      const nextTitle = sanitizeTitleValue(softenedTitle.text, 92);
+      current.title = countWords(nextTitle) >= 4 ? nextTitle : previousTitle;
+      current.body = softenedBody.text;
+      continue;
+    }
+
+    if (current.type === "example") {
+      const softenedBefore = softenNonSalesText(current.before, 122, tonePreference);
+      const softenedAfter = softenNonSalesText(current.after, 122, tonePreference);
+      violations += softenedBefore.violations + softenedAfter.violations;
+      current.before = softenedBefore.text;
+      current.after = softenedAfter.text;
+      continue;
+    }
+
+    if (current.type === "cta") {
+      const softenedTitle = softenNonSalesText(current.title, 84, tonePreference);
+      const softenedSubtitle = softenNonSalesText(
+        current.subtitle,
+        CTA_SUBTITLE_OUTPUT_MAX,
+        tonePreference
+      );
+      violations += softenedTitle.violations + softenedSubtitle.violations;
+      current.title = sanitizeTitleValue(softenedTitle.text, 84);
+      current.subtitle = softenedSubtitle.text;
+    }
+  }
+
+  return {
+    slides: nextSlides,
+    violations
+  };
+}
+
+function dedupeReasonCodes(reasons: string[]) {
+  return Array.from(new Set(reasons.filter(Boolean)));
+}
+
+function validateNonSalesCommonOutput(slides: CarouselOutlineSlide[], topic: string) {
+  const reasons: string[] = [];
+  const hook = slides.find((slide) => slide.type === "hook");
+  const cta = slides.find((slide) => slide.type === "cta");
+
+  if (hook) {
+    const hookText = `${hook.title} ${hook.subtitle}`.trim();
+    if (containsMetaHookLanguage(hookText)) {
+      reasons.push("first_slide_meta_hook");
+    }
+    if (!hasPrimaryTopicAnchor(hookText, topic) && !isCopyTopicAligned(hookText, topic)) {
+      reasons.push("first_slide_topic_unclear");
+    }
+  } else {
+    reasons.push("missing_hook_slide");
+  }
+
+  const firstThree = slides.slice(0, 3);
+  if (firstThree.some((slide) => containsMetaHookLanguage(collectSlideCopy(slide)))) {
+    reasons.push("meta_hook_in_opening");
+  }
+
+  if (cta && containsDirectMessageCta(`${cta.title} ${cta.subtitle}`)) {
+    reasons.push("non_sales_direct_cta");
+  }
+
+  return dedupeReasonCodes(reasons);
+}
+
+function validateSalesOutput(slides: CarouselOutlineSlide[]) {
+  const reasons: string[] = [];
+  const cta = slides.find((slide) => slide.type === "cta");
+  const hook = slides.find((slide) => slide.type === "hook");
+
+  if (!hook) {
+    reasons.push("missing_hook_slide");
+  }
+
+  if (!cta) {
+    reasons.push("missing_cta_slide");
+  } else if (!hasPrimaryCtaActionVerb(`${cta.title} ${cta.subtitle}`)) {
+    reasons.push("sales_cta_missing_action");
+  }
+
+  return dedupeReasonCodes(reasons);
+}
+
+function validateExpertOutput(slides: CarouselOutlineSlide[], topic: string) {
+  const reasons = validateNonSalesCommonOutput(slides, topic);
+  const shift = slides.find((slide) => slide.type === "shift");
+  const solution = slides.find((slide) => slide.type === "solution");
+  const explanation = shift && "body" in shift ? shift.body ?? "" : "";
+  const hasMechanismCue = /(?:^|[^\p{L}])(потому|поэтому|из-за|когда|если|чтобы)(?=$|[^\p{L}])/iu.test(
+    explanation
+  );
+
+  if (!hasMechanismCue) {
+    reasons.push("expert_missing_mechanism_explanation");
+  }
+
+  if (!solution || !("bullets" in solution) || solution.bullets.length < 2) {
+    reasons.push("expert_solution_too_weak");
+  }
+
+  return dedupeReasonCodes(reasons);
+}
+
+function validateInstructionOutput(slides: CarouselOutlineSlide[], topic: string) {
+  const reasons = validateNonSalesCommonOutput(slides, topic);
+  const solution = slides.find((slide) => slide.type === "solution");
+  const mistake = slides.find((slide) => slide.type === "mistake");
+  const solutionCopy = solution && "bullets" in solution ? solution.bullets.join(" ") : "";
+  const stepCue = /(?:^|[^\p{L}])(шаг|сначала|потом|затем|проверьте|сделайте|1|2|3)(?=$|[^\p{L}])/iu.test(
+    solutionCopy
+  );
+  if (!solution || !("bullets" in solution) || solution.bullets.length < 2 || !stepCue) {
+    reasons.push("instruction_missing_step_logic");
+  }
+  if (!mistake || !("body" in mistake) || countWords(mistake.body ?? "") < 7) {
+    reasons.push("instruction_missing_mistakes_block");
+  }
+
+  return dedupeReasonCodes(reasons);
+}
+
+function validateDiagnosticOutput(slides: CarouselOutlineSlide[], topic: string) {
+  const reasons = validateNonSalesCommonOutput(slides, topic);
+  const problem = slides.find((slide) => slide.type === "problem");
+  const mistake = slides.find((slide) => slide.type === "mistake");
+  const consequence = slides.find((slide) => slide.type === "consequence");
+  const shift = slides.find((slide) => slide.type === "shift");
+
+  if (!problem || !("bullets" in problem) || problem.bullets.length < 2) {
+    reasons.push("diagnostic_missing_symptoms");
+  }
+
+  const hasDiagnosticDepth =
+    (mistake && "body" in mistake && countWords(mistake.body ?? "") >= 8) ||
+    (consequence && "bullets" in consequence && consequence.bullets.length >= 2);
+  if (!hasDiagnosticDepth) {
+    reasons.push("diagnostic_shallow_explanation");
+  }
+
+  const shiftBody = shift && "body" in shift ? shift.body ?? "" : "";
+  const hasCorrectionCue = /(?:^|[^\p{L}])(исправ|проверь|сделай|сделайте|меняй|меняйте)(?=$|[^\p{L}])/iu.test(
+    shiftBody
+  );
+  if (!hasCorrectionCue) {
+    reasons.push("diagnostic_missing_correction_path");
+  }
+
+  return dedupeReasonCodes(reasons);
+}
+
+function validateCaseOutput(slides: CarouselOutlineSlide[], topic: string) {
+  const reasons = validateNonSalesCommonOutput(slides, topic);
+  const example = slides.find((slide) => slide.type === "example");
+  const consequence = slides.find((slide) => slide.type === "consequence");
+
+  if (!example || !example.before || !example.after) {
+    reasons.push("case_missing_before_after");
+  }
+
+  const hasResultCue =
+    (example && /\d/.test(`${example.before} ${example.after}`)) ||
+    (consequence && "bullets" in consequence && consequence.bullets.some((item) => /\d/.test(item)));
+  if (!hasResultCue) {
+    reasons.push("case_missing_result_signal");
+  }
+
+  return dedupeReasonCodes(reasons);
+}
+
+function validateSocialOutput(slides: CarouselOutlineSlide[], topic: string) {
+  const reasons = validateNonSalesCommonOutput(slides, topic);
+  const openingText = slides
+    .slice(0, 4)
+    .map((slide) => collectSlideCopy(slide))
+    .join(" ");
+
+  if (NON_SALES_TONE_PATTERNS.some((pattern) => pattern.test(openingText))) {
+    reasons.push("social_tone_too_harsh");
+  }
+
+  return dedupeReasonCodes(reasons);
+}
+
+function validateModeSpecificOutput(
+  slides: CarouselOutlineSlide[],
+  mode: ContentMode,
+  topic: string
+) {
+  const reasons =
+    mode === "sales"
+      ? validateSalesOutput(slides)
+      : mode === "instruction"
+        ? validateInstructionOutput(slides, topic)
+        : mode === "diagnostic"
+          ? validateDiagnosticOutput(slides, topic)
+          : mode === "case"
+            ? validateCaseOutput(slides, topic)
+            : mode === "social"
+              ? validateSocialOutput(slides, topic)
+              : validateExpertOutput(slides, topic);
+
+  return {
+    ok: reasons.length === 0,
+    reasons
+  };
+}
+
+function repairModeSpecificOutput(
+  slides: CarouselOutlineSlide[],
+  mode: ContentMode,
+  topic: string,
+  options?: GenerationOptions
+) {
+  const nextSlides = slides.map((slide) => ({ ...slide })) as CarouselOutlineSlide[];
+  const currentFlow = nextSlides.map((slide) => slide.type);
+
+  if (mode !== "sales") {
+    const firstSlide = enforceFirstSlidePolicy(nextSlides, currentFlow, topic, mode);
+    for (let index = 0; index < nextSlides.length; index += 1) {
+      nextSlides[index] = firstSlide.slides[index] ?? nextSlides[index];
+    }
+  }
+
+  const ctaIndex = nextSlides.findIndex((slide) => slide.type === "cta");
+  if (ctaIndex >= 0 && nextSlides[ctaIndex]?.type === "cta") {
+    const cta = nextSlides[ctaIndex] as Extract<CarouselOutlineSlide, { type: "cta" }>;
+    const ctaVariants = buildCtaVariants(options?.goal, topic, mode);
+    if (mode !== "sales" || containsDirectMessageCta(`${cta.title} ${cta.subtitle}`)) {
+      cta.title = buildCtaTitleFallback(options?.goal, topic, mode);
+      cta.subtitle = ctaVariants.soft;
+    }
+  }
+
+  if (mode === "instruction") {
+    const solutionIndex = nextSlides.findIndex((slide) => slide.type === "solution");
+    if (solutionIndex >= 0 && nextSlides[solutionIndex]?.type === "solution") {
+      const solution = nextSlides[solutionIndex] as Extract<CarouselOutlineSlide, { type: "solution" }>;
+      const solutionFallback = buildDeterministicSolutionFallback(topic, options);
+      if (!solution.bullets || solution.bullets.length < 2) {
+        solution.title = solutionFallback.title;
+        solution.bullets = solutionFallback.bullets;
+      }
+
+      if (hasForbiddenNegativeBulletsForPositiveSlide("solution", solution.bullets)) {
+        solution.title = solutionFallback.title;
+        solution.bullets = solutionFallback.bullets;
+      }
+
+      const solutionCopy = solution.bullets.join(" ");
+      const hasStepCue =
+        /(?:^|[^\p{L}])(шаг|сначала|потом|затем|проверьте|сделайте|1|2|3)(?=$|[^\p{L}])/iu.test(
+          solutionCopy
+        );
+      if (!hasStepCue && solution.bullets.length > 0) {
+        const [first, ...rest] = solution.bullets;
+        const normalizedFirst = sanitizeCopyText(normalizeText(first, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX);
+        solution.bullets = [`Сначала: ${normalizedFirst || "выполни первый шаг из плана"}`, ...rest]
+          .map((item) => sanitizeCopyText(normalizeText(item, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX))
+          .filter(Boolean)
+          .slice(0, MAX_BULLETS_PER_SLIDE);
+      }
+    }
+  }
+
+  if (mode === "expert") {
+    const shiftIndex = nextSlides.findIndex((slide) => slide.type === "shift");
+    if (shiftIndex >= 0 && nextSlides[shiftIndex]?.type === "shift") {
+      const shift = nextSlides[shiftIndex] as Extract<CarouselOutlineSlide, { type: "shift" }>;
+      const hasMechanismCue = /(?:^|[^\p{L}])(потому|поэтому|из-за|когда|если|чтобы)(?=$|[^\p{L}])/iu.test(
+        shift.body ?? ""
+      );
+      if (!shift.body || countWords(shift.body) < 8 || !hasMechanismCue) {
+        shift.body =
+          "Сначала закрепи базовую причину, потом меняй действие. Поэтому результат становится стабильным и предсказуемым.";
+      }
+    }
+  }
+
+  if (mode === "case") {
+    const exampleIndex = nextSlides.findIndex((slide) => slide.type === "example");
+    if (exampleIndex >= 0 && nextSlides[exampleIndex]?.type === "example") {
+      const example = nextSlides[exampleIndex] as Extract<CarouselOutlineSlide, { type: "example" }>;
+      if (!example.before || !example.after) {
+        const focus = buildCompactTopicFocus(sanitizeTopic(topic), 38);
+        example.before = example.before || `До: в вопросе «${focus}» действия были несистемными.`;
+        example.after = example.after || "После: ввели понятный алгоритм и получили стабильную динамику.";
+      }
+    }
+  }
+
+  if (mode === "diagnostic") {
+    const problemIndex = nextSlides.findIndex((slide) => slide.type === "problem");
+    if (problemIndex >= 0 && nextSlides[problemIndex]?.type === "problem") {
+      const problem = nextSlides[problemIndex] as Extract<CarouselOutlineSlide, { type: "problem" }>;
+      if (!problem.bullets || problem.bullets.length < 2) {
+        problem.bullets = buildRoleBulletsFallback("problem", topic, options);
+      }
+    }
+
+    const shiftIndex = nextSlides.findIndex((slide) => slide.type === "shift");
+    if (shiftIndex >= 0 && nextSlides[shiftIndex]?.type === "shift") {
+      const shift = nextSlides[shiftIndex] as Extract<CarouselOutlineSlide, { type: "shift" }>;
+      if (!shift.body || !/(?:исправ|проверь|сделай|сделайте|меняй|меняйте)/iu.test(shift.body)) {
+        shift.body =
+          "Проверь один триггер, который запускает сбой, и измени одно действие в тайминге. Так схема стабилизируется.";
+      }
+    }
+  }
+
+  if (mode === "social") {
+    const hookIndex = nextSlides.findIndex((slide) => slide.type === "hook");
+    if (hookIndex >= 0 && nextSlides[hookIndex]?.type === "hook") {
+      const hook = nextSlides[hookIndex] as Extract<CarouselOutlineSlide, { type: "hook" }>;
+      const softened = softenNonSalesText(`${hook.title}. ${hook.subtitle}`, 180);
+      const parts = softened.text.split(".").map((part) => part.trim()).filter(Boolean);
+      hook.title = sanitizeTitleValue(parts[0] || hook.title, 84);
+      hook.subtitle =
+        sanitizeCopyText(normalizeText(parts.slice(1).join(". "), HOOK_SUBTITLE_INPUT_MAX), HOOK_SUBTITLE_OUTPUT_MAX) ||
+        buildFirstSlideSubtitleForMode(topic, mode);
+    }
+  }
+
+  return nextSlides;
+}
+
+function finalizeSlidesForOutput(
+  slides: CarouselOutlineSlide[],
+  mode: ContentMode,
+  topic: string,
+  options?: GenerationOptions
+) {
+  const tonePreference = resolveTonePreference(options?.tone);
+  const firstPass = applyToneGuardrails(slides, mode, tonePreference);
+  let nextSlides = firstPass.slides;
+  let toneViolations = firstPass.violations;
+
+  const modeValidation = validateModeSpecificOutput(nextSlides, mode, topic);
+  if (!modeValidation.ok) {
+    nextSlides = repairModeSpecificOutput(nextSlides, mode, topic, options);
+    const secondPass = applyToneGuardrails(nextSlides, mode, tonePreference);
+    nextSlides = secondPass.slides;
+    toneViolations += secondPass.violations;
+  }
+
+  nextSlides = applyHookEditorialPolish(nextSlides, mode, topic);
+  nextSlides = applyNonSalesOpeningStyleGuardrails(nextSlides, mode, topic, options);
+  nextSlides = stripBodyArrowsForNonSales(nextSlides, mode);
+
+  nextSlides = nextSlides.map((slide) => {
+    if ((slide.type === "mistake" || slide.type === "shift") && countWords(slide.title) < 4) {
+      const rebuiltTitle = sanitizeTitleValue(buildRoleTitleFallback(slide.type, topic, options), 92);
+      const guaranteedTitle =
+        countWords(rebuiltTitle) >= 4
+          ? rebuiltTitle
+          : slide.type === "shift"
+            ? "Как изменить подход к теме"
+            : "Ошибка, которая тормозит результат";
+      return {
+        ...slide,
+        title: guaranteedTitle
+      };
+    }
+    return slide;
+  });
+
+  const finalValidation = validateModeSpecificOutput(nextSlides, mode, topic);
+
+  return {
+    slides: nextSlides,
+    toneViolations,
+    modeValidationErrors: finalValidation.ok ? [] : finalValidation.reasons
+  };
+}
+
+function stripBodyArrowsForNonSales(
+  slides: CarouselOutlineSlide[],
+  mode: ContentMode
+): CarouselOutlineSlide[] {
+  if (mode === "sales") {
+    return slides;
+  }
+
+  return slides.map((slide) => {
+    if (!("body" in slide) || typeof slide.body !== "string") {
+      return slide;
+    }
+
+    return {
+      ...slide,
+      body: slide.body.replace(/\s*→\s*/gu, " ").replace(/\s{2,}/g, " ").trim()
+    };
+  });
+}
+
 export async function generateCarouselFromTopic(
   topic: string,
   requestedSlidesCount?: number,
   options?: GenerationOptions
 ): Promise<CarouselGenerationResult> {
   const cleanedTopic = normalizeText(topic, 800) || "Новая карусель";
-  const expectedFlow = [...CANONICAL_FLOW];
+  const modeDecision = detectContentMode({
+    topic: cleanedTopic,
+    niche: options?.niche,
+    audience: options?.audience,
+    goal: options?.goal,
+    rawPrompt: cleanedTopic,
+    modeOverride: options?.contentMode
+  });
+  const effectiveOptions: GenerationOptions = {
+    ...options,
+    contentMode: modeDecision.modeEffective
+  };
+  const slidesCount = resolveSlidesCount(requestedSlidesCount);
+  const systemPrompt = buildSystemPrompt(modeDecision.modeEffective, cleanedTopic, effectiveOptions);
+  const expectedFlow = resolveExpectedFlowByMode(modeDecision.modeEffective, slidesCount);
   const promptVariant = resolvePromptVariant(options?.promptVariant);
 
   try {
     const openai = getOpenAIClient();
-    const models = resolveModelCandidates();
+    const models = resolveModelCandidates(modeDecision.modeEffective);
     const modelAttempts = resolveModelAttemptsPerCandidate();
+    const retryInvalidSchema = shouldRetryInvalidSchema(modeDecision.modeEffective);
+    const retryAnotherModelAfterQualityFailure = shouldRetryWithAnotherModelAfterQualityFailure(
+      modeDecision.modeEffective
+    );
     let lastError: unknown = null;
 
     for (const model of models) {
@@ -682,19 +2037,27 @@ export async function generateCarouselFromTopic(
             options?.niche,
             options?.audience,
             options?.tone,
-            options?.goal
+            options?.goal,
+            modeDecision.modeEffective,
+            expectedFlow
           );
           const validationErrors: string[] = [];
           let wasRetried = false;
           let tokensUsed = 0;
 
-          const response = await requestCarouselCompletion(openai, model, userMessage, expectedFlow.length);
+          const response = await requestCarouselCompletion(
+            openai,
+            model,
+            systemPrompt,
+            userMessage,
+            expectedFlow.length
+          );
           tokensUsed += readTotalTokens(response);
           let parsedResponse = parseCarouselModelResponse(response);
           let validationResult = validateCarouselResponse(parsedResponse, expectedFlow);
           validationErrors.push(...validationResult.errors);
 
-          if (!validationResult.valid) {
+          if (!validationResult.valid && retryInvalidSchema) {
             wasRetried = true;
             const retryUserMessage =
               userMessage +
@@ -704,6 +2067,7 @@ export async function generateCarouselFromTopic(
             const retryResponse = await requestCarouselCompletion(
               openai,
               model,
+              systemPrompt,
               retryUserMessage,
               expectedFlow.length
             );
@@ -711,44 +2075,70 @@ export async function generateCarouselFromTopic(
             parsedResponse = parseCarouselModelResponse(retryResponse);
             validationResult = validateCarouselResponse(parsedResponse, expectedFlow);
             validationErrors.push(...validationResult.errors);
+          } else if (!validationResult.valid) {
+            validationErrors.push("schema_retry_skipped");
           }
 
           const normalizedSlides = normalizeSlides(
-            mapModelSlidesToLegacyShape(parsedResponse.slides, expectedFlow),
+            mapModelSlidesToLegacyShape(parsedResponse.slides, expectedFlow, modeDecision.modeEffective),
             expectedFlow,
             cleanedTopic,
-            options
+            effectiveOptions
           );
           const constrainedSlides = enforceTopicAndHookIntegrity(
             normalizedSlides,
             expectedFlow,
             cleanedTopic,
-            options
+            effectiveOptions,
+            modeDecision.modeEffective
           );
-          const repairedSlides = repairTopicCoverage(constrainedSlides, expectedFlow, cleanedTopic);
+          const repairedSlides = repairTopicCoverage(
+            constrainedSlides,
+            expectedFlow,
+            cleanedTopic,
+            effectiveOptions,
+            modeDecision.modeEffective
+          );
           const polishedSlides = applyFinalCopyPolish(
             repairedSlides,
             expectedFlow,
             cleanedTopic,
-            options
+            effectiveOptions,
+            modeDecision.modeEffective
           );
-          const topicRelevantSlides = isOutlineTopicRelevant(polishedSlides, cleanedTopic)
-            ? polishedSlides
-            : buildFallbackSlides(cleanedTopic, expectedFlow, options);
+          const firstSlideApplied = enforceFirstSlidePolicy(
+            polishedSlides,
+            expectedFlow,
+            cleanedTopic,
+            modeDecision.modeEffective
+          );
+          let firstSlideRepairs = firstSlideApplied.repairs;
+          const topicRelevantSlides = isOutlineTopicRelevant(firstSlideApplied.slides, cleanedTopic)
+            ? firstSlideApplied.slides
+            : buildFallbackSlides(cleanedTopic, expectedFlow, effectiveOptions);
           const qualityGuardedSlides = enforceSlideQuality(
             topicRelevantSlides,
             expectedFlow,
             cleanedTopic,
-            options
+            effectiveOptions
           );
           const topicCoveredSlides = repairTopicCoverage(
             qualityGuardedSlides,
             expectedFlow,
-            cleanedTopic
+            cleanedTopic,
+            effectiveOptions,
+            modeDecision.modeEffective
           );
-          const quality = evaluateSlideQuality(topicCoveredSlides, expectedFlow, cleanedTopic);
+          const finalFirstSlideApplied = enforceFirstSlidePolicy(
+            topicCoveredSlides,
+            expectedFlow,
+            cleanedTopic,
+            modeDecision.modeEffective
+          );
+          firstSlideRepairs += finalFirstSlideApplied.repairs;
+          const quality = evaluateSlideQuality(finalFirstSlideApplied.slides, expectedFlow, cleanedTopic);
 
-          if (topicRelevantSlides !== polishedSlides) {
+          if (topicRelevantSlides !== firstSlideApplied.slides) {
             console.warn("Generated outline was strongly off-topic. Using deterministic fallback slides.");
           }
 
@@ -757,14 +2147,41 @@ export async function generateCarouselFromTopic(
               qualityGuardedSlides,
               expectedFlow,
               cleanedTopic,
-              options,
-              quality.reasons
+              effectiveOptions,
+              quality.reasons,
+              modeDecision.modeEffective
             );
-            const repairedQuality = evaluateSlideQuality(locallyRepairedSlides, expectedFlow, cleanedTopic);
+            const firstSlideAfterRescue = enforceFirstSlidePolicy(
+              locallyRepairedSlides,
+              expectedFlow,
+              cleanedTopic,
+              modeDecision.modeEffective
+            );
+            firstSlideRepairs += firstSlideAfterRescue.repairs;
+            const repairedQuality = evaluateSlideQuality(
+              firstSlideAfterRescue.slides,
+              expectedFlow,
+              cleanedTopic
+            );
 
             if (repairedQuality.ok) {
+              const finalizedOutput = finalizeSlidesForOutput(
+                firstSlideAfterRescue.slides,
+                modeDecision.modeEffective,
+                cleanedTopic,
+                effectiveOptions
+              );
+              validationErrors.push(
+                ...finalizedOutput.modeValidationErrors.map((reasonCode) => `mode:${reasonCode}`)
+              );
+              if (finalizedOutput.modeValidationErrors.length > 0 && attempt < modelAttempts) {
+                console.warn(
+                  `Model "${model}" attempt ${attempt} failed mode quality gate (${finalizedOutput.modeValidationErrors.join(", ")}). Retrying.`
+                );
+                continue;
+              }
               return {
-                slides: locallyRepairedSlides,
+                slides: finalizedOutput.slides,
                 caption: normalizeGeneratedCaption(parsedResponse.caption),
                 promptVariant,
                 generationSource: "model",
@@ -773,6 +2190,16 @@ export async function generateCarouselFromTopic(
                   tokensUsed,
                   validationErrors: dedupeErrors(validationErrors),
                   retried: wasRetried
+                },
+                generationProfile: {
+                  ...buildGenerationProfile({
+                    modeDecision,
+                    goal: options?.goal,
+                    firstSlideRepairs,
+                    toneViolations: finalizedOutput.toneViolations,
+                    modeValidationErrors: finalizedOutput.modeValidationErrors,
+                    fallbackUsed: false
+                  })
                 }
               };
             }
@@ -786,6 +2213,9 @@ export async function generateCarouselFromTopic(
             }
 
             lastError = new Error(`Low-quality generation from model "${model}": ${reason}`);
+            if (!retryAnotherModelAfterQualityFailure) {
+              throw lastError;
+            }
             console.warn(
               `Model "${model}" produced weak copy after retries (${reason}). Trying next candidate.`
             );
@@ -793,17 +2223,33 @@ export async function generateCarouselFromTopic(
           }
 
           if (hasBannedTemplateLanguage(qualityGuardedSlides)) {
-            if (attempt < 2) {
+            if (attempt < modelAttempts) {
               console.warn(`Model "${model}" attempt ${attempt} returned templated language. Retrying.`);
               continue;
             }
+            const strippedSlides = stripBannedTemplateLanguage(
+              finalFirstSlideApplied.slides,
+              expectedFlow,
+              cleanedTopic,
+              effectiveOptions
+            );
+            const finalizedOutput = finalizeSlidesForOutput(
+              strippedSlides,
+              modeDecision.modeEffective,
+              cleanedTopic,
+              effectiveOptions
+            );
+            validationErrors.push(
+              ...finalizedOutput.modeValidationErrors.map((reasonCode) => `mode:${reasonCode}`)
+            );
+            if (finalizedOutput.modeValidationErrors.length > 0 && attempt < modelAttempts) {
+              console.warn(
+                `Model "${model}" attempt ${attempt} failed mode quality gate after strip (${finalizedOutput.modeValidationErrors.join(", ")}). Retrying.`
+              );
+              continue;
+            }
             return {
-              slides: stripBannedTemplateLanguage(
-                topicCoveredSlides,
-                expectedFlow,
-                cleanedTopic,
-                options
-              ),
+              slides: finalizedOutput.slides,
               caption: normalizeGeneratedCaption(parsedResponse.caption),
               promptVariant,
               generationSource: "model",
@@ -812,12 +2258,37 @@ export async function generateCarouselFromTopic(
                 tokensUsed,
                 validationErrors: dedupeErrors(validationErrors),
                 retried: wasRetried
+              },
+              generationProfile: {
+                ...buildGenerationProfile({
+                  modeDecision,
+                  goal: options?.goal,
+                  firstSlideRepairs,
+                  toneViolations: finalizedOutput.toneViolations,
+                  modeValidationErrors: finalizedOutput.modeValidationErrors,
+                  fallbackUsed: false
+                })
               }
             };
           }
 
+          const finalizedOutput = finalizeSlidesForOutput(
+            finalFirstSlideApplied.slides,
+            modeDecision.modeEffective,
+            cleanedTopic,
+            effectiveOptions
+          );
+          validationErrors.push(
+            ...finalizedOutput.modeValidationErrors.map((reasonCode) => `mode:${reasonCode}`)
+          );
+          if (finalizedOutput.modeValidationErrors.length > 0 && attempt < modelAttempts) {
+            console.warn(
+              `Model "${model}" attempt ${attempt} failed mode quality gate (${finalizedOutput.modeValidationErrors.join(", ")}). Retrying.`
+            );
+            continue;
+          }
           return {
-            slides: topicCoveredSlides,
+            slides: finalizedOutput.slides,
             caption: normalizeGeneratedCaption(parsedResponse.caption),
             promptVariant,
             generationSource: "model",
@@ -826,6 +2297,16 @@ export async function generateCarouselFromTopic(
               tokensUsed,
               validationErrors: dedupeErrors(validationErrors),
               retried: wasRetried
+            },
+            generationProfile: {
+              ...buildGenerationProfile({
+                modeDecision,
+                goal: options?.goal,
+                firstSlideRepairs,
+                toneViolations: finalizedOutput.toneViolations,
+                modeValidationErrors: finalizedOutput.modeValidationErrors,
+                fallbackUsed: false
+              })
             }
           };
         } catch (error) {
@@ -849,17 +2330,47 @@ export async function generateCarouselFromTopic(
   } catch (error) {
     console.error("AI generation failed. Falling back to deterministic slides:", error);
 
+    const fallbackSlides = buildFallbackSlides(cleanedTopic, expectedFlow, effectiveOptions);
+    const firstSlideFallbackApplied = enforceFirstSlidePolicy(
+      fallbackSlides,
+      expectedFlow,
+      cleanedTopic,
+      modeDecision.modeEffective
+    );
+    const finalizedFallback = finalizeSlidesForOutput(
+      firstSlideFallbackApplied.slides,
+      modeDecision.modeEffective,
+      cleanedTopic,
+      effectiveOptions
+    );
+
     return {
-      slides: buildFallbackSlides(cleanedTopic, expectedFlow, options),
+      slides: finalizedFallback.slides,
       caption: "",
       promptVariant,
       generationSource: "fallback",
       generationMeta: {
         model: "fallback",
         tokensUsed: 0,
-        validationErrors:
-          error instanceof Error && error.message.trim() ? [error.message.trim()] : ["fallback activated"],
+        validationErrors: dedupeErrors(
+          [
+            ...(error instanceof Error && error.message.trim()
+              ? [error.message.trim()]
+              : ["fallback activated"]),
+            ...finalizedFallback.modeValidationErrors.map((reasonCode) => `mode:${reasonCode}`)
+          ].filter(Boolean)
+        ),
         retried: false
+      },
+      generationProfile: {
+        ...buildGenerationProfile({
+          modeDecision,
+          goal: options?.goal,
+          firstSlideRepairs: firstSlideFallbackApplied.repairs,
+          toneViolations: finalizedFallback.toneViolations,
+          modeValidationErrors: finalizedFallback.modeValidationErrors,
+          fallbackUsed: true
+        })
       },
       fallbackReason: resolveFallbackReason(error)
     };
@@ -871,7 +2382,16 @@ export async function generateCaptionFromCarousel(
 ): Promise<CarouselPostCaption> {
   const topic = normalizeText(input.topic, 220) || "вашей теме";
   const slides = Array.isArray(input.slides) ? input.slides.slice(0, 10) : [];
-  const fallback = buildCaptionFallback(topic, slides, input.goal);
+  const modeDecision = detectContentMode({
+    topic,
+    niche: input.niche,
+    audience: input.audience,
+    goal: input.goal,
+    rawPrompt: slides.map((slide) => collectSlideCopy(slide)).join(" "),
+    modeOverride: input.contentMode
+  });
+  const mode = input.resolvedMode ?? modeDecision.modeEffective;
+  const fallback = buildCaptionFallback(topic, slides, input.goal, mode);
 
   if (!slides.length) {
     return fallback;
@@ -900,7 +2420,10 @@ export async function generateCaptionFromCarousel(
                     "Output strict JSON only.",
                     "Tone: social-native, concrete, no office language, no robotic templates.",
                     "Avoid clichés like «в современном мире» and other boilerplate.",
-                    "Do not mention slides by number. Keep smooth narrative flow."
+                    "Do not mention slides by number. Keep smooth narrative flow.",
+                    mode === "sales"
+                      ? "Sales mode: CTA may be direct and conversion-focused."
+                      : "Non-sales mode: CTA must be soft, without «write in direct» patterns."
                   ].join(" ")
                 }
               ]
@@ -916,7 +2439,9 @@ export async function generateCaptionFromCarousel(
                     niche: input.niche,
                     audience: input.audience,
                     tone: input.tone,
-                    goal: input.goal
+                    goal: input.goal,
+                    contentMode: input.contentMode,
+                    resolvedMode: mode
                   })
                 }
               ]
@@ -961,7 +2486,7 @@ export async function generateCaptionFromCarousel(
           hashtags?: unknown;
         };
 
-        return normalizeCaption(parsed, fallback, input.goal);
+        return normalizeCaption(parsed, fallback, input.goal, mode);
       } catch (error) {
         lastError = error;
         logModelFailure(model, error);
@@ -995,8 +2520,221 @@ function resolveExpectedFlow(targetCount: number) {
   return CANONICAL_FLOW;
 }
 
+function resolveExpectedFlowByMode(mode: ContentMode, targetCount: number) {
+  if (targetCount !== 9) {
+    return resolveExpectedFlow(targetCount);
+  }
+
+  const plannedFlow = MODE_SLIDE_PLANS[mode]?.map((step) => step.role);
+  if (Array.isArray(plannedFlow) && plannedFlow.length === 9) {
+    return plannedFlow;
+  }
+
+  return resolveExpectedFlow(targetCount);
+}
+
+function formatModeSlidePlan(mode: ContentMode, flow: CarouselSlideRole[]) {
+  const plan = MODE_SLIDE_PLANS[mode] ?? MODE_SLIDE_PLANS.expert;
+  const intentByRole = new Map(plan.map((step) => [step.role, step.intent]));
+
+  return flow
+    .map((role, index) => {
+      const intent = intentByRole.get(role) ?? "раскрыть мысль по делу";
+      return `${index + 1}. ${role} — ${intent}`;
+    })
+    .join("\n");
+}
+
 function resolvePromptVariant(value?: PromptVariant | string) {
   return value === "A" ? "A" : "B";
+}
+
+function resolveContentMode(value?: ContentModeInput | string): ContentModeInput {
+  if (value === "auto") {
+    return "auto";
+  }
+
+  if (typeof value !== "string") {
+    return "auto";
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return "auto";
+  }
+
+  return CONTENT_MODE_LIST.includes(normalized as ContentMode)
+    ? (normalized as ContentMode)
+    : "auto";
+}
+
+function detectContentMode(input: {
+  topic: string;
+  niche?: string;
+  audience?: string;
+  goal?: string;
+  rawPrompt?: string;
+  modeOverride?: ContentModeInput;
+}): ModeDecision {
+  const override = resolveContentMode(input.modeOverride);
+  const source = normalizeText(
+    [
+      input.topic,
+      input.niche ?? "",
+      input.audience ?? "",
+      input.goal ?? "",
+      input.rawPrompt ?? ""
+    ]
+      .filter(Boolean)
+      .join(" "),
+    720
+  ).toLowerCase();
+  const goal = normalizeText(input.goal ?? "", 64).toLowerCase();
+
+  const modeScores: Record<ContentMode, number> = {
+    sales: 0,
+    expert: 0,
+    instruction: 0,
+    diagnostic: 0,
+    case: 0,
+    social: 0
+  };
+  const reasonCodes: string[] = [];
+
+  const addScore = (mode: ContentMode, score: number, reason: string, condition: boolean) => {
+    if (!condition) {
+      return;
+    }
+    modeScores[mode] += score;
+    reasonCodes.push(reason);
+  };
+
+  addScore(
+    "sales",
+    4,
+    "sales_keywords",
+    containsStem(source, [
+      "куп",
+      "прод",
+      "заяв",
+      "лид",
+      "ворон",
+      "сделк",
+      "доход",
+      "roi",
+      "конверс",
+      "ипотек"
+    ])
+  );
+  addScore("sales", 3, "goal_leads", isLeadsGoal(goal));
+
+  addScore(
+    "expert",
+    3,
+    "expert_keywords",
+    containsStem(source, ["почему", "объясн", "разбор", "что меш", "как работ"])
+  );
+
+  addScore(
+    "instruction",
+    4,
+    "instruction_keywords",
+    containsStem(source, ["пошаг", "инструк", "чек-лист", "алгоритм", "как сдел"])
+  );
+
+  addScore(
+    "diagnostic",
+    3,
+    "diagnostic_keywords",
+    containsStem(source, ["ошиб", "миф", "не получ", "почему не", "где срыв"])
+  );
+
+  addScore(
+    "case",
+    3,
+    "case_keywords",
+    containsStem(source, ["кейс", "пример", "до/после", "до после"])
+  );
+
+  addScore(
+    "social",
+    2,
+    "social_keywords",
+    containsStem(source, ["истори", "опыт", "путь", "жизн", "быт", "поддерж"])
+  );
+
+  // Household and pet-care topics should not fall into default sales framing.
+  addScore(
+    "expert",
+    3,
+    "household_pet_topic",
+    containsStem(source, ["щен", "собак", "туалет", "выгул", "луж", "пелен"])
+  );
+
+  if (override !== "auto") {
+    return {
+      modeDetected: override,
+      modeEffective: override,
+      modeSource: "manual" as const,
+      confidence: 1,
+      reasonCodes: ["manual_override", ...reasonCodes]
+    };
+  }
+
+  const ranked = (Object.entries(modeScores) as Array<[ContentMode, number]>).sort((a, b) => b[1] - a[1]);
+  const [topMode, topScore] = ranked[0] ?? ["expert", 0];
+  const secondScore = ranked[1]?.[1] ?? 0;
+
+  if (topScore <= 0) {
+    return {
+      modeDetected: "expert" as const,
+      modeEffective: "expert" as const,
+      modeSource: "auto" as const,
+      confidence: 0.55,
+      reasonCodes: ["auto_default_expert", ...reasonCodes]
+    };
+  }
+
+  const hasTie = ranked.filter(([, score]) => score === topScore).length > 1;
+  if (hasTie) {
+    return {
+      modeDetected: "expert" as const,
+      modeEffective: "expert" as const,
+      modeSource: "auto" as const,
+      confidence: 0.56,
+      reasonCodes: ["score_tie_default_expert", ...reasonCodes]
+    };
+  }
+
+  const confidence = Math.max(0.55, Math.min(0.95, 0.55 + (topScore - secondScore) * 0.08));
+
+  return {
+    modeDetected: topMode,
+    modeEffective: topMode,
+    modeSource: "auto" as const,
+    confidence,
+    reasonCodes
+  };
+}
+
+function containsStem(source: string, stems: string[]) {
+  if (!source) {
+    return false;
+  }
+
+  const variants = stems
+    .map((stem) => stem.trim())
+    .filter(Boolean)
+    .map((stem) => escapeRegExp(stem));
+
+  if (!variants.length) {
+    return false;
+  }
+
+  return new RegExp(
+    `(?:^|[^\\p{L}\\p{N}])(?:${variants.join("|")})[\\p{L}\\p{N}-]*(?=$|[^\\p{L}\\p{N}])`,
+    "iu"
+  ).test(source);
 }
 
 function resolveTopicDomain(topic: string, options?: GenerationOptions): TopicDomain {
@@ -1005,52 +2743,63 @@ function resolveTopicDomain(topic: string, options?: GenerationOptions): TopicDo
     420
   ).toLowerCase();
 
-  if (
-    /\b(финанс|инвест|бюджет|деньг|доход|портфел|кредит|налог|капитал|риск)\w*\b/iu.test(source)
-  ) {
+  if (containsStem(source, ["финанс", "инвест", "бюджет", "деньг", "доход", "портфел", "кредит", "налог", "капитал", "риск"])) {
     return "finance";
   }
 
-  if (
-    /\b(врач|медицин|диагноз|пациент|клиник|здоров|лечение|терапи|симптом)\w*\b/iu.test(source)
-  ) {
+  if (containsStem(source, ["врач", "медицин", "диагноз", "пациент", "клиник", "здоров", "лечение", "терапи", "симптом"])) {
     return "health";
   }
 
-  if (
-    /\b(психолог|тревог|выгоран|терапевт|эмоци|самооцен|отношен|стресс)\w*\b/iu.test(source)
-  ) {
+  if (containsStem(source, ["психолог", "тревог", "выгоран", "терапевт", "эмоци", "самооцен", "отношен", "стресс"])) {
     return "psychology";
   }
 
-  if (/\b(фитнес|тренер|трениров|зал|спорт|форма|похуд|нагрузк)\w*\b/iu.test(source)) {
+  if (containsStem(source, ["фитнес", "тренер", "трениров", "зал", "спорт", "форма", "похуд", "нагрузк"])) {
     return "fitness";
   }
 
-  if (
-    /\b(бьюти|салон|мастер|космет|ресниц|маник|ногт|бров|стилист)\w*\b/iu.test(source)
-  ) {
+  if (containsStem(source, ["бьюти", "салон", "мастер", "космет", "ресниц", "маник", "ногт", "бров", "стилист"])) {
     return "beauty";
   }
 
-  if (
-    /\b(репетитор|обучен|ученик|урок|школ|курс|преподав|студент|образован)\w*\b/iu.test(source)
-  ) {
+  if (containsStem(source, ["репетитор", "обучен", "ученик", "урок", "школ", "курс", "преподав", "студент", "образован"])) {
     return "education";
   }
 
   if (
-    /\b(личн[а-яё]*\s+бренд|эксперт|блог|контент|instagram|telegram|соцсет|автор)\b/iu.test(source)
-  ) {
-    return "creator";
-  }
-
-  if (
-    /\b(продаж|заявк|лид|воронк|конверс|маркетолог|риелтор|агентств|клиент|сделк|реклам)\w*\b/iu.test(
-      source
-    )
+    containsStem(source, [
+      "продаж",
+      "заявк",
+      "лид",
+      "воронк",
+      "конверс",
+      "маркетолог",
+      "риелтор",
+      "агентств",
+      "клиент",
+      "сделк",
+      "реклам",
+      "недвижим",
+      "квартир",
+      "показ",
+      "объект",
+      "авито",
+      "циан",
+      "ипотек"
+    ])
   ) {
     return "sales";
+  }
+
+  const hasPersonalBrandPhrase = /(?:^|[^\p{L}\p{N}])личн[а-яё]*\s+бренд(?=$|[^\p{L}\p{N}])/iu.test(
+    source
+  );
+  if (
+    hasPersonalBrandPhrase ||
+    containsStem(source, ["эксперт", "блог", "контент", "instagram", "telegram", "соцсет", "автор"])
+  ) {
+    return "creator";
   }
 
   return "general";
@@ -1123,7 +2872,9 @@ function buildUserPrompt(
   niche?: string,
   audience?: string,
   tone?: string,
-  goal?: string
+  goal?: string,
+  mode: ContentMode = "expert",
+  expectedFlow: CarouselSlideRole[] = CANONICAL_FLOW
 ) {
   const resolvedNiche = normalizeText(niche, 120);
   const resolvedAudience = normalizeText(audience, 160);
@@ -1145,7 +2896,26 @@ function buildUserPrompt(
     prompt += `\nЦель карусели: ${resolvedGoal}`;
   }
 
-  prompt += "\n\nСоздай карусель из 9 слайдов. Ответ — только JSON.";
+  prompt += `\nРежим контента: ${mode}`;
+
+  if (mode !== "sales") {
+    prompt +=
+      "\nПравило 1-го слайда: прямо назови тему, без мета-хука и без интриги про подачу." +
+      "\nЗапрещено для 1-го слайда: «узкое место», «результат буксует», «дочитывали/сохраняли», «покажу, как раскрыть тему»." +
+      "\nТон: спокойный экспертный, без обвинений и лишней драматизации." +
+      "\nCTA: мягкий или отсутствует, без «напиши слово в директ» и без двойного призыва.";
+  }
+
+  if (mode === "instruction") {
+    prompt += "\nФокус структуры: цель -> шаги -> условия -> частые ошибки -> краткое резюме.";
+  } else if (mode === "diagnostic") {
+    prompt += "\nФокус структуры: симптомы -> причины -> механизм -> как исправить.";
+  } else if (mode === "case") {
+    prompt += "\nФокус структуры: контекст -> действия -> результат -> выводы.";
+  }
+
+  prompt += `\n\nПлан слайдов по ролям:\n${formatModeSlidePlan(mode, expectedFlow)}`;
+  prompt += `\n\nСоздай карусель из ${expectedFlow.length} слайдов. Ответ — только JSON.`;
 
   return prompt;
 }
@@ -1184,6 +2954,10 @@ function buildCaptionPrompt(input: CaptionGenerationInput) {
   const audience = normalizeText(input.audience ?? "", 160);
   const tone = normalizeText(input.tone ?? "", 40);
   const goal = normalizeText(input.goal ?? "", 48);
+  const modeOverride = resolveContentMode(input.contentMode);
+  const mode: ContentMode =
+    input.resolvedMode ??
+    (modeOverride === "auto" ? (isLeadsGoal(goal.toLowerCase()) ? "sales" : "expert") : modeOverride);
   const slideDigest = input.slides
     .map((slide, index) => {
       if (slide.type === "hook" || slide.type === "cta") {
@@ -1205,36 +2979,64 @@ function buildCaptionPrompt(input: CaptionGenerationInput) {
     })
     .join("\n");
 
+  const formatLines =
+    mode === "sales"
+      ? [
+          "- 3-4 абзаца",
+          "- Первый абзац: крючок, цепляющее начало (вопрос или утверждение)",
+          "- Второй абзац: суть — о чём карусель и зачем листать",
+          "- Третий абзац: личный опыт или наблюдение автора (1-2 предложения)",
+          "- Четвёртый абзац: призыв к действию"
+        ]
+      : [
+          "- 3-4 абзаца",
+          "- Первый абзац: прямо назови тему и кому это полезно",
+          "- Второй абзац: объясни причину/механику без драмы",
+          "- Третий абзац: практический шаг, который можно применить сразу",
+          "- Четвёртый абзац: мягкий вывод или мягкий CTA"
+        ];
+
+  const ctaLines =
+    mode === "sales"
+      ? [
+          "- cta: основной призыв из 1-2 предложений.",
+          "- cta_soft: мягкий CTA (сохрани / отправь другу).",
+          "- cta_aggressive: прямой CTA (напиши слово / оставь комментарий)."
+        ]
+      : [
+          "- cta: мягкий CTA или спокойный следующий шаг.",
+          "- cta_soft: мягкий CTA (сохрани / проверь у себя / попробуй шаг).",
+          "- cta_aggressive: резервная версия без «напиши в директ» и без давления."
+        ];
+
   return [
     `Напиши подпись к Instagram-посту для карусели на тему: "${input.topic}".`,
+    `Режим контента: ${mode}.`,
     niche ? `Ниша: ${niche}` : "",
     audience ? `Аудитория: ${audience}` : "",
     tone ? `Тон: ${tone}` : "",
     goal ? `Цель: ${goal}` : "",
     "",
     "Формат:",
-    "- 3-4 абзаца",
-    "- Первый абзац: крючок, цепляющее начало (вопрос или утверждение)",
-    "- Второй абзац: суть — о чём карусель и зачем листать",
-    "- Третий абзац: личный опыт или наблюдение автора (1-2 предложения)",
-    "- Четвёртый абзац: призыв к действию (сохрани / перешли другу / напиши в комментариях)",
+    ...formatLines,
     "",
     "НЕ используй:",
     "- Хештеги внутри текста подписи",
     "- Эмодзи в начале абзацев",
     "- «Всем привет!» и подобные вступления",
     "- @username, счётчики, ссылки",
+    mode === "sales" ? "" : "- Прямые призывы в директ и манипулятивный дожим",
     "",
-    "Тон: как пишет умный человек в своём блоге — не продающий, не нудный, а по делу.",
+    mode === "sales"
+      ? "Тон: живой, практичный, без канцелярита."
+      : "Тон: спокойный экспертный, без обвинений и давления.",
     "",
     "Контекст карусели:",
     slideDigest,
     "",
     "Ответ верни в JSON с полями: text, cta, cta_soft, cta_aggressive, hashtags.",
     "- text: 3-4 абзаца в заданном формате, без хештегов.",
-    "- cta: основной призыв из 1-2 предложений.",
-    "- cta_soft: мягкий CTA (сохрани / отправь другу).",
-    "- cta_aggressive: прямой CTA (напиши слово / оставь комментарий).",
+    ...ctaLines,
     "- hashtags: 4-8 тематических хештегов отдельным массивом."
   ]
     .filter(Boolean)
@@ -1265,7 +3067,8 @@ function enforceTopicAndHookIntegrity(
   slides: CarouselOutlineSlide[],
   expectedFlow: CarouselSlideRole[],
   topic: string,
-  options?: GenerationOptions
+  options?: GenerationOptions,
+  mode: ContentMode = resolveModeFromOptions(options)
 ) {
   return expectedFlow.map((role, index) => {
     const current = slides[index];
@@ -1297,8 +3100,8 @@ function enforceTopicAndHookIntegrity(
       if (!normalizedTitle || hasGenericMistakeLead || hookTopicMismatch || hookAnchorMismatch || hookLooksAwkward) {
         return {
           ...current,
-          title: buildHookFallbackTitle(topic),
-          subtitle: safeSubtitle || buildHookFallbackSubtitle(topic)
+          title: buildHookFallbackTitle(topic, mode),
+          subtitle: safeSubtitle || buildHookFallbackSubtitle(topic, mode)
         };
       }
     }
@@ -1331,7 +3134,9 @@ function enforceTopicAndHookIntegrity(
 function repairTopicCoverage(
   slides: CarouselOutlineSlide[],
   expectedFlow: CarouselSlideRole[],
-  topic: string
+  topic: string,
+  options?: GenerationOptions,
+  mode: ContentMode = resolveModeFromOptions(options)
 ) {
   const topicStems = buildTopicStemSet(topic);
   if (topicStems.size === 0) {
@@ -1358,8 +3163,8 @@ function repairTopicCoverage(
       typeof hook.subtitle === "string"
         ? sanitizeCopyText(normalizeText(hook.subtitle, HOOK_SUBTITLE_INPUT_MAX), HOOK_SUBTITLE_OUTPUT_MAX)
         : "";
-    hook.title = buildHookFallbackTitle(topic);
-    hook.subtitle = safeSubtitle || buildHookFallbackSubtitle(topic);
+    hook.title = buildHookFallbackTitle(topic, mode);
+    hook.subtitle = safeSubtitle || buildHookFallbackSubtitle(topic, mode);
   }
 
   if (hasSupportingTopic) {
@@ -1400,7 +3205,8 @@ function applyFinalCopyPolish(
   slides: CarouselOutlineSlide[],
   expectedFlow: CarouselSlideRole[],
   topic: string,
-  options?: GenerationOptions
+  options?: GenerationOptions,
+  mode: ContentMode = resolveModeFromOptions(options)
 ) {
   const nextSlides = slides.map((slide) => ({ ...slide })) as CarouselOutlineSlide[];
   const hookIndex = expectedFlow.findIndex((role) => role === "hook");
@@ -1408,7 +3214,7 @@ function applyFinalCopyPolish(
   const ctaIndex = expectedFlow.findIndex((role) => role === "cta");
 
   if (hookIndex >= 0) {
-      const hook = nextSlides[hookIndex];
+    const hook = nextSlides[hookIndex];
     if (hook?.type === "hook") {
       const normalizedTitle = sanitizeTitleValue(hook.title, 84);
       const normalizedSubtitle = sanitizeCopyText(
@@ -1422,32 +3228,30 @@ function applyFinalCopyPolish(
         isHookEchoingTopic(normalizedTitle, topic) ||
         isListLikeHookTitle(normalizedTitle) ||
         isHookQuestionTemplate(normalizedTitle) ||
+        (mode !== "sales" && hasNonSalesGrammarRisk(normalizedTitle)) ||
         hasAwkwardHookTitle(normalizedTitle) ||
         startsWithGenericMistakeLead(normalizedTitle) ||
         hasLegacyTemplatePhrase(combinedHook) ||
         BANNED_TEMPLATE_PATTERNS.some((pattern) => pattern.test(combinedHook)) ||
         !hasPrimaryTopicAnchor(combinedHook, topic);
-      const generatedScore = scoreHookCandidate(normalizedTitle, normalizedSubtitle);
-      const candidates = buildHookCandidates(topic, options);
+      const candidates = buildHookCandidates(topic, options, mode);
       const best = pickBestHookCandidate(candidates);
-      const bestScore = best ? scoreHookCandidate(best.title, best.subtitle) : Number.NEGATIVE_INFINITY;
-      const shouldUpgradeHook = Boolean(best && bestScore >= generatedScore + 2);
 
-      if (shouldRepairHook || shouldUpgradeHook) {
+      if (shouldRepairHook) {
         if (!best) {
-          hook.title = buildHookFallbackTitle(topic);
-          hook.subtitle = normalizedSubtitle || buildHookFallbackSubtitle(topic);
+          hook.title = buildHookFallbackTitle(topic, mode);
+          hook.subtitle = normalizedSubtitle || buildHookFallbackSubtitle(topic, mode);
         } else {
           hook.title = best.title;
           hook.subtitle = best.subtitle;
         }
       } else {
         hook.title = normalizedTitle;
-        hook.subtitle = normalizedSubtitle || buildHookFallbackSubtitle(topic);
+        hook.subtitle = normalizedSubtitle || buildHookFallbackSubtitle(topic, mode);
       }
 
       if (countSentenceMarks(`${hook.title} ${hook.subtitle}`) > 2) {
-        hook.subtitle = buildHookFallbackSubtitle(topic);
+        hook.subtitle = buildHookFallbackSubtitle(topic, mode);
       }
 
       const anchoredHook = `${hook.title} ${hook.subtitle}`.trim();
@@ -1477,13 +3281,16 @@ function applyFinalCopyPolish(
   if (ctaIndex >= 0) {
     const cta = nextSlides[ctaIndex];
     if (cta?.type === "cta") {
-      const ctaVariants = buildCtaVariants(options?.goal, topic);
+      const ctaVariants = buildCtaVariants(options?.goal, topic, mode);
       const normalizedTitle = sanitizeTitleValue(cta.title, 84);
       const normalizedSubtitle = sanitizeCopyText(
         normalizeText(cta.subtitle, CTA_SUBTITLE_INPUT_MAX),
         CTA_SUBTITLE_OUTPUT_MAX
       );
-      const hasAction = hasActionVerb(normalizedSubtitle);
+      const hasPrimaryAction = hasPrimaryCtaActionVerb(normalizedSubtitle);
+      const directCtaDetected = containsDirectMessageCta(normalizedSubtitle);
+      const shouldUseSoftCta = mode !== "sales" && (directCtaDetected || !hasPrimaryAction);
+      const actionIsAcceptable = hasPrimaryAction;
       const weakTitle =
         !normalizedTitle ||
         /\b(готов[а-яё]*|объединить\s+усилия|поехали|пора\s+действовать|давайте\s+начнем)\b/iu.test(
@@ -1491,9 +3298,13 @@ function applyFinalCopyPolish(
         );
 
       cta.title = weakTitle
-        ? buildCtaTitleFallback(options?.goal, topic)
+        ? buildCtaTitleFallback(options?.goal, topic, mode)
         : normalizedTitle;
-      cta.subtitle = hasAction ? normalizedSubtitle : ctaVariants.selected;
+      cta.subtitle = shouldUseSoftCta
+        ? ctaVariants.soft
+        : actionIsAcceptable
+          ? normalizedSubtitle
+          : ctaVariants.selected;
     }
   }
 
@@ -1506,6 +3317,8 @@ function enforceSlideQuality(
   topic: string,
   options?: GenerationOptions
 ): CarouselOutlineSlide[] {
+  const mode = resolveModeFromOptions(options);
+
   return expectedFlow.map((role, index) => {
     const current = slides[index];
     const fallback = normalizeSlideByType(role, null, topic, index, options);
@@ -1527,6 +3340,7 @@ function enforceSlideQuality(
         isHookEchoingTopic(title, topic) ||
         isListLikeHookTitle(title) ||
         isHookQuestionTemplate(title) ||
+        (mode !== "sales" && hasNonSalesGrammarRisk(title)) ||
         hasAwkwardHookTitle(title) ||
         startsWithGenericMistakeLead(title) ||
         hasLegacyTemplatePhrase(title) ||
@@ -1534,8 +3348,8 @@ function enforceSlideQuality(
 
       return {
         type: "hook",
-        title: weakTitle ? buildHookFallbackTitle(topic) : title,
-        subtitle: subtitle || buildHookFallbackSubtitle(topic)
+        title: weakTitle ? buildHookFallbackTitle(topic, mode) : title,
+        subtitle: subtitle || buildHookFallbackSubtitle(topic, mode)
       };
     }
 
@@ -1576,9 +3390,10 @@ function enforceSlideQuality(
       const mistakeFallback = fallback as CarouselOutlineSlide & { body?: string };
       const title = sanitizeTitleValue(mistake.title, 92);
       const body =
-        sanitizeCopyText(normalizeText((mistake as { body?: unknown }).body, 420), 390) ||
+        normalizeBodyText((mistake as { body?: unknown }).body, BODY_BLOCK_INPUT_MAX) ||
+        normalizeBodyText(mistakeFallback.body, BODY_BLOCK_OUTPUT_MAX) ||
         mistakeFallback.body ||
-        "→ Ты даёшь общий совет, и человек не узнаёт себя в ситуации\n→ Нет конкретного примера, поэтому мысль звучит как шаблон\n→ После слайда непонятно, что менять прямо сейчас";
+        "Совет звучит слишком общо, поэтому человек не узнаёт свою ситуацию\nНет конкретного примера, из-за этого мысль воспринимается как шаблон\nПосле слайда неясно, какое действие сделать прямо сейчас";
       const weakTitle =
         !title ||
         startsWithGenericMistakeLead(title) ||
@@ -1596,12 +3411,17 @@ function enforceSlideQuality(
     if (role === "consequence") {
       const consequence = current as Extract<CarouselOutlineSlide, { type: "consequence" }>;
       const consequenceFallback = fallback as Extract<CarouselOutlineSlide, { type: "consequence" }>;
+      const title = sanitizeTitleValue((consequence as { title?: unknown }).title, 84);
       const bullets = normalizeBullets(consequence.bullets, consequenceFallback.bullets);
       const strongBullets = pickStrongBullets(bullets, consequenceFallback.bullets);
       return {
         type: "consequence",
+        title:
+          !title || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
+            ? buildRoleTitleFallback("consequence", topic, options)
+            : title,
         bullets: strongBullets
-      };
+      } as CarouselOutlineSlide;
     }
 
     if (role === "shift") {
@@ -1609,7 +3429,8 @@ function enforceSlideQuality(
       const shiftFallback = fallback as CarouselOutlineSlide & { body?: string };
       const title = sanitizeTitleValue(shift.title, 92);
       const body =
-        sanitizeCopyText(normalizeText((shift as { body?: unknown }).body, 420), 390) ||
+        normalizeBodyText((shift as { body?: unknown }).body, BODY_BLOCK_INPUT_MAX) ||
+        normalizeBodyText(shiftFallback.body, BODY_BLOCK_OUTPUT_MAX) ||
         shiftFallback.body ||
         "Сначала покажи конкретный факт, потом вывод. Так читатель понимает логику и доходит до действия.";
       const weakTitle =
@@ -1628,13 +3449,24 @@ function enforceSlideQuality(
 
     if (role === "solution") {
       const solution = current as Extract<CarouselOutlineSlide, { type: "solution" }>;
-      const solutionFallback = fallback as Extract<CarouselOutlineSlide, { type: "solution" }>;
+      const solutionFallback = buildDeterministicSolutionFallback(topic, options);
+      const title = sanitizeTitleValue((solution as { title?: unknown }).title, 84);
       const bullets = normalizeBullets(solution.bullets, solutionFallback.bullets);
       const strongBullets = pickStrongBullets(bullets, solutionFallback.bullets);
+      if (strongBullets.length < 2) {
+        return solutionFallback;
+      }
+      if (hasForbiddenNegativeBulletsForPositiveSlide(role, strongBullets)) {
+        return solutionFallback;
+      }
       return {
         type: "solution",
+        title:
+          !title || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
+            ? solutionFallback.title
+            : title,
         bullets: strongBullets
-      };
+      } as CarouselOutlineSlide;
     }
 
     if (role === "example") {
@@ -1652,20 +3484,23 @@ function enforceSlideQuality(
     }
 
     const cta = current as Extract<CarouselOutlineSlide, { type: "cta" }>;
-    const ctaVariants = buildCtaVariants(options?.goal, topic);
+    const ctaVariants = buildCtaVariants(options?.goal, topic, mode);
     const title = sanitizeTitleValue(cta.title, 84);
     const subtitle = sanitizeCopyText(
       normalizeText(cta.subtitle, CTA_SUBTITLE_INPUT_MAX),
       CTA_SUBTITLE_OUTPUT_MAX
     );
-    const hasAction = hasActionVerb(subtitle);
+    const hasPrimaryAction = hasPrimaryCtaActionVerb(subtitle);
+    const directCtaDetected = containsDirectMessageCta(subtitle);
+    const shouldUseSoftCta = mode !== "sales" && (directCtaDetected || !hasPrimaryAction);
+    const actionIsAcceptable = hasPrimaryAction;
     return {
       type: "cta",
       title:
         !title || countWords(title) < 2 || isWeakRoleTitle(title) || hasLegacyTemplatePhrase(title)
-          ? buildCtaTitleFallback(options?.goal, topic)
+          ? buildCtaTitleFallback(options?.goal, topic, mode)
           : title,
-      subtitle: hasAction ? subtitle : ctaVariants.selected
+      subtitle: shouldUseSoftCta ? ctaVariants.soft : actionIsAcceptable ? subtitle : ctaVariants.selected
     };
   });
 }
@@ -1795,6 +3630,9 @@ function evaluateSlideQuality(
       if (solution.bullets.some((item) => isWeakBulletText(item))) {
         reasons.push("low detail on solution");
       }
+      if (hasForbiddenNegativeBulletsForPositiveSlide(role, solution.bullets)) {
+        reasons.push("solution_contains_negative_outcome_language");
+      }
       continue;
     }
 
@@ -1836,16 +3674,16 @@ function hasConcreteAnchorInCopy(value: string) {
     return false;
   }
 
-  const hasNumber = /\b\d+(?:[.,]\d+)?\s*%?\b/u.test(text);
-  const hasAction = /\b(сделай|сделайте|проверь|проверьте|замени|замените|добавь|добавьте|запусти|запустите|опиши|вынеси|попробуй|попробуйте|начни|начните|внедри|внедрите|напиши|напишите|сохраните|ответьте|пришлите|оставьте)\b/iu.test(
+  const hasNumber = /(?:^|[^\p{L}\p{N}])\d+(?:[.,]\d+)?\s*%?(?=$|[^\p{L}\p{N}])/u.test(text);
+  const hasAction = /(?:^|[^\p{L}])(сделай|сделайте|проверь|проверьте|замени|замените|добавь|добавьте|запусти|запустите|опиши|вынеси|попробуй|попробуйте|начни|начните|внедри|внедрите|напиши|напишите|сохраните|ответьте|пришлите|оставьте)(?=$|[^\p{L}])/iu.test(
     text
   );
-  const hasScenario = /\b(когда|если|утром|вечером|на\s+встрече|в\s+переписке|в\s+ленте|в\s+instagram|сегодня|за\s+неделю|за\s+месяц|после\s+первой\s+встречи)\b/iu.test(
+  const hasScenario = /(?:^|[^\p{L}])(когда|если|утром|вечером|на\s+встрече|в\s+переписке|в\s+ленте|в\s+instagram|сегодня|за\s+неделю|за\s+месяц|после\s+первой\s+встречи)(?=$|[^\p{L}])/iu.test(
     text
   );
-  const hasComparison = /\b(vs|против|вместо|чем\s+больше.+тем\s+меньше|не\s+.+,\s+а\s+.+)\b/iu.test(
-    text
-  );
+  const hasComparison =
+    /(?:^|[^\p{L}])(vs|против|вместо)(?=$|[^\p{L}])/iu.test(text) ||
+    /чем\s+больше.+тем\s+меньше|не\s+.+,\s+а\s+.+/iu.test(text);
 
   return hasNumber || hasAction || hasScenario || hasComparison;
 }
@@ -1856,12 +3694,19 @@ function hasActionVerb(value: string) {
   );
 }
 
+function hasPrimaryCtaActionVerb(value: string) {
+  return /(?:^|[^\p{L}])(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите|подпишитесь|выберите)(?=$|[^\p{L}])/iu.test(
+    value
+  );
+}
+
 function rescueWeakSlidesAfterQualityCheck(
   slides: CarouselOutlineSlide[],
   expectedFlow: CarouselSlideRole[],
   topic: string,
   options: GenerationOptions | undefined,
-  reasons: string[]
+  reasons: string[],
+  mode: ContentMode = resolveModeFromOptions(options)
 ) {
   const nextSlides = slides.map((slide) => ({ ...slide })) as CarouselOutlineSlide[];
   const hookIndex = expectedFlow.findIndex((role) => role === "hook");
@@ -1870,9 +3715,9 @@ function rescueWeakSlidesAfterQualityCheck(
     const hasHookIssue = reasons.some((reason) => reason.includes("hook") || reason.includes("topic"));
     if (hasHookIssue) {
       const hook = nextSlides[hookIndex] as Extract<CarouselOutlineSlide, { type: "hook" }>;
-      const bestHook = pickBestHookCandidate(buildHookCandidates(topic, options));
-      hook.title = bestHook?.title || buildHookFallbackTitle(topic);
-      hook.subtitle = bestHook?.subtitle || buildHookFallbackSubtitle(topic);
+      const bestHook = pickBestHookCandidate(buildHookCandidates(topic, options, mode));
+      hook.title = bestHook?.title || buildHookFallbackTitle(topic, mode);
+      hook.subtitle = bestHook?.subtitle || buildHookFallbackSubtitle(topic, mode);
       const anchoredHook = `${hook.title} ${hook.subtitle}`.trim();
       if (!hasPrimaryTopicAnchor(anchoredHook, topic)) {
         hook.title = addTopicAnchorToTitle(hook.title, buildTopicAnchorLabel(topic));
@@ -1906,15 +3751,27 @@ function pickStrongBullets(
   fallback: string[],
   minimum = 2
 ) {
-  const strong = bullets
+  const cleaned = bullets
+    .map((item) => sanitizeCopyText(normalizeText(item, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX))
+    .filter(Boolean);
+  const strong = cleaned
     .filter((item) => countWords(item) >= 4)
     .filter((item) => !isWeakBulletText(item));
 
   if (strong.length >= minimum) {
-    return strong.slice(0, 4);
+    return strong.slice(0, MAX_BULLETS_PER_SLIDE);
   }
 
-  return fallback.slice(0, 4);
+  const medium = cleaned.filter((item) => countWords(item) >= 3);
+  if (medium.length >= minimum) {
+    return medium.slice(0, MAX_BULLETS_PER_SLIDE);
+  }
+
+  if (cleaned.length) {
+    return cleaned.slice(0, MAX_BULLETS_PER_SLIDE);
+  }
+
+  return fallback.slice(0, MAX_BULLETS_PER_SLIDE);
 }
 
 function isWeakRoleTitle(value: string) {
@@ -1926,11 +3783,68 @@ function isWeakRoleTitle(value: string) {
   return WEAK_ROLE_TITLE_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
-function buildHookCandidates(topic: string, options?: GenerationOptions) {
+function buildHookCandidates(
+  topic: string,
+  options?: GenerationOptions,
+  mode: ContentMode = resolveModeFromOptions(options)
+) {
+  const topicFocus = buildCompactTopicFocus(sanitizeTopic(topic), 34);
+  if (mode !== "sales") {
+    const nonSalesSubtitle =
+      mode === "instruction"
+        ? "Покажу последовательность шагов, условия и частые ошибки без перегруза."
+        : mode === "diagnostic"
+          ? "Разберём симптомы, причины и план исправления без запугивания."
+          : mode === "case"
+            ? "Покажу контекст, действия и результат на реальном сценарии."
+            : mode === "social"
+              ? "Коротко разложим, что мешает и что реально помогает в быту."
+              : "Разложим причины, механизм и рабочие шаги без агрессивных хуков.";
+
+    return [
+      {
+        title: trimToWordBoundary(buildFirstSlideTitleForMode(topic, mode), 72),
+        subtitle: trimToWordBoundary(buildFirstSlideSubtitleForMode(topic, mode), 132)
+      },
+      {
+        title: trimToWordBoundary(`Почему вокруг «${topicFocus}» случаются срывы`, 72),
+        subtitle: trimToWordBoundary(nonSalesSubtitle, 132)
+      },
+      {
+        title: trimToWordBoundary(
+          mode === "instruction"
+            ? `Как по «${topicFocus}» сделать план`
+            : `Что мешает стабильно решить «${topicFocus}»`,
+          72
+        ),
+        subtitle: trimToWordBoundary(
+          mode === "instruction"
+            ? "Соберём план: шаги, тайминг и проверка результата."
+            : "Соберём ясную структуру: причина, действие и ожидаемый эффект.",
+          132
+        )
+      }
+    ];
+  }
+
   const normalizedTopic = normalizeText(topic, 220).toLowerCase();
+  const safeTopicForCopy = sanitizeTopic(topic);
   const topicDomain = resolveTopicDomain(topic, options);
-  const isAdContext = /\b(реклам|клик|лендинг|заяв|лид|воронк)\b/iu.test(normalizedTopic);
-  const isCallContext = /\b(звон|созвон|переговор|клиент\s+пропал)\b/iu.test(normalizedTopic);
+  const isAdContext = containsStem(normalizedTopic, ["реклам", "клик", "лендинг", "заяв", "лид", "воронк"]);
+  const isCallContext =
+    containsStem(normalizedTopic, ["звон", "созвон", "переговор"]) ||
+    /клиент\s+пропал/iu.test(normalizedTopic);
+  const isRealEstateContext = containsStem(normalizedTopic, [
+    "риелтор",
+    "недвижим",
+    "квартир",
+    "показ",
+    "объект",
+    "авито",
+    "циан",
+    "ипотек",
+    "сделк"
+  ]);
   const goalCue = normalizeText(options?.goal ?? "", 30).toLowerCase();
   const tensionTitle =
     topicDomain === "education"
@@ -1945,6 +3859,8 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
               ? "Первый визит прошел, а повтора нет: где теряется ценность?"
               : topicDomain === "finance"
                 ? "Цифры есть, а решение не принимается: что мешает?"
+                : topicDomain === "sales"
+                  ? "Показы идут, а сделки буксуют: где разрыв?"
                 : topicDomain === "creator"
                   ? "Контент есть, а реакции мало: где ломается интерес?"
                   : "Шаги есть, а результат буксует: где узкое место?";
@@ -1953,14 +3869,18 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
     ? "Созвон прошёл. Почему дальше тишина?"
     : isAdContext
       ? "Клики есть. Почему заявок нет?"
+      : isRealEstateContext
+        ? "Показы есть, а сделки стоят"
       : tensionTitle;
 
   const firstSubtitle = isCallContext
     ? "Разберём, какая фраза ломает доверие в первые 2 минуты."
     : isAdContext
       ? "Покажу, где после клика теряется доверие и деньги."
+      : isRealEstateContext
+        ? "Покажу, где рвётся диалог на показе и после него."
       : trimToWordBoundary(
-          `Покажу, как раскрыть «${buildCompactTopicFocus(topic, 34)}» так, чтобы люди дочитывали и сохраняли.`,
+          `Покажу, как раскрыть «${buildCompactTopicFocus(safeTopicForCopy, 34)}» так, чтобы люди дочитывали и сохраняли.`,
           132
         );
 
@@ -1971,7 +3891,7 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
     },
     {
       title: trimToWordBoundary(
-        `Ты вкладываешь часы в «${buildCompactTopicFocus(topic, 24)}», а отклик уходит за 2 секунды`,
+        `Ты вкладываешь часы в «${buildCompactTopicFocus(safeTopicForCopy, 24)}», а отклик уходит за 2 секунды`,
         72
       ),
       subtitle: trimToWordBoundary(
@@ -1981,7 +3901,7 @@ function buildHookCandidates(topic: string, options?: GenerationOptions) {
     },
     {
       title: trimToWordBoundary(
-        `В «${buildCompactTopicFocus(topic, 22)}» досмотры падают из-за воды и повтора мыслей`,
+        `В «${buildCompactTopicFocus(safeTopicForCopy, 22)}» досмотры падают из-за воды и повтора мыслей`,
         72
       ),
       subtitle: trimToWordBoundary(
@@ -2102,7 +4022,7 @@ function stripBannedTemplateLanguage(
 function removeBannedPhrases(value: string) {
   let next = value;
   for (const pattern of BANNED_TEMPLATE_PATTERNS) {
-    const flags = `${pattern.flags.includes("i") ? "i" : ""}g`;
+    const flags = `${pattern.flags.includes("i") ? "i" : ""}${pattern.flags.includes("u") ? "u" : ""}g`;
     next = next.replace(new RegExp(pattern.source, flags), " ");
   }
   return sanitizeCopyText(normalizeText(next, 180), 170);
@@ -2172,8 +4092,11 @@ function normalizeSlideByType(
   index: number,
   options?: GenerationOptions
 ): CarouselOutlineSlide {
+  void index;
   const safe = toRecord(rawSlide);
-  const topicFocus = buildTopicFocus(topic);
+  const sanitizedTopic = sanitizeTopic(topic);
+  const topicFocus = buildTopicFocus(sanitizedTopic);
+  const mode = resolveModeFromOptions(options);
 
   if (expectedType === "hook") {
     const rawTitle = sanitizeTitleValue(safe.title, 84);
@@ -2185,10 +4108,10 @@ function normalizeSlideByType(
         : "";
     return {
       type: "hook",
-      title: normalizedTitle || buildHookFallbackTitle(topic),
+      title: normalizedTitle || buildHookFallbackTitle(sanitizedTopic, mode),
       subtitle:
         sanitizeCopyText(normalizeText(safe.subtitle, HOOK_SUBTITLE_INPUT_MAX), HOOK_SUBTITLE_OUTPUT_MAX) ||
-        buildHookFallbackSubtitle(topic)
+        buildHookFallbackSubtitle(sanitizedTopic, mode)
     };
   }
 
@@ -2199,8 +4122,8 @@ function normalizeSlideByType(
       title:
         (rawTitle && !startsWithGenericMistakeLead(rawTitle) && !hasLegacyTemplatePhrase(rawTitle)
           ? rawTitle
-          : "") || buildRoleTitleFallback("problem", topic, options),
-      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("problem", topic, options))
+          : "") || buildRoleTitleFallback("problem", sanitizedTopic, options),
+      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("problem", sanitizedTopic, options))
     };
   }
 
@@ -2211,21 +4134,21 @@ function normalizeSlideByType(
       title:
         (rawTitle && !startsWithGenericMistakeLead(rawTitle) && !hasLegacyTemplatePhrase(rawTitle)
           ? rawTitle
-          : "") || buildRoleTitleFallback("amplify", topic, options),
-      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("amplify", topic, options))
+          : "") || buildRoleTitleFallback("amplify", sanitizedTopic, options),
+      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("amplify", sanitizedTopic, options))
     };
   }
 
   if (expectedType === "mistake") {
     const rawTitle = sanitizeTitleValue(safe.title, 92);
     const body =
-      sanitizeCopyText(normalizeText(safe.body, 420), 390) ||
-      "→ Ты даёшь общий совет, и человек не узнаёт себя в ситуации\n→ Нет конкретного примера, поэтому мысль звучит как шаблон\n→ После слайда непонятно, что менять прямо сейчас";
+      normalizeBodyText(safe.body, BODY_BLOCK_INPUT_MAX) ||
+      "Совет звучит слишком общо, поэтому человек не узнаёт свою ситуацию\nНет конкретного примера, из-за этого мысль воспринимается как шаблон\nПосле слайда неясно, какое действие сделать прямо сейчас";
     return {
       type: "mistake",
       title:
         (rawTitle && !hasLegacyTemplatePhrase(rawTitle) ? rawTitle : "") ||
-        buildRoleTitleFallback("mistake", topic, options),
+        buildRoleTitleFallback("mistake", sanitizedTopic, options),
       body
     } as CarouselOutlineSlide;
   }
@@ -2234,15 +4157,15 @@ function normalizeSlideByType(
     const rawTitle = sanitizeTitleValue(safe.title, 84);
     return {
       type: "consequence",
-      title: rawTitle || buildRoleTitleFallback("consequence", topic, options),
-      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("consequence", topic, options))
+      title: rawTitle || buildRoleTitleFallback("consequence", sanitizedTopic, options),
+      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("consequence", sanitizedTopic, options))
     } as CarouselOutlineSlide;
   }
 
   if (expectedType === "shift") {
     const rawTitle = sanitizeTitleValue(safe.title, 92);
     const body =
-      sanitizeCopyText(normalizeText(safe.body, 420), 390) ||
+      normalizeBodyText(safe.body, BODY_BLOCK_INPUT_MAX) ||
       "Сначала покажи конкретный факт, потом вывод. Так читатель понимает логику и доходит до действия.";
     return {
       type: "shift",
@@ -2250,17 +4173,18 @@ function normalizeSlideByType(
         (rawTitle && !startsWithGenericMistakeLead(rawTitle) && !hasLegacyTemplatePhrase(rawTitle)
           ? rawTitle
           : "") ||
-        buildRoleTitleFallback("shift", topic, options),
+        buildRoleTitleFallback("shift", sanitizedTopic, options),
       body
     } as CarouselOutlineSlide;
   }
 
   if (expectedType === "solution") {
+    const deterministicSolution = buildDeterministicSolutionFallback(sanitizedTopic, options);
     const rawTitle = sanitizeTitleValue(safe.title, 84);
     return {
       type: "solution",
-      title: rawTitle || buildRoleTitleFallback("solution", topic, options),
-      bullets: normalizeBullets(safe.bullets, buildRoleBulletsFallback("solution", topic, options))
+      title: rawTitle || deterministicSolution.title,
+      bullets: normalizeBullets(safe.bullets, deterministicSolution.bullets)
     } as CarouselOutlineSlide;
   }
 
@@ -2272,12 +4196,12 @@ function normalizeSlideByType(
         `До: «${topicFocus} объясняли общо, и человек терял нить»`,
       after:
         sanitizeCopyText(normalizeText(safe.after, 128), 122) ||
-        `После: «Добавили конкретные шаги, и отклик по ${topicFocus} стал стабильнее»`
+        "После: «Сменили подход — и результат стал стабильным»"
     };
   }
 
   const ctaTitle = sanitizeTitleValue(safe.title, 84);
-  const goalAwareCta = buildGoalAwareCta(options?.goal, topic);
+  const goalAwareCta = buildGoalAwareCta(options?.goal, sanitizedTopic, mode);
   return {
     type: "cta",
     title: ctaTitle || trimToWordBoundary("Хотите адаптацию под свою тему?", 84),
@@ -2297,14 +4221,17 @@ function buildFallbackSlides(
 
 function normalizeBullets(value: unknown, fallback: string[]) {
   if (!Array.isArray(value)) {
-    return fallback;
+    return fallback.slice(0, MAX_BULLETS_PER_SLIDE);
   }
 
   const dedupe = new Set<string>();
   const cleaned: string[] = [];
 
   for (const item of value) {
-    const normalized = sanitizeCopyText(normalizeText(item, 128), 122);
+    const normalized = sanitizeCopyText(normalizeText(item, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX)
+      .replace(/^[•·\-–—→\s]+/u, "")
+      .replace(/[.!?]+\s*$/u, "")
+      .trim();
     if (!normalized) {
       continue;
     }
@@ -2317,18 +4244,174 @@ function normalizeBullets(value: unknown, fallback: string[]) {
     dedupe.add(fingerprint);
     cleaned.push(normalized);
 
-    if (cleaned.length >= 4) {
+    if (cleaned.length >= MAX_BULLETS_PER_SLIDE) {
       break;
     }
   }
 
-  return cleaned.length ? cleaned : fallback;
+  return cleaned.length ? cleaned : fallback.slice(0, MAX_BULLETS_PER_SLIDE);
 }
 
-function buildCtaTitleFallback(goal: string | undefined, topic: string) {
+function buildCtaTitleFallback(goal: string | undefined, topic: string, mode: ContentMode = "expert") {
   void goal;
   void topic;
+  if (mode !== "sales") {
+    return "Сохраните и примените";
+  }
   return trimToWordBoundary(getFallbackTitle("cta"), 96);
+}
+
+function sanitizeTopic(topic: string): string {
+  const normalized = normalizeText(topic, 180)
+    .replace(/[?!]+/gu, " ")
+    .replace(/[«»"'`]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+
+  if (!normalized) {
+    return "вашей теме";
+  }
+
+  const cleaned = normalized
+    .replace(/^(как\s+правильн[а-яё]*\s+)/iu, "")
+    .replace(/^(почему\s+)/iu, "")
+    .replace(/^(что\s*бы\s+)/iu, "")
+    .replace(/^(чтобы\s+)/iu, "")
+    .replace(/^(как\s+)/iu, "")
+    .replace(/^(что\s+делать\s+(?:с|если|когда)\s+)/iu, "")
+    .replace(/\bкак\s+правильн[а-яё]*\b/giu, "")
+    .replace(/\bпочему\b/giu, "")
+    .replace(/\bчто\s*бы\b/giu, "")
+    .replace(/\s+/gu, " ")
+    .replace(/^[\s,.:;—–-]+|[\s,.:;—–-]+$/gu, "")
+    .trim();
+
+  const compact = removeDanglingTail(trimToWordBoundary(cleaned, 40));
+  if (compact.length >= 4) {
+    return compact;
+  }
+
+  const fallback = removeDanglingTail(trimToWordBoundary(normalized, 40));
+  return fallback || "вашей теме";
+}
+
+function buildSolutionTitleFallback(topic: string) {
+  const focus = upperFirst(buildCompactTopicFocus(sanitizeTopic(topic), 34));
+  return trimToWordBoundary(`План действий по «${focus}»`, 84);
+}
+
+function buildDeterministicSolutionFallback(
+  topic: string,
+  options?: GenerationOptions
+): Extract<CarouselOutlineSlide, { type: "solution" }> {
+  void options;
+  return {
+    type: "solution",
+    title: buildSolutionTitleFallback(topic),
+    bullets: [
+      "Выбери одно конкретное действие и начни с него сегодня",
+      "Результат приходит от системы, а не от разового усилия",
+      "Маленький стабильный шаг работает лучше большого но редкого"
+    ]
+  };
+}
+
+function resolvePositiveSlideType(role: string): "solution" | "pivot" | "what_works" | null {
+  const normalizedRole = normalizeText(role, 64)
+    .toLowerCase()
+    .replace(/[\s-]+/gu, "_");
+  if (!normalizedRole) {
+    return null;
+  }
+
+  if (
+    normalizedRole === "solution" ||
+    normalizedRole === "solution_slide" ||
+    normalizedRole === "решение" ||
+    normalizedRole.includes("solution")
+  ) {
+    return "solution";
+  }
+
+  if (
+    normalizedRole === "pivot" ||
+    normalizedRole === "pivot_slide" ||
+    normalizedRole === "поворот" ||
+    normalizedRole === "разворот" ||
+    normalizedRole === "shift" ||
+    normalizedRole.includes("pivot")
+  ) {
+    return "pivot";
+  }
+
+  if (
+    normalizedRole === "what_works" ||
+    normalizedRole === "whatworks" ||
+    normalizedRole === "что_работает" ||
+    normalizedRole === "чтоработает" ||
+    normalizedRole.includes("what_works") ||
+    normalizedRole.includes("whatworks")
+  ) {
+    return "what_works";
+  }
+
+  return null;
+}
+
+function isPositiveActionSlideType(role: string) {
+  return resolvePositiveSlideType(role) !== null;
+}
+
+function findNegativeOutcomeSignal(value: string): string | null {
+  const normalized = normalizeText(value, 180).toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const signals: Array<{ signal: string; pattern: RegExp }> = [
+    { signal: "снижается", pattern: /(?:^|[^\p{L}])снижается(?=$|[^\p{L}])/iu },
+    { signal: "не доходят", pattern: /(?:^|[^\p{L}])не\s+доходят(?=$|[^\p{L}])/iu },
+    { signal: "нестабильно*", pattern: /(?:^|[^\p{L}])нестабильн[а-яё]*(?=$|[^\p{L}])/iu },
+    { signal: "сливается*", pattern: /(?:^|[^\p{L}])слива(?:ется|ются|ешь|ете|ем)(?=$|[^\p{L}])/iu },
+    { signal: "теряется*", pattern: /(?:^|[^\p{L}])теря(?:ется|ются|ешь|ете|ем)(?=$|[^\p{L}])/iu }
+  ];
+
+  for (const entry of signals) {
+    if (entry.pattern.test(normalized)) {
+      return entry.signal;
+    }
+  }
+
+  return null;
+}
+
+function containsNegativeOutcomeSignal(value: string) {
+  return Boolean(findNegativeOutcomeSignal(value));
+}
+
+function hasForbiddenNegativeBulletsForPositiveSlide(role: string, bullets: string[]) {
+  const positiveSlideType = resolvePositiveSlideType(role);
+  if (!positiveSlideType) {
+    return false;
+  }
+
+  for (const item of bullets) {
+    const signal = findNegativeOutcomeSignal(item);
+    if (!signal) {
+      continue;
+    }
+
+    console.error("[positive-slide-negative-signal]", {
+      slideType: role,
+      normalizedSlideType: positiveSlideType,
+      signal,
+      bullet: item
+    });
+
+    return true;
+  }
+
+  return false;
 }
 
 function getFallbackTitle(role: CarouselSlideRole): string {
@@ -2345,9 +4428,30 @@ function buildRoleTitleFallback(
   topic: string,
   options?: GenerationOptions
 ) {
-  void topic;
-  void options;
   const maxLength = role === "mistake" || role === "shift" ? 92 : 96;
+  const sanitizedTopic = sanitizeTopic(topic);
+  const domain = resolveTopicDomain(sanitizedTopic, options);
+  const focus = upperFirst(buildCompactTopicFocus(sanitizedTopic, 40));
+  const domainVariants = buildDomainRoleTitleVariants(domain, focus);
+  const roleVariants = (
+    domainVariants as Partial<Record<"problem" | "amplify" | "mistake" | "shift", string[]>>
+  )[role as "problem" | "amplify" | "mistake" | "shift"];
+
+  if (
+    (role === "problem" || role === "amplify" || role === "mistake" || role === "shift") &&
+    roleVariants?.length
+  ) {
+    return trimToWordBoundary(pickVariantByTopic(`${sanitizedTopic}:${role}`, roleVariants), maxLength);
+  }
+
+  if (role === "consequence") {
+    return trimToWordBoundary(`${focus}: цена ошибки`, maxLength);
+  }
+
+  if (role === "solution") {
+    return trimToWordBoundary(buildSolutionTitleFallback(topic), maxLength);
+  }
+
   return trimToWordBoundary(getFallbackTitle(role), maxLength);
 }
 
@@ -2528,7 +4632,11 @@ function buildRoleBulletsFallback(
   topic: string,
   options?: GenerationOptions
 ) {
-  const domain = resolveTopicDomain(topic, options);
+  if (role === "solution") {
+    return buildDeterministicSolutionFallback(topic, options).bullets;
+  }
+
+  const domain = resolveTopicDomain(sanitizeTopic(topic), options);
 
   if (domain === "education") {
     if (role === "problem") {
@@ -2555,7 +4663,7 @@ function buildRoleBulletsFallback(
     return [
       "Ставьте микро-цель на 7 дней с понятным критерием «сделано».",
       "Добавляйте короткую практику 10–15 минут между занятиями.",
-      "Показывайте прогресс формулой «было -> стало» на реальных примерах."
+      "Показывайте прогресс формулой «было и стало» на реальных примерах."
     ];
   }
 
@@ -2803,13 +4911,44 @@ function normalizeText(value: unknown, maxLength: number) {
   return normalized.slice(0, maxLength);
 }
 
-function buildHookFallbackTitle(topic: string) {
-  void topic;
-  return trimToWordBoundary(getFallbackTitle("hook"), 96);
+function normalizeBodyText(value: unknown, maxLength: number) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const normalizedLines = value
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  if (!normalizedLines.length) {
+    return "";
+  }
+
+  const joined = normalizedLines.join("\n");
+  if (joined.length <= maxLength) {
+    return joined;
+  }
+
+  const compact = joined.replace(/\n+/g, " ");
+  return trimToWordBoundary(compact, maxLength);
 }
 
-function buildHookFallbackSubtitle(topic: string) {
-  const topicFocus = buildTopicFocus(topic);
+function buildHookFallbackTitle(topic: string, mode: ContentMode = "expert") {
+  if (mode === "sales") {
+    return trimToWordBoundary(getFallbackTitle("hook"), 96);
+  }
+
+  return trimToWordBoundary(buildFirstSlideTitleForMode(topic, mode), 96);
+}
+
+function buildHookFallbackSubtitle(topic: string, mode: ContentMode = "expert") {
+  if (mode !== "sales") {
+    return trimToWordBoundary(buildFirstSlideSubtitleForMode(topic, mode), 132);
+  }
+
+  const topicFocus = buildTopicFocus(sanitizeTopic(topic));
   const variants = [
     `Покажу 3 формулировки по ${topicFocus}, которые удерживают внимание в первые 5 секунд.`,
     `Разберём 1 реальный сценарий по ${topicFocus}: где люди уходят и какой шаг возвращает диалог.`,
@@ -2917,7 +5056,7 @@ function extractHookAnchor(topic: string) {
 }
 
 function hasDanglingTail(value: string) {
-  return /\b(и|а|но|или|что|чтобы|потому|когда|где|как|если|по|в|на|для|с|к|от|из|у|до|за|без|при|о|об|обо|над|под|между|через|про|который|которого|которой|которые|первого|второго|третьего|четвертого|пятого|обычно|живой|стабильному)\s*$/iu.test(
+  return /\b(и|а|но|или|что|чтобы|потому|когда|где|как|если|по|в|на|для|с|к|от|из|из-за|у|до|за|без|при|о|об|обо|над|под|между|через|про|который|которого|которой|которые|первого|второго|третьего|четвертого|пятого|обычно|живой|стабильному)\s*$/iu.test(
     value.trim()
   );
 }
@@ -2925,7 +5064,7 @@ function hasDanglingTail(value: string) {
 function removeDanglingTail(value: string) {
   return value
     .replace(
-      /(?:^|[\s\u00A0])(и|а|но|или|что|чтобы|потому|когда|где|как|если|по|в|на|для|с|к|от|из|у|до|за|без|при|о|об|обо|над|под|между|через|про|который|которого|которой|которые|первого|второго|третьего|четвертого|пятого|обычно|живой|стабильному)\s*$/iu,
+      /(?:^|[\s\u00A0])(и|а|но|или|что|чтобы|потому|когда|где|как|если|по|в|на|для|с|к|от|из|из-за|у|до|за|без|при|о|об|обо|над|под|между|через|про|который|которого|которой|которые|первого|второго|третьего|четвертого|пятого|обычно|живой|стабильному)\s*$/iu,
       ""
     )
     .replace(/[,:;—–-]+\s*$/u, "")
@@ -3041,6 +5180,24 @@ function hasAwkwardHookTitle(value: string) {
     /^[\p{L}-]+(?:у|ю)\s+[\p{L}-]{4,}ть\s*:/iu.test(normalized) ||
     /^[\p{L}-]+\s+[\p{L}-]{4,}ть:\s+как\b/iu.test(normalized) ||
     /«[^»]*\b(и|а|но|или|к|по|на|для|без|от)\s*»/iu.test(normalized)
+  );
+}
+
+function hasNonSalesGrammarRisk(value: string) {
+  const normalized = value.replace(/\s+/gu, " ").trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (/[«»"]/u.test(normalized)) {
+    return false;
+  }
+
+  return (
+    /^почему\s+.+\s+не\s+работает$/iu.test(normalized) ||
+    /^как\s+наладить\s+.+$/iu.test(normalized) ||
+    /^почему\s+срывается\s+.+$/iu.test(normalized) ||
+    /^кейс:\s+как\s+наладили\s+.+$/iu.test(normalized)
   );
 }
 
@@ -3359,7 +5516,8 @@ function normalizeCaption(
     hashtags?: unknown;
   },
   fallback: CarouselPostCaption,
-  goal?: string
+  goal?: string,
+  mode: ContentMode = "expert"
 ): CarouselPostCaption {
   const text = formatCaptionText(sanitizeCopyText(normalizeText(raw.text, 1800), 1750) || fallback.text);
   const ctaSoft =
@@ -3368,14 +5526,21 @@ function normalizeCaption(
     sanitizeCopyText(normalizeText(raw.cta_aggressive, 220), 210) ||
     fallback.ctaAggressive ||
     fallback.cta;
+  const safeCtaSoft =
+    mode !== "sales" && containsDirectMessageCta(ctaSoft)
+      ? sanitizeCopyText(normalizeText(fallback.ctaSoft, 220), 210) || fallback.cta
+      : ctaSoft;
   const requestedCta = sanitizeCopyText(normalizeText(raw.cta, 220), 210);
-  const cta = requestedCta || selectCtaByGoal(goal, { soft: ctaSoft, aggressive: ctaAggressive });
+  const safeRequestedCta =
+    mode !== "sales" && requestedCta && containsDirectMessageCta(requestedCta) ? "" : requestedCta;
+  const cta =
+    safeRequestedCta || selectCtaByGoal(goal, { soft: safeCtaSoft, aggressive: ctaAggressive }, mode);
   const hashtags = normalizeHashtags(raw.hashtags);
 
   return {
     text,
     cta,
-    ctaSoft,
+    ctaSoft: safeCtaSoft,
     ctaAggressive,
     hashtags: hashtags.length ? hashtags : fallback.hashtags
   };
@@ -3416,22 +5581,32 @@ function normalizeHashtags(value: unknown) {
   return hashtags;
 }
 
-function buildCaptionFallback(topic: string, slides: CarouselOutlineSlide[], goal?: string): CarouselPostCaption {
+function buildCaptionFallback(
+  topic: string,
+  slides: CarouselOutlineSlide[],
+  goal?: string,
+  mode: ContentMode = "expert"
+): CarouselPostCaption {
+  const sanitizedTopic = sanitizeTopic(topic);
   const hook = slides.find((slide) => slide.type === "hook");
   const solution = slides.find((slide) => slide.type === "solution");
-  const firstIdea = hook?.title || buildHookFallbackTitle(topic);
+  const firstIdea = hook?.title || buildHookFallbackTitle(sanitizedTopic, mode);
   const solutionLine =
     solution && "bullets" in solution && solution.bullets.length
       ? solution.bullets[0]
-      : "Разбейте тему на короткие, самостоятельные мысли — так дочитывают чаще.";
-  const ctaVariants = buildCtaVariants(goal, topic);
+      : mode === "sales"
+        ? "Разбейте тему на короткие, самостоятельные мысли — так дочитывают чаще."
+        : "Возьмите один шаг из карусели и примените его в ближайшей практике.";
+  const ctaVariants = buildCtaVariants(goal, sanitizedTopic, mode);
 
   const text = formatCaptionText(
     trimToWordBoundary(
     [
       `${firstIdea}.`,
       `Главная мысль этой карусели: ${solutionLine}`,
-      "Сфокусируйтесь на одной проблеме аудитории и разверните её через контраст: было -> стало.",
+      mode === "sales"
+        ? "Сфокусируйтесь на одной проблеме аудитории и разверните её через контраст: было -> стало."
+        : "Сфокусируйтесь на одной причине и разверните её через механизм: почему это происходит и что менять.",
       "Так текст звучит живо, не теряет ритм и даёт человеку понятный следующий шаг."
     ].join(" "),
     1700
@@ -3443,41 +5618,69 @@ function buildCaptionFallback(topic: string, slides: CarouselOutlineSlide[], goa
     cta: ctaVariants.selected,
     ctaSoft: ctaVariants.soft,
     ctaAggressive: ctaVariants.aggressive,
-    hashtags: buildFallbackHashtags(topic)
+    hashtags: buildFallbackHashtags(sanitizedTopic)
   };
 }
 
-function buildGoalAwareCta(goal?: string, topic?: string) {
-  return buildCtaVariants(goal, topic).selected;
+function containsDirectMessageCta(value: string) {
+  const normalized = normalizeText(value, 220).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return /(?:^|[^\p{L}])(директ|дир|личк|лс|в\s+сообщени|в\s+личн|напиши\s+\p{L}|пиши\s+\p{L})(?=$|[^\p{L}])/iu.test(
+    normalized
+  );
 }
 
-function buildCtaVariants(goal?: string, topic?: string) {
+function buildGoalAwareCta(goal?: string, topic?: string, mode: ContentMode = "expert") {
+  return buildCtaVariants(goal, topic, mode).selected;
+}
+
+function buildCtaVariants(goal?: string, topic?: string, mode: ContentMode = "expert") {
   const normalizedGoal = normalizeText(goal, 40).toLowerCase();
-  const domain = resolveTopicDomain(topic ?? "");
-  const focus = buildCompactTopicFocus(topic ?? "", 34);
+  const sanitizedTopic = sanitizeTopic(topic ?? "");
+  const domain = resolveTopicDomain(sanitizedTopic || topic || "");
+  const focus = buildCompactTopicFocus(sanitizedTopic, 34);
+  const seed = sanitizedTopic || domain;
 
   const aggressive = isLeadsGoal(normalizedGoal)
     ? "Напишите «ПЛАН» в директ — соберу структуру под ваши заявки."
-    : pickVariantByTopic(topic ?? domain, [
+    : pickVariantByTopic(seed, [
         `Напишите «КАРКАС» в директ — пришлю короткий шаблон под «${focus}».`,
         `Напишите «ШАБЛОН» в директ — отправлю готовый скелет под «${focus}».`
       ]);
 
   const soft = isFollowersGoal(normalizedGoal)
-    ? pickVariantByTopic(topic ?? domain, [
+    ? pickVariantByTopic(seed, [
         "Сохраните пост и подпишитесь — разберу следующий кейс в этом формате.",
         "Сохраните карусель и перешлите коллеге, с кем хотите сверить подход."
       ])
-    : buildDomainSoftCta(domain, focus, topic);
+    : buildDomainSoftCta(domain, focus, sanitizedTopic);
+
+  const normalizedAggressive = trimToWordBoundary(aggressive, 210);
+  const normalizedSoft = trimToWordBoundary(soft, 210);
+  const selected =
+    mode === "sales"
+      ? selectCtaByGoal(goal, { soft: normalizedSoft, aggressive: normalizedAggressive }, mode)
+      : normalizedSoft;
 
   return {
-    aggressive: trimToWordBoundary(aggressive, 210),
-    soft: trimToWordBoundary(soft, 210),
-    selected: selectCtaByGoal(goal, { soft, aggressive })
+    aggressive: normalizedAggressive,
+    soft: normalizedSoft,
+    selected
   };
 }
 
-function selectCtaByGoal(goal: string | undefined, variants: { soft: string; aggressive: string }) {
+function selectCtaByGoal(
+  goal: string | undefined,
+  variants: { soft: string; aggressive: string },
+  mode: ContentMode = "expert"
+) {
+  if (mode !== "sales") {
+    return variants.soft;
+  }
+
   const normalizedGoal = normalizeText(goal, 40).toLowerCase();
   if (isLeadsGoal(normalizedGoal)) {
     return variants.aggressive;

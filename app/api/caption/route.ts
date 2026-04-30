@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { generateCaptionFromCarousel } from "@/lib/openai";
-import type { CarouselOutlineSlide } from "@/types/editor";
+import type { CarouselOutlineSlide, ContentModeInput } from "@/types/editor";
 
 export const runtime = "nodejs";
 
 const MAX_TOPIC_CHARS = 4000;
 const MIN_TOPIC_CHARS = 3;
+const CONTENT_MODE_SET = new Set<ContentModeInput>([
+  "auto",
+  "sales",
+  "expert",
+  "instruction",
+  "diagnostic",
+  "case",
+  "social"
+]);
 
 export async function POST(request: Request) {
   let body: {
@@ -15,6 +24,7 @@ export async function POST(request: Request) {
     audience?: unknown;
     tone?: unknown;
     goal?: unknown;
+    contentMode?: unknown;
   };
 
   try {
@@ -25,6 +35,7 @@ export async function POST(request: Request) {
       audience?: unknown;
       tone?: unknown;
       goal?: unknown;
+      contentMode?: unknown;
     };
   } catch {
     return NextResponse.json({ error: "Некорректный формат запроса." }, { status: 400 });
@@ -35,6 +46,7 @@ export async function POST(request: Request) {
   const audience = typeof body.audience === "string" ? body.audience.trim().slice(0, 160) : "";
   const tone = typeof body.tone === "string" ? body.tone.trim().slice(0, 40) : "";
   const goal = typeof body.goal === "string" ? body.goal.trim().slice(0, 40) : "";
+  const contentMode = resolveContentModeInput(body.contentMode);
 
   if (!topic) {
     return NextResponse.json({ error: "Подпись недоступна: сначала задайте тему карусели." }, { status: 400 });
@@ -62,7 +74,8 @@ export async function POST(request: Request) {
       niche,
       audience,
       tone,
-      goal
+      goal,
+      contentMode
     });
 
     return NextResponse.json({ caption });
@@ -70,6 +83,19 @@ export async function POST(request: Request) {
     console.error("Caption API failed:", error);
     return NextResponse.json({ error: "Не удалось сгенерировать подпись." }, { status: 500 });
   }
+}
+
+function resolveContentModeInput(value: unknown): ContentModeInput {
+  if (typeof value !== "string") {
+    return "auto";
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (CONTENT_MODE_SET.has(normalized as ContentModeInput)) {
+    return normalized as ContentModeInput;
+  }
+
+  return "auto";
 }
 
 function normalizeOutlineSlides(value: unknown): CarouselOutlineSlide[] {
