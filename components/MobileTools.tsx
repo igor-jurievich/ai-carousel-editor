@@ -1207,7 +1207,7 @@ export function MobileTools({
                           .join("\n")
                       : ""
                   }
-                  placeholder="Здесь появится подпись к посту после нажатия «Сгенерировать»"
+                  placeholder="Здесь появится подпись после генерации"
                   rows={8}
                   readOnly
                 />

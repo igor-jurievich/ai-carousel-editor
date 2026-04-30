@@ -1,6 +1,7 @@
 "use client";
 
 import { SLIDES_COUNT_OPTIONS } from "@/lib/slides";
+import { AppSelect } from "@/components/AppSelect";
 
 type ToolbarProps = {
   topic: string;
@@ -45,17 +46,17 @@ export function Toolbar({
         <div className="prompt-actions">
           <label className="prompt-count-field">
             <span>Карточек</span>
-            <select
-              value={slidesCount}
-              onChange={(event) => onSlidesCountChange(Number(event.target.value))}
+            <AppSelect
+              value={String(slidesCount)}
+              onValueChange={(value) => onSlidesCountChange(Number(value))}
               disabled={disabled}
-            >
-              {SLIDES_COUNT_OPTIONS.map((count) => (
-                <option key={count} value={count}>
-                  {count}
-                </option>
-              ))}
-            </select>
+              ariaLabel="Количество карточек"
+              triggerClassName="prompt-count-select"
+              options={SLIDES_COUNT_OPTIONS.map((count) => ({
+                value: String(count),
+                label: String(count)
+              }))}
+            />
           </label>
           <button
             className="btn prompt-generate-btn"
