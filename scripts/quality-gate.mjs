@@ -4,6 +4,11 @@ import path from "node:path";
 const BASE_URL = process.env.QUALITY_BASE_URL || process.env.SMOKE_BASE_URL || "http://localhost:3000";
 const RUNS = Number(process.env.QUALITY_RUNS || 1);
 const REQUEST_TIMEOUT_MS = Number(process.env.QUALITY_TIMEOUT_MS || 80000);
+const QA_BYPASS_KEY =
+  process.env.QUALITY_QA_BYPASS_KEY ||
+  process.env.SMOKE_QA_BYPASS_KEY ||
+  process.env.GENERATE_QA_BYPASS_KEY ||
+  "";
 
 const TOPICS = [
   "Почему риелторы и маркетологи спорят из-за качества заявок",
@@ -24,7 +29,20 @@ const TOPIC_LIMIT = Number(process.env.QUALITY_TOPICS_LIMIT || TOPICS.length);
 const ACTIVE_TOPICS = TOPICS.slice(0, Math.max(1, Math.min(TOPICS.length, Number.isFinite(TOPIC_LIMIT) ? TOPIC_LIMIT : TOPICS.length)));
 const ACTIVE_FORMATS = parseCsvSubset(process.env.QUALITY_FORMATS, FORMATS);
 const ACTIVE_THEMES = parseCsvSubset(process.env.QUALITY_THEMES, THEMES);
+const CONTENT_MODES = parseCsvSubset(
+  process.env.QUALITY_MODES,
+  ["sales", "expert", "instruction", "diagnostic", "case", "social"]
+);
 const FLOW_9 = ["hook", "problem", "amplify", "mistake", "consequence", "shift", "solution", "example", "cta"];
+const FLOW_9_BY_MODE = {
+  sales: FLOW_9,
+  expert: ["hook", "problem", "amplify", "mistake", "shift", "solution", "example", "consequence", "cta"],
+  instruction: ["hook", "problem", "shift", "solution", "mistake", "amplify", "example", "consequence", "cta"],
+  diagnostic: ["hook", "problem", "mistake", "consequence", "amplify", "shift", "solution", "example", "cta"],
+  case: ["hook", "problem", "example", "amplify", "shift", "solution", "mistake", "consequence", "cta"],
+  social: ["hook", "problem", "amplify", "mistake", "shift", "solution", "example", "consequence", "cta"],
+  auto: FLOW_9
+};
 
 const BANNED_PHRASES = [
   "в современном мире",
@@ -46,6 +64,14 @@ const WEAK_TITLE_PATTERNS = [
 
 const ACTION_VERB_RE =
   /(?:^|[^\p{L}])(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите|подпишитесь|выберите)(?=$|[^\p{L}])/iu;
+const DIRECT_CTA_RE =
+  /(?:^|[^\p{L}])(директ|дир|лс|личк|напиши\s+\p{L}|пиши\s+\p{L}|в\s+личн)(?=$|[^\p{L}])/iu;
+const META_HOOK_RE =
+  /(?:^|[^\p{L}])(узк[а-яё]*\s+мест[а-яё]*|результат\s+буксует|дочитыва|сохраня[а-яё]*|раскрыть\s+тему)(?=$|[^\p{L}])/iu;
+const MECHANISM_CUE_RE =
+  /(?:^|[^\p{L}])(потому|поэтому|из-за|когда|если|чтобы)(?=$|[^\p{L}])/iu;
+const STEP_CUE_RE =
+  /(?:^|[^\p{L}])(шаг|сначала|потом|затем|проверьте|сделайте|1|2|3)(?=$|[^\p{L}])/iu;
 
 const FAILURE_CATEGORY_ORDER = [
   "slides_shape",
@@ -59,6 +85,8 @@ const FAILURE_CATEGORY_ORDER = [
   "short_title",
   "example_quality",
   "cta_quality",
+  "mode_quality",
+  "mode_profile",
   "project_meta",
   "network",
   "other"
@@ -152,6 +180,14 @@ function classifyFailure(error) {
     return "cta_quality";
   }
 
+  if (normalized.includes("mode profile")) {
+    return "mode_profile";
+  }
+
+  if (normalized.includes("non-sales") || normalized.includes("instruction_") || normalized.includes("expert_")) {
+    return "mode_quality";
+  }
+
   if (normalized.includes("project.format mismatch") || normalized.includes("project.theme mismatch")) {
     return "project_meta";
   }
@@ -223,7 +259,7 @@ function hasTopicAnchor(text, anchors) {
   });
 }
 
-function validateSlides(slides, topic) {
+function validateSlides(slides, topic, mode, generationProfile) {
   const errors = [];
 
   if (!Array.isArray(slides) || slides.length !== 9) {
@@ -231,11 +267,12 @@ function validateSlides(slides, topic) {
     return errors;
   }
 
+  const expectedFlow = FLOW_9_BY_MODE[mode] || FLOW_9;
   const anchors = topicAnchors(topic);
   const titleFingerprints = new Set();
 
-  for (let i = 0; i < FLOW_9.length; i += 1) {
-    const expectedType = FLOW_9[i];
+  for (let i = 0; i < expectedFlow.length; i += 1) {
+    const expectedType = expectedFlow[i];
     const slide = slides[i];
     if (!slide || slide.type !== expectedType) {
       errors.push(`slide ${i + 1}: expected type ${expectedType}, got ${slide?.type ?? "none"}`);
@@ -274,6 +311,9 @@ function validateSlides(slides, topic) {
       const hookBlock = [slide.title, slide.subtitle].filter(Boolean).join(" ");
       if (!hasTopicAnchor(hookBlock, anchors)) {
         errors.push("hook is weakly aligned with topic");
+      }
+      if (mode !== "sales" && META_HOOK_RE.test(hookBlock)) {
+        errors.push("non-sales hook contains meta-hook language");
       }
       continue;
     }
@@ -326,13 +366,45 @@ function validateSlides(slides, topic) {
       } else if (!ACTION_VERB_RE.test(subtitle)) {
         errors.push("cta subtitle does not contain a clear action");
       }
+      if (mode !== "sales" && DIRECT_CTA_RE.test(`${title} ${subtitle}`)) {
+        errors.push("non-sales cta is direct-response");
+      }
+    }
+  }
+
+  if (mode === "instruction") {
+    const solution = slides.find((slide) => slide?.type === "solution");
+    const solutionCopy =
+      solution && Array.isArray(solution.bullets) ? solution.bullets.join(" ") : "";
+    if (!STEP_CUE_RE.test(solutionCopy)) {
+      errors.push("instruction_solution_missing_step_cue");
+    }
+  }
+
+  if (mode === "expert") {
+    const shift = slides.find((slide) => slide?.type === "shift");
+    const shiftBody = normalize(shift?.body);
+    if (!MECHANISM_CUE_RE.test(shiftBody)) {
+      errors.push("expert_shift_missing_mechanism_cue");
+    }
+  }
+
+  if (generationProfile && typeof generationProfile === "object") {
+    const effectiveMode = normalize(generationProfile.modeEffective);
+    if (mode !== "auto" && effectiveMode && effectiveMode !== mode) {
+      errors.push(`mode profile mismatch: requested ${mode}, got ${effectiveMode}`);
     }
   }
 
   return errors;
 }
 
-async function runCase({ topic, format, theme, runIndex }) {
+async function runCase({ topic, format, theme, mode, runIndex }) {
+  const headers = { "Content-Type": "application/json" };
+  if (QA_BYPASS_KEY) {
+    headers["x-qa-generate-key"] = QA_BYPASS_KEY;
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -342,13 +414,14 @@ async function runCase({ topic, format, theme, runIndex }) {
   try {
     response = await fetch(`${BASE_URL}/api/generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         topic,
         slidesCount: 9,
         format,
         theme,
-        promptVariant: "B"
+        promptVariant: "B",
+        contentMode: mode
       }),
       signal: controller.signal
     });
@@ -376,7 +449,11 @@ async function runCase({ topic, format, theme, runIndex }) {
     errors.push(`project.theme mismatch: expected ${theme}, got ${payload?.project?.theme ?? "none"}`);
   }
 
-  errors.push(...validateSlides(payload.slides, topic));
+  if (mode !== "auto" && payload?.project?.contentMode && payload.project.contentMode !== mode) {
+    errors.push(`mode profile mismatch: requested ${mode}, got ${payload.project.contentMode}`);
+  }
+
+  errors.push(...validateSlides(payload.slides, topic, mode, payload?.generationProfile));
 
   return {
     errors,
@@ -385,6 +462,7 @@ async function runCase({ topic, format, theme, runIndex }) {
       topic,
       format,
       theme,
+      mode,
       hook: payload?.slides?.[0]?.title ?? "",
       problem: payload?.slides?.[1]?.title ?? "",
       cta: payload?.slides?.[8]?.title ?? ""
@@ -395,42 +473,46 @@ async function runCase({ topic, format, theme, runIndex }) {
 async function main() {
   const failures = [];
   const samples = [];
-  const total = ACTIVE_TOPICS.length * ACTIVE_FORMATS.length * ACTIVE_THEMES.length * RUNS;
+  const total = ACTIVE_TOPICS.length * ACTIVE_FORMATS.length * ACTIVE_THEMES.length * CONTENT_MODES.length * RUNS;
   let done = 0;
 
   for (let runIndex = 1; runIndex <= RUNS; runIndex += 1) {
-    for (const topic of ACTIVE_TOPICS) {
-      for (const format of ACTIVE_FORMATS) {
-        for (const theme of ACTIVE_THEMES) {
-          done += 1;
-          process.stdout.write(`\n[${done}/${total}] run ${runIndex} | ${format}/${theme} | ${topic}\n`);
-          try {
-            const result = await runCase({ topic, format, theme, runIndex });
-            if (result.errors.length > 0) {
+    for (const mode of CONTENT_MODES) {
+      for (const topic of ACTIVE_TOPICS) {
+        for (const format of ACTIVE_FORMATS) {
+          for (const theme of ACTIVE_THEMES) {
+            done += 1;
+            process.stdout.write(`\n[${done}/${total}] run ${runIndex} | ${mode} | ${format}/${theme} | ${topic}\n`);
+            try {
+              const result = await runCase({ topic, format, theme, mode, runIndex });
+              if (result.errors.length > 0) {
+                failures.push({
+                  runIndex,
+                  topic,
+                  format,
+                  theme,
+                  mode,
+                  errors: result.errors
+                });
+                process.stdout.write(`  FAIL: ${result.errors.join("; ")}\n`);
+              } else {
+                if (samples.length < 10 && result.payload) {
+                  samples.push(result.payload);
+                }
+                process.stdout.write("  OK\n");
+              }
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
               failures.push({
                 runIndex,
                 topic,
                 format,
                 theme,
-                errors: result.errors
+                mode,
+                errors: [message]
               });
-              process.stdout.write(`  FAIL: ${result.errors.join("; ")}\n`);
-            } else {
-              if (samples.length < 10 && result.payload) {
-                samples.push(result.payload);
-              }
-              process.stdout.write("  OK\n");
+              process.stdout.write(`  FAIL: ${message}\n`);
             }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            failures.push({
-              runIndex,
-              topic,
-              format,
-              theme,
-              errors: [message]
-            });
-            process.stdout.write(`  FAIL: ${message}\n`);
           }
         }
       }
@@ -445,6 +527,7 @@ async function main() {
     topics: ACTIVE_TOPICS.length,
     formats: ACTIVE_FORMATS,
     themes: ACTIVE_THEMES,
+    modes: CONTENT_MODES,
     failed: failures.length,
     failureSummary: buildFailureSummary(failures),
     samples,
@@ -481,7 +564,7 @@ async function main() {
     process.stdout.write("samples:\n");
     for (const sample of samples.slice(0, 6)) {
       process.stdout.write(
-        `  [run ${sample.runIndex}] ${sample.format}/${sample.theme} | ${sample.topic}\n`
+        `  [run ${sample.runIndex}] ${sample.mode} | ${sample.format}/${sample.theme} | ${sample.topic}\n`
       );
       process.stdout.write(`    hook: ${sample.hook}\n`);
       process.stdout.write(`    problem: ${sample.problem}\n`);

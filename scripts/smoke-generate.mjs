@@ -1,5 +1,10 @@
 const BASE_URL = process.env.SMOKE_BASE_URL || "http://localhost:3000";
 const RUNS = Number(process.env.SMOKE_RUNS || 2);
+const QA_BYPASS_KEY =
+  process.env.SMOKE_QA_BYPASS_KEY ||
+  process.env.QUALITY_QA_BYPASS_KEY ||
+  process.env.GENERATE_QA_BYPASS_KEY ||
+  "";
 
 const TOPICS = [
   "Почему заявки есть, но сделки не закрываются",
@@ -9,7 +14,20 @@ const TOPICS = [
 
 const FORMATS = ["1:1", "4:5", "9:16"];
 const THEMES = ["light", "dark", "color"];
+const CONTENT_MODES = (process.env.SMOKE_MODES || "sales,expert,instruction")
+  .split(",")
+  .map((item) => normalize(item))
+  .filter(Boolean);
 const FLOW_9 = ["hook", "problem", "amplify", "mistake", "consequence", "shift", "solution", "example", "cta"];
+const FLOW_9_BY_MODE = {
+  sales: FLOW_9,
+  expert: ["hook", "problem", "amplify", "mistake", "shift", "solution", "example", "consequence", "cta"],
+  instruction: ["hook", "problem", "shift", "solution", "mistake", "amplify", "example", "consequence", "cta"],
+  diagnostic: ["hook", "problem", "mistake", "consequence", "amplify", "shift", "solution", "example", "cta"],
+  case: ["hook", "problem", "example", "amplify", "shift", "solution", "mistake", "consequence", "cta"],
+  social: ["hook", "problem", "amplify", "mistake", "shift", "solution", "example", "consequence", "cta"],
+  auto: FLOW_9
+};
 const BANNED_PHRASES = [
   "в современном мире",
   "в теме ",
@@ -24,6 +42,14 @@ const MECHANICAL_TITLE_RE = /^к чему это вед[её]т[:\s-]*/iu;
 
 const ACTION_VERB_RE =
   /(?:^|[^\p{L}])(напиши|напишите|сохраните|оставьте|отправьте|ответьте|пришлите|подпишитесь|выберите)(?=$|[^\p{L}])/iu;
+const DIRECT_CTA_RE =
+  /(?:^|[^\p{L}])(директ|дир|лс|личк|напиши\s+\p{L}|пиши\s+\p{L}|в\s+личн)(?=$|[^\p{L}])/iu;
+const META_HOOK_RE =
+  /(?:^|[^\p{L}])(узк[а-яё]*\s+мест[а-яё]*|результат\s+буксует|дочитыва|сохраня[а-яё]*|раскрыть\s+тему)(?=$|[^\p{L}])/iu;
+const MECHANISM_CUE_RE =
+  /(?:^|[^\p{L}])(потому|поэтому|из-за|когда|если|чтобы)(?=$|[^\p{L}])/iu;
+const STEP_CUE_RE =
+  /(?:^|[^\p{L}])(шаг|сначала|потом|затем|проверьте|сделайте|1|2|3)(?=$|[^\p{L}])/iu;
 
 function normalize(value) {
   if (typeof value !== "string") {
@@ -55,15 +81,16 @@ function hasBrokenTail(value) {
   return /[:—–-]\s*$/u.test(text);
 }
 
-function validateSlides(slides) {
+function validateSlides(slides, mode, generationProfile) {
   const errors = [];
   if (!Array.isArray(slides) || slides.length !== 9) {
     errors.push("slides length is not 9");
     return errors;
   }
 
-  for (let i = 0; i < FLOW_9.length; i += 1) {
-    const expectedType = FLOW_9[i];
+  const expectedFlow = FLOW_9_BY_MODE[mode] || FLOW_9;
+  for (let i = 0; i < expectedFlow.length; i += 1) {
+    const expectedType = expectedFlow[i];
     const slide = slides[i];
     if (!slide || slide.type !== expectedType) {
       errors.push(`slide ${i + 1}: expected type ${expectedType}, got ${slide?.type ?? "none"}`);
@@ -96,6 +123,9 @@ function validateSlides(slides) {
       }
       if (/^(одна\s+)?(главная\s+)?ошибка/.test(title)) {
         errors.push("hook starts with generic 'ошибка'");
+      }
+      if (mode !== "sales" && META_HOOK_RE.test(`${title} ${subtitle}`)) {
+        errors.push("non-sales hook contains meta-hook language");
       }
       continue;
     }
@@ -140,22 +170,54 @@ function validateSlides(slides) {
       } else if (!ACTION_VERB_RE.test(subtitle)) {
         errors.push("cta subtitle does not contain a clear action");
       }
+      if (mode !== "sales" && DIRECT_CTA_RE.test(`${title} ${subtitle}`)) {
+        errors.push("non-sales cta is direct-response");
+      }
+    }
+  }
+
+  if (mode === "instruction") {
+    const solution = slides.find((slide) => slide?.type === "solution");
+    const solutionCopy =
+      solution && Array.isArray(solution.bullets) ? solution.bullets.join(" ") : "";
+    if (!STEP_CUE_RE.test(solutionCopy)) {
+      errors.push("instruction solution missing step cue");
+    }
+  }
+
+  if (mode === "expert") {
+    const shift = slides.find((slide) => slide?.type === "shift");
+    if (!MECHANISM_CUE_RE.test(normalize(shift?.body))) {
+      errors.push("expert shift missing mechanism cue");
+    }
+  }
+
+  if (generationProfile && mode !== "auto") {
+    const effective = normalize(generationProfile.modeEffective);
+    if (effective && effective !== mode) {
+      errors.push(`mode profile mismatch: requested ${mode}, got ${effective}`);
     }
   }
 
   return errors;
 }
 
-async function runCase({ topic, format, theme, runIndex }) {
+async function runCase({ topic, format, theme, mode, runIndex }) {
+  const headers = { "Content-Type": "application/json" };
+  if (QA_BYPASS_KEY) {
+    headers["x-qa-generate-key"] = QA_BYPASS_KEY;
+  }
+
   const response = await fetch(`${BASE_URL}/api/generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       topic,
       slidesCount: 9,
       format,
       theme,
-      promptVariant: "B"
+      promptVariant: "B",
+      contentMode: mode
     })
   });
 
@@ -180,7 +242,7 @@ async function runCase({ topic, format, theme, runIndex }) {
     errors.push(`project.theme mismatch: expected ${theme}, got ${payload?.project?.theme ?? "none"}`);
   }
 
-  errors.push(...validateSlides(payload.slides));
+  errors.push(...validateSlides(payload.slides, mode, payload?.generationProfile));
 
   return {
     errors,
@@ -190,7 +252,8 @@ async function runCase({ topic, format, theme, runIndex }) {
       runIndex,
       topic,
       format,
-      theme
+      theme,
+      mode
     }
   };
 }
@@ -198,42 +261,46 @@ async function runCase({ topic, format, theme, runIndex }) {
 async function main() {
   const failures = [];
   const samples = [];
-  const total = TOPICS.length * FORMATS.length * THEMES.length * RUNS;
+  const total = TOPICS.length * FORMATS.length * THEMES.length * CONTENT_MODES.length * RUNS;
   let done = 0;
 
   for (let runIndex = 1; runIndex <= RUNS; runIndex += 1) {
-    for (const topic of TOPICS) {
-      for (const format of FORMATS) {
-        for (const theme of THEMES) {
-          done += 1;
-          process.stdout.write(`\n[${done}/${total}] ${runIndex} | ${format} | ${theme} | ${topic}\n`);
-          try {
-            const result = await runCase({ topic, format, theme, runIndex });
-            if (result.errors.length > 0) {
+    for (const mode of CONTENT_MODES) {
+      for (const topic of TOPICS) {
+        for (const format of FORMATS) {
+          for (const theme of THEMES) {
+            done += 1;
+            process.stdout.write(`\n[${done}/${total}] ${runIndex} | ${mode} | ${format} | ${theme} | ${topic}\n`);
+            try {
+              const result = await runCase({ topic, format, theme, mode, runIndex });
+              if (result.errors.length > 0) {
+                failures.push({
+                  runIndex,
+                  topic,
+                  format,
+                  theme,
+                  mode,
+                  errors: result.errors
+                });
+                process.stdout.write(`  FAIL: ${result.errors.join("; ")}\n`);
+              } else {
+                if (samples.length < 6) {
+                  samples.push(result.payload);
+                }
+                process.stdout.write("  OK\n");
+              }
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
               failures.push({
                 runIndex,
                 topic,
                 format,
                 theme,
-                errors: result.errors
+                mode,
+                errors: [message]
               });
-              process.stdout.write(`  FAIL: ${result.errors.join("; ")}\n`);
-            } else {
-              if (samples.length < 6) {
-                samples.push(result.payload);
-              }
-              process.stdout.write("  OK\n");
+              process.stdout.write(`  FAIL: ${message}\n`);
             }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            failures.push({
-              runIndex,
-              topic,
-              format,
-              theme,
-              errors: [message]
-            });
-            process.stdout.write(`  FAIL: ${message}\n`);
           }
         }
       }
@@ -249,7 +316,7 @@ async function main() {
     process.stdout.write("samples:\n");
     for (const sample of samples) {
       process.stdout.write(
-        `  [run ${sample.runIndex}] ${sample.format}/${sample.theme} | ${sample.topic}\n`
+        `  [run ${sample.runIndex}] ${sample.mode} | ${sample.format}/${sample.theme} | ${sample.topic}\n`
       );
       process.stdout.write(`    hook: ${sample.hook}\n`);
       process.stdout.write(`    cta:  ${sample.cta}\n`);
@@ -260,7 +327,7 @@ async function main() {
     process.stdout.write("\nfailures:\n");
     for (const failure of failures.slice(0, 20)) {
       process.stdout.write(
-        `  run ${failure.runIndex} | ${failure.format}/${failure.theme} | ${failure.topic}\n`
+        `  run ${failure.runIndex} | ${failure.mode} | ${failure.format}/${failure.theme} | ${failure.topic}\n`
       );
       for (const error of failure.errors) {
         process.stdout.write(`    - ${error}\n`);
