@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Switch from "@radix-ui/react-switch";
+import { AppSelect } from "@/components/AppSelect";
 import { AppIcon } from "@/components/icons";
 import type { Slide, TextElement } from "@/types/editor";
 
@@ -72,22 +74,31 @@ export function SlideExportModal({
         <div className="editor-modal-content slide-export-content">
           <div className="slide-export-mode-row">
             <span>Формат</span>
-            <select
-              className="select"
+            <AppSelect
               value={exportMode}
-              onChange={(event) => onExportModeChange(event.target.value as "zip" | "png" | "jpg" | "pdf")}
-            >
-              <option value="zip">ZIP (PNG)</option>
-              <option value="png">PNG</option>
-              <option value="jpg">JPG</option>
-              <option value="pdf">PDF</option>
-            </select>
+              onValueChange={(value) => onExportModeChange(value as "zip" | "png" | "jpg" | "pdf")}
+              ariaLabel="Формат экспорта"
+              triggerClassName="select slide-export-mode-select"
+              options={[
+                { value: "zip", label: "ZIP (PNG)" },
+                { value: "png", label: "PNG" },
+                { value: "jpg", label: "JPG" },
+                { value: "pdf", label: "PDF" }
+              ]}
+            />
           </div>
 
-          <label className="slide-export-all-toggle">
-            <input type="checkbox" checked={isAllSelected} onChange={onToggleAll} />
+          <div className="slide-export-all-toggle">
             <span>Все слайды ({slides.length})</span>
-          </label>
+            <Switch.Root
+              className="slide-export-switch-root"
+              checked={isAllSelected}
+              onCheckedChange={() => onToggleAll()}
+              aria-label="Выбрать все слайды"
+            >
+              <Switch.Thumb className="slide-export-switch-thumb" />
+            </Switch.Root>
+          </div>
 
           <div className="slide-export-list">
             {slides.map((slide, index) => {
@@ -95,20 +106,23 @@ export function SlideExportModal({
               const preview = getSlidePreview(slide);
 
               return (
-                <label
+                <div
                   key={slide.id}
                   className={`slide-export-item ${isSelected ? "selected" : ""}`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggleSlide(slide.id)}
-                  />
                   <div className="slide-export-item-copy">
                     <strong>Слайд {index + 1}</strong>
                     <span>{preview}</span>
                   </div>
-                </label>
+                  <Switch.Root
+                    className="slide-export-switch-root"
+                    checked={isSelected}
+                    onCheckedChange={() => onToggleSlide(slide.id)}
+                    aria-label={`Выбрать слайд ${index + 1}`}
+                  >
+                    <Switch.Thumb className="slide-export-switch-thumb" />
+                  </Switch.Root>
+                </div>
               );
             })}
           </div>

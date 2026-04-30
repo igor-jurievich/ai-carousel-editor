@@ -73,6 +73,7 @@ import type {
   CarouselPostCaption,
   CarouselTemplateCategory,
   CarouselTemplateId,
+  ContentModeInput,
   ShapeElement,
   Slide,
   SlidePhotoSettings,
@@ -88,21 +89,25 @@ const MAX_TOPIC_CHARS = 4000;
 const MIN_TOPIC_CHARS = 3;
 const EXPORT_LOCK_STATUS = "Дождитесь завершения экспорта и повторите действие.";
 const GENERATE_LOCK_STATUS = "Дождитесь завершения генерации и повторите действие.";
-const GENERATE_TIMEOUT_MS = 30_000;
+const GENERATE_TIMEOUT_MS = 110_000;
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
 const HISTORY_LIMIT = 40;
 const EXPORT_ATTEMPTS_MAX = 3;
 const EXPORT_CAPTURE_ATTEMPTS = 3;
 const MOBILE_PREVIEW_MAX_WIDTH: Record<SlideFormat, number> = {
-  "1:1": 324,
-  "4:5": 338,
-  "9:16": 312
+  "1:1": 390,
+  "4:5": 392,
+  "9:16": 344
 };
 const MANAGED_TEXT_META_KEYS = new Set(["managed-title", "managed-body"]);
 const MANAGED_TITLE_META_KEY = "managed-title";
 const MANAGED_BODY_META_KEY = "managed-body";
 const DEFAULT_HIGHLIGHT_COLOR = "#6366f1";
+const ACCENT_SLIDE_BACKGROUND = "#6366f1";
+const ACCENT_SLIDE_TEXT_COLOR = "#ffffff";
+const DEFAULT_SLIDE_BACKGROUND = "#ffffff";
+const DEFAULT_SLIDE_TEXT_COLOR = "#111111";
 const DEFAULT_SLIDE_PHOTO_SETTINGS: SlidePhotoSettings = {
   zoom: 100,
   offsetX: 0,
@@ -139,10 +144,19 @@ const LEGACY_ACCENT_CHIP_HEX_COLORS = new Set([
 const HEX_COLOR_INPUT_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 type EditableTextTargetRole = "title" | "body";
 type MobileColorSchemeMode = "single" | "double";
-type GridDecorationMode = "full" | "vertical" | "dots";
+type GridDecorationMode = "full" | "vertical" | "dots" | "gradient" | "notes" | "flash";
 type TextCaseMode = "normal" | "uppercase" | "lowercase" | "capitalize";
 type MobileStylePresetId = "mono" | "grid" | "gradient" | "notes" | "dots" | "flash";
-type MobileToolTab = "templates" | "color" | "background" | "style" | "text" | "font" | "size";
+type MobileToolTab =
+  | "slides"
+  | "layers"
+  | "templates"
+  | "color"
+  | "background"
+  | "style"
+  | "text"
+  | "font"
+  | "size";
 
 const MOBILE_TAB_ITEMS: Array<{
   id: MobileToolTab;
@@ -159,6 +173,8 @@ const MOBILE_TAB_ITEMS: Array<{
 ];
 
 const MOBILE_TAB_TITLE: Record<MobileToolTab, string> = {
+  slides: "Слайды",
+  layers: "Слои",
   templates: "Шаблоны",
   color: "Цвет",
   background: "Фон",
@@ -183,24 +199,24 @@ const MOBILE_STYLE_PRESET_CONFIG: Record<
     gridMode: "full"
   },
   gradient: {
-    background: "#f4ede8",
-    gridVisible: false,
-    gridMode: "vertical"
+    background: "#e9f3ff",
+    gridVisible: true,
+    gridMode: "gradient"
   },
   notes: {
-    background: "#ececf1",
+    background: "#fffaf0",
     gridVisible: true,
-    gridMode: "vertical"
+    gridMode: "notes"
   },
   dots: {
-    background: "#f5f5f6",
+    background: "#f7f7fb",
     gridVisible: true,
     gridMode: "dots"
   },
   flash: {
-    background: "#e8e9ed",
+    background: "#f3f4ff",
     gridVisible: true,
-    gridMode: "vertical"
+    gridMode: "flash"
   }
 };
 
@@ -252,24 +268,24 @@ const MOBILE_STYLE_PRESET_ITEMS: Array<{
     preview:
       "repeating-linear-gradient(90deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px), repeating-linear-gradient(180deg, rgba(18,21,27,0.12) 0 1px, transparent 1px 10px), #f8f8f9"
   },
-  { id: "gradient", label: "Градиент", preview: "linear-gradient(130deg, #f7f4f1 0%, #ece2d9 100%)" },
+  { id: "gradient", label: "Градиент", preview: "linear-gradient(135deg, #e9f3ff 0%, #ffffff 100%)" },
   {
     id: "notes",
     label: "Заметки",
     preview:
-      "repeating-linear-gradient(180deg, rgba(43,47,58,0.2) 0 1px, transparent 1px 11px), linear-gradient(180deg, #f8f9fc 0%, #eef1f7 100%)"
+      "linear-gradient(90deg, rgba(99,102,241,0.22) 0 1px, transparent 1px), repeating-linear-gradient(180deg, rgba(43,47,58,0.18) 0 1px, transparent 1px 11px), #fffaf0"
   },
   {
     id: "dots",
     label: "Точки",
     preview:
-      "radial-gradient(circle, rgba(18,21,27,0.28) 1.1px, transparent 1.2px) 0 0 / 10px 10px, #f5f5f6"
+      "radial-gradient(circle, rgba(18,21,27,0.28) 1.1px, transparent 1.2px) 0 0 / 10px 10px, #f7f7fb"
   },
   {
     id: "flash",
     label: "Молнии",
     preview:
-      "repeating-linear-gradient(135deg, rgba(56,60,70,0.15) 0 6px, transparent 6px 16px), repeating-linear-gradient(45deg, rgba(56,60,70,0.12) 0 6px, transparent 6px 18px), #e8e9ed"
+      "repeating-linear-gradient(135deg, rgba(99,102,241,0.22) 0 6px, transparent 6px 18px), #f3f4ff"
   }
 ];
 
@@ -322,7 +338,7 @@ function parseRgbFromColor(value: string) {
 function resolveGridColorForBackground(background: string) {
   const rgb = parseRgbFromColor(background);
   if (!rgb) {
-    return "rgba(0, 0, 0, 0.04)";
+    return "rgba(128, 128, 128, 0.06)";
   }
 
   const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
@@ -343,8 +359,26 @@ function inferGridModeFromSlide(slide: Slide): GridDecorationMode | null {
     return "dots";
   }
 
+  if (gridElements.some((element) => Math.abs(element.rotation ?? 0) > 0.1)) {
+    return "flash";
+  }
+
+  if (
+    gridElements.some(
+      (element) =>
+        element.shape === "rect" &&
+        element.height > 8 &&
+        element.width > element.height * 3
+    )
+  ) {
+    return "gradient";
+  }
+
   const verticalCount = gridElements.filter((element) => element.height > element.width * 3).length;
   const horizontalCount = gridElements.filter((element) => element.width > element.height * 3).length;
+  if (horizontalCount > 2 && verticalCount <= 1) {
+    return "notes";
+  }
   if (verticalCount > 0 && horizontalCount > 0) {
     return "full";
   }
@@ -359,6 +393,79 @@ function buildGridDecorationElements(
   const { width, height } = SLIDE_FORMAT_DIMENSIONS[format];
   const step = Math.max(58, format === "9:16" ? 84 : 72);
   const elements: ShapeElement[] = [];
+  const pushRect = (
+    props: Pick<ShapeElement, "x" | "y" | "width" | "height" | "fill"> &
+      Partial<Pick<ShapeElement, "opacity" | "rotation" | "cornerRadius">>
+  ) => {
+    elements.push({
+      id: makeEditorElementId("decor-grid"),
+      type: "shape",
+      metaKey: "decor-grid-line",
+      shape: "rect",
+      x: props.x,
+      y: props.y,
+      width: props.width,
+      height: props.height,
+      fill: props.fill,
+      opacity: props.opacity ?? 1,
+      rotation: props.rotation ?? 0,
+      cornerRadius: props.cornerRadius ?? 0
+    });
+  };
+
+  if (mode === "gradient") {
+    const bands = 9;
+    const bandHeight = Math.ceil(height / bands);
+    for (let index = 0; index < bands; index += 1) {
+      const progress = index / Math.max(1, bands - 1);
+      pushRect({
+        x: 0,
+        y: index * bandHeight,
+        width,
+        height: bandHeight + 1,
+        fill: `rgba(255, 255, 255, ${Math.min(0.78, 0.08 + progress * 0.7).toFixed(2)})`
+      });
+    }
+    return elements;
+  }
+
+  if (mode === "notes") {
+    const lineStep = format === "9:16" ? 70 : 56;
+    for (let y = lineStep; y <= height; y += lineStep) {
+      pushRect({
+        x: 0,
+        y,
+        width,
+        height: 1.5,
+        fill: "rgba(0, 0, 0, 0.04)"
+      });
+    }
+    pushRect({
+      x: Math.round(width * 0.14),
+      y: 0,
+      width: 2,
+      height,
+      fill: "rgba(99, 102, 241, 0.08)"
+    });
+    return elements;
+  }
+
+  if (mode === "flash") {
+    const stripeWidth = Math.max(6, Math.round(width * 0.012));
+    const diagonalHeight = Math.round(Math.hypot(width, height) * 1.3);
+    for (let x = -width; x <= width * 1.35; x += Math.max(72, step)) {
+      pushRect({
+        x,
+        y: -height * 0.15,
+        width: stripeWidth,
+        height: diagonalHeight,
+        fill: "rgba(99, 102, 241, 0.08)",
+        rotation: -28,
+        cornerRadius: stripeWidth
+      });
+    }
+    return elements;
+  }
 
   if (mode === "dots") {
     const dotSize = format === "9:16" ? 6 : 5;
@@ -385,37 +492,23 @@ function buildGridDecorationElements(
   }
 
   for (let x = 0; x <= width; x += step) {
-    elements.push({
-      id: makeEditorElementId("decor-grid"),
-      type: "shape",
-      metaKey: "decor-grid-line",
-      shape: "rect",
+    pushRect({
       x,
       y: 0,
-      width: 1,
+      width: 1.5,
       height,
-      fill: color,
-      opacity: 1,
-      rotation: 0,
-      cornerRadius: 0
+      fill: color
     });
   }
 
   if (mode === "full") {
     for (let y = 0; y <= height; y += step) {
-      elements.push({
-        id: makeEditorElementId("decor-grid"),
-        type: "shape",
-        metaKey: "decor-grid-line",
-        shape: "rect",
+      pushRect({
         x: 0,
         y,
         width,
-        height: 1,
-        fill: color,
-        opacity: 1,
-        rotation: 0,
-        cornerRadius: 0
+        height: 1.5,
+        fill: color
       });
     }
   }
@@ -424,7 +517,7 @@ function buildGridDecorationElements(
 }
 
 function resolveGridElementOpacity(element: Pick<ShapeElement, "shape">) {
-  return element.shape === "circle" ? 0.65 : 1;
+  return element.shape === "circle" ? 1 : 1;
 }
 
 function normalizeHighlightRanges(ranges: TextHighlightRange[] | undefined, textLength: number) {
@@ -541,6 +634,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const [slidesCount, setSlidesCount] = useState(DEFAULT_SLIDES_COUNT);
   const [projectId, setProjectId] = useState<string | null>(initialProjectId);
   const [promptVariant, setPromptVariant] = useState<"A" | "B">("B");
+  const [contentMode, setContentMode] = useState<ContentModeInput>("auto");
   const [niche, setNiche] = useState("");
   const [audience, setAudience] = useState("");
   const [tone, setTone] = useState("balanced");
@@ -552,6 +646,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [isGeneratePanelVisible, setIsGeneratePanelVisible] = useState(!initialProjectId);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isCanvasTransitioning, setIsCanvasTransitioning] = useState(false);
   const [editingTextElementId, setEditingTextElementId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [selectedTextSelection, setSelectedTextSelection] = useState<{
@@ -585,6 +680,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const [isProjectHydrated, setIsProjectHydrated] = useState(false);
   const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
   const [captionResult, setCaptionResult] = useState<CarouselPostCaption | null>(null);
+  const [needsPostGenerateRelayout, setNeedsPostGenerateRelayout] = useState(false);
   const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([]);
   const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([]);
   const desktopCanvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -607,6 +703,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const backgroundImageInputRef = useRef<HTMLInputElement | null>(null);
   const generateRequestRef = useRef(0);
   const generateAbortRef = useRef<AbortController | null>(null);
+  const canvasTransitionTimerRef = useRef<number | null>(null);
   const lastHistoryAtRef = useRef(0);
   const skipAutosaveRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
@@ -712,6 +809,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   }, []);
 
   useEffect(() => {
+    if (!isProjectHydrated) {
+      return;
+    }
+
     const { width: canvasWidth, height: canvasHeight } = SLIDE_FORMAT_DIMENSIONS[slideFormat];
     const canvasAspectRatio = canvasWidth / canvasHeight;
 
@@ -738,18 +839,18 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         const paginationHeight =
           (host?.querySelector(".mobile-slide-pagination") as HTMLElement | null)?.offsetHeight ?? 0;
         const availableHeight = Math.max(
-          220,
-          (hostRect?.height ?? viewportHeight * 0.52) - paginationHeight - 24
+          260,
+          (hostRect?.height ?? viewportHeight * 0.72) - paginationHeight - 10
         );
         const widthLimit = Math.max(
           220,
           Math.min(
-            hostWidth * 0.88,
-            viewportWidth - 56,
+            hostWidth - 16,
+            viewportWidth - 20,
             MOBILE_PREVIEW_MAX_WIDTH[slideFormat]
           )
         );
-        const heightLimit = availableHeight * canvasAspectRatio;
+        const heightLimit = availableHeight * 0.88 * canvasAspectRatio;
         const nextSize = Math.max(220, Math.min(widthLimit, heightLimit));
         setDisplaySize((current) =>
           Math.abs(current - nextSize) < 1 ? current : Math.round(nextSize)
@@ -768,6 +869,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     };
 
     updateSize();
+    const settleTimerA = window.setTimeout(updateSize, 0);
+    const settleTimerB = window.setTimeout(updateSize, 220);
     const observer = new ResizeObserver(updateSize);
     if (desktopCanvasHostRef.current) {
       observer.observe(desktopCanvasHostRef.current);
@@ -789,11 +892,13 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     window.visualViewport?.addEventListener("resize", updateSize);
 
     return () => {
+      window.clearTimeout(settleTimerA);
+      window.clearTimeout(settleTimerB);
       observer.disconnect();
       window.removeEventListener("resize", updateSize);
       window.visualViewport?.removeEventListener("resize", updateSize);
     };
-  }, [mobileToolTab, slideFormat]);
+  }, [fontsReady, isGenerating, isProjectHydrated, mobileToolTab, slideFormat, slides.length]);
 
   useEffect(() => {
     const isMobileViewport = () => window.innerWidth <= MOBILE_BREAKPOINT;
@@ -890,6 +995,12 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const activeSlideIndex = useMemo(
     () => slides.findIndex((slide) => slide.id === activeSlide?.id),
     [activeSlide?.id, slides]
+  );
+  const isActiveSlideAccent = useMemo(
+    () =>
+      normalizeColorForInput(activeSlide?.background, DEFAULT_SLIDE_BACKGROUND).toLowerCase() ===
+      ACCENT_SLIDE_BACKGROUND,
+    [activeSlide?.background]
   );
 
   const selectedElement = useMemo(
@@ -1109,6 +1220,18 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const canUndo = historyPast.length > 0;
   const canRedo = historyFuture.length > 0;
 
+  const flashCanvasTransition = () => {
+    setIsCanvasTransitioning(true);
+    if (canvasTransitionTimerRef.current !== null) {
+      window.clearTimeout(canvasTransitionTimerRef.current);
+    }
+
+    canvasTransitionTimerRef.current = window.setTimeout(() => {
+      setIsCanvasTransitioning(false);
+      canvasTransitionTimerRef.current = null;
+    }, 260);
+  };
+
   useEffect(() => {
     if (mobileToolTab !== "templates") {
       return;
@@ -1144,6 +1267,16 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     setSlides(existing.slides?.length ? cloneSlides(existing.slides) : createStarterSlides("light", "1:1"));
     setTopic(existing.topic ?? "");
     setPromptVariant(existing.promptVariant === "A" ? "A" : "B");
+    setContentMode(
+      existing.contentMode === "sales" ||
+        existing.contentMode === "expert" ||
+        existing.contentMode === "instruction" ||
+        existing.contentMode === "diagnostic" ||
+        existing.contentMode === "case" ||
+        existing.contentMode === "social"
+        ? existing.contentMode
+        : "auto"
+    );
     setSlidesCount(clampSlidesCount(existing.slides?.length ?? DEFAULT_SLIDES_COUNT));
     setNiche(existing.niche ?? "");
     setAudience(existing.audience ?? "");
@@ -1190,6 +1323,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           format: slideFormat,
           theme: activeTemplateId,
           promptVariant,
+          contentMode,
           niche: niche.trim() || undefined,
           audience: audience.trim() || undefined,
           tone,
@@ -1236,6 +1370,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     slideFormat,
     activeTemplateId,
     promptVariant,
+    contentMode,
     niche,
     audience,
     tone,
@@ -1246,13 +1381,44 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   ]);
 
   useEffect(() => {
-    if (!isProjectHydrated || initialCanvasFormatAppliedRef.current) {
+    if (!isProjectHydrated || !fontsReady || initialCanvasFormatAppliedRef.current) {
       return;
     }
 
-    initialCanvasFormatAppliedRef.current = true;
-    setSlides((current) => relayoutSlidesForFormat(current, slideFormat, slideFormat));
-  }, [isProjectHydrated, slideFormat]);
+    let hasAppliedInitialFormat = false;
+    const applyInitialFormat = () => {
+      if (hasAppliedInitialFormat || initialCanvasFormatAppliedRef.current) {
+        return;
+      }
+
+      hasAppliedInitialFormat = true;
+      initialCanvasFormatAppliedRef.current = true;
+      setSlides((current) => relayoutSlidesForFormat(current, slideFormat, slideFormat));
+    };
+
+    const frame = window.requestAnimationFrame(applyInitialFormat);
+    const timeout = window.setTimeout(applyInitialFormat, 0);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [fontsReady, isProjectHydrated, slideFormat]);
+
+  useEffect(() => {
+    if (!needsPostGenerateRelayout || !isProjectHydrated || isGenerating || !fontsReady) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      setNeedsPostGenerateRelayout(false);
+      setSlides((current) => relayoutSlidesForFormat(current, slideFormat, slideFormat));
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [fontsReady, isGenerating, isProjectHydrated, needsPostGenerateRelayout, slideFormat]);
 
   useEffect(() => {
     if (!isProjectHydrated || editorOpenedTrackedRef.current) {
@@ -1273,6 +1439,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     return () => {
       generateAbortRef.current?.abort();
       generateAbortRef.current = null;
+      if (canvasTransitionTimerRef.current !== null) {
+        window.clearTimeout(canvasTransitionTimerRef.current);
+        canvasTransitionTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -1666,7 +1836,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           goal,
           format: slideFormat,
           theme: activeTemplateId,
-          promptVariant
+          promptVariant,
+          contentMode
         }),
         signal: activeController.signal
       }).finally(() => {
@@ -1677,6 +1848,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         slides?: CarouselOutlineSlide[];
         project?: {
           promptVariant?: "A" | "B";
+          contentMode?: ContentModeInput;
         };
         error?: string;
       };
@@ -1685,6 +1857,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           slides?: CarouselOutlineSlide[];
           project?: {
             promptVariant?: "A" | "B";
+            contentMode?: ContentModeInput;
           };
           error?: string;
         };
@@ -1708,11 +1881,22 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       );
       pushHistorySnapshot(true);
       setSlides(nextSlides);
+      setNeedsPostGenerateRelayout(true);
       setActiveSlideId(nextSlides[0]?.id ?? null);
       setSelectedElementId(null);
       setEditingTextElementId(null);
       setCaptionResult(null);
       setPromptVariant(data.project?.promptVariant === "A" ? "A" : "B");
+      setContentMode(
+        data.project?.contentMode === "sales" ||
+          data.project?.contentMode === "expert" ||
+          data.project?.contentMode === "instruction" ||
+          data.project?.contentMode === "diagnostic" ||
+          data.project?.contentMode === "case" ||
+          data.project?.contentMode === "social"
+          ? data.project.contentMode
+          : contentMode
+      );
       setIsGeneratePanelVisible(false);
       trackEvent({
         name: "generate_succeeded",
@@ -2147,6 +2331,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     }
 
     if (templateApplied) {
+      flashCanvasTransition();
       toast.success("Шаблон применён");
     }
 
@@ -2351,6 +2536,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           audience,
           tone,
           goal,
+          contentMode,
           slides: outline
         })
       });
@@ -2369,7 +2555,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         name: "caption_generated",
         payload: {
           format: slideFormat,
-          slidesCount: slides.length
+          slidesCount: slides.length,
+          contentMode
         }
       });
       setStatus("Подпись к посту готова.");
@@ -3035,6 +3222,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       updateSlide(activeSlide.id, applyOnSlide, { recordHistory: false });
     }
 
+    flashCanvasTransition();
     setStatus(`Применён стиль: ${presetId}.`);
   };
 
@@ -3106,6 +3294,30 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     }
 
     updateSlide(activeSlide.id, applyOnSlide, { recordHistory: false });
+  };
+
+  const handleAccentSlideChange = (enabled: boolean) => {
+    if (!activeSlide) {
+      return;
+    }
+
+    const nextBackground = enabled ? ACCENT_SLIDE_BACKGROUND : DEFAULT_SLIDE_BACKGROUND;
+    const nextTextColor = enabled ? ACCENT_SLIDE_TEXT_COLOR : DEFAULT_SLIDE_TEXT_COLOR;
+    updateSlide(activeSlide.id, (slide) => ({
+      ...slide,
+      background: nextBackground,
+      elements: slide.elements
+        .filter((element) => !(enabled && element.type === "shape" && element.metaKey === "decor-grid-line"))
+        .map((element): CanvasElement =>
+          element.type === "text"
+            ? {
+                ...element,
+                fill: nextTextColor
+              }
+            : element
+        )
+    }));
+    setStatus(enabled ? "Акцент применён к текущему слайду." : "Акцент снят с текущего слайда.");
   };
 
   const handleStartTextEditing = (slideId: string, elementId: string) => {
@@ -3751,6 +3963,119 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return null;
     }
 
+    if (mobileToolTab === "slides") {
+      return (
+        <div className="mobile-v3-sheet-stack">
+          <div className="mobile-v3-slide-list">
+            {slides.map((slide, index) => {
+              const isActive = slide.id === activeSlideId;
+              return (
+                <button
+                  key={slide.id}
+                  type="button"
+                  className={`mobile-v3-slide-card ${isActive ? "active" : ""}`}
+                  onClick={() => handleSelectSlide(slide.id, { syncCanvas: true, source: "tools" })}
+                  disabled={generationLocked}
+                >
+                  <span
+                    className="mobile-v3-slide-thumb"
+                    style={{ background: slide.background || DEFAULT_SLIDE_BACKGROUND }}
+                  >
+                    <span className="mobile-v3-slide-number">{index + 1}</span>
+                    <span className="mobile-v3-slide-thumb-line" />
+                    <span className="mobile-v3-slide-thumb-line short" />
+                  </span>
+                  <span className="mobile-v3-slide-copy">
+                    <strong>{slide.name || `Слайд ${index + 1}`}</strong>
+                    <small>{slide.elements.length} эл.</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mobile-v3-sheet-actions">
+            <button
+              type="button"
+              className="mobile-v3-sheet-action primary"
+              onClick={() => handleInsertSlideAt(activeSlideIndex >= 0 ? activeSlideIndex + 1 : slides.length)}
+              disabled={generationLocked}
+            >
+              + Добавить слайд
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-sheet-action"
+              onClick={() => {
+                if (activeSlide) {
+                  handleDuplicateSlide(activeSlide.id);
+                }
+              }}
+              disabled={generationLocked || !activeSlide}
+            >
+              Дублировать
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (mobileToolTab === "layers") {
+      const layerItems = activeSlide ? [...activeSlide.elements].reverse() : [];
+
+      return (
+        <div className="mobile-v3-sheet-stack">
+          <div className="mobile-v3-layer-list">
+            {activeSlide && layerItems.length ? (
+              layerItems.map((element, index) => {
+                const isActive = selectedElementId === element.id;
+                return (
+                  <button
+                    key={element.id}
+                    type="button"
+                    className={`mobile-v3-layer-card ${isActive ? "active" : ""}`}
+                    onClick={() => handleSelectElement(activeSlide.id, element.id)}
+                    disabled={generationLocked}
+                  >
+                    <span className="mobile-v3-layer-kind">{getMobileLayerTypeLabel(element)}</span>
+                    <span className="mobile-v3-layer-copy">
+                      <strong>{getMobileLayerLabel(element, layerItems.length - index)}</strong>
+                      <small>{getMobileLayerMeta(element)}</small>
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="mobile-v3-empty-panel">На слайде пока нет редактируемых слоёв</div>
+            )}
+          </div>
+
+          <div className="mobile-v3-sheet-actions">
+            <button
+              type="button"
+              className="mobile-v3-sheet-action primary"
+              onClick={() => {
+                if (activeSlide) {
+                  handleAddText(activeSlide.id);
+                }
+              }}
+              disabled={generationLocked || !activeSlide}
+            >
+              + Текст
+            </button>
+            <button
+              type="button"
+              className="mobile-v3-sheet-action danger"
+              onClick={handleDeleteElement}
+              disabled={generationLocked || !selectedElementId}
+            >
+              Удалить слой
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (mobileToolTab === "templates") {
       return (
         <div className="mobile-v3-sheet-stack">
@@ -3960,7 +4285,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             onClick={() => handleAddBackgroundImage(activeSlide?.id)}
             disabled={generationLocked || !activeSlide}
           >
-            + Фото
+            Загрузить фото
           </button>
         </div>
       );
@@ -3976,6 +4301,18 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               onCheckedChange={(value) => setMobileApplyStyleForAll(Boolean(value))}
               className="mobile-switch-root"
               disabled={generationLocked}
+            >
+              <Switch.Thumb className="mobile-switch-thumb" />
+            </Switch.Root>
+          </label>
+
+          <label className="mobile-v3-switch-row">
+            <span>Акцент</span>
+            <Switch.Root
+              checked={isActiveSlideAccent}
+              onCheckedChange={(value) => handleAccentSlideChange(Boolean(value))}
+              className="mobile-switch-root"
+              disabled={generationLocked || !activeSlide}
             >
               <Switch.Thumb className="mobile-switch-thumb" />
             </Switch.Root>
@@ -4088,22 +4425,6 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             >
               H
             </button>
-            <button
-              type="button"
-              className="mobile-v3-format-btn"
-              onClick={() => handleMobileTextFormattingAction("brush")}
-              disabled={generationLocked}
-            >
-              кисть
-            </button>
-            <button
-              type="button"
-              className="mobile-v3-format-btn"
-              onClick={() => handleMobileTextFormattingAction("wave")}
-              disabled={generationLocked || !effectiveSelectedTextElement}
-            >
-              ~
-            </button>
           </div>
 
           <textarea
@@ -4122,9 +4443,6 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             onInput={(event) => syncMobileTextAreaHeight(event.currentTarget)}
             disabled={generationLocked || !effectiveSelectedTextElement}
           />
-          <p className="mobile-v3-sheet-hint">
-            Разметка: <code>@@текст@@</code> = выделение, <code>**текст**</code> = жирный.
-          </p>
         </div>
       );
     }
@@ -4132,37 +4450,38 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     if (mobileToolTab === "font") {
       const titleFont = managedTitleTextElement?.fontFamily ?? MOBILE_FONT_OPTIONS[0];
       const bodyFont = managedBodyTextElement?.fontFamily ?? titleFont;
+      const activeFont = selectedTextTargetRole === "title" ? titleFont : bodyFont;
 
       return (
         <div className="mobile-v3-sheet-stack">
-          <div className="mobile-v3-sheet-block">
-            <span className="mobile-v3-row-label">Заголовок</span>
-            <div className="mobile-v3-font-row">
-              {MOBILE_FONT_OPTIONS.map((font) => (
-                <button
-                  key={`title-${font}`}
-                  type="button"
-                  className={`mobile-v3-font-pill ${titleFont === font ? "active" : ""}`}
-                  style={{ fontFamily: `"${font}", Inter, sans-serif` }}
-                  onClick={() => handleMobileFontChangeForRole("title", font)}
-                  disabled={generationLocked}
-                >
-                  {font}
-                </button>
-              ))}
-            </div>
+          <div className="mobile-v3-segment">
+            <button
+              type="button"
+              className={`mobile-v3-segment-btn ${selectedTextTargetRole === "title" ? "active" : ""}`}
+              onClick={() => handleSelectedTextTargetRoleChange("title")}
+              disabled={generationLocked}
+            >
+              Заголовок
+            </button>
+            <button
+              type="button"
+              className={`mobile-v3-segment-btn ${selectedTextTargetRole === "body" ? "active" : ""}`}
+              onClick={() => handleSelectedTextTargetRoleChange("body")}
+              disabled={generationLocked}
+            >
+              Описание
+            </button>
           </div>
 
           <div className="mobile-v3-sheet-block">
-            <span className="mobile-v3-row-label">Описание</span>
             <div className="mobile-v3-font-row">
               {MOBILE_FONT_OPTIONS.map((font) => (
                 <button
-                  key={`body-${font}`}
+                  key={`${selectedTextTargetRole}-${font}`}
                   type="button"
-                  className={`mobile-v3-font-pill ${bodyFont === font ? "active" : ""}`}
+                  className={`mobile-v3-font-pill ${activeFont === font ? "active" : ""}`}
                   style={{ fontFamily: `"${font}", Inter, sans-serif` }}
-                  onClick={() => handleMobileFontChangeForRole("body", font)}
+                  onClick={() => handleMobileFontChangeForRole(selectedTextTargetRole, font)}
                   disabled={generationLocked}
                 >
                   {font}
@@ -4179,13 +4498,6 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           >
             + Добавить шрифт
           </button>
-
-          <p className="mobile-v3-sheet-hint">
-            Проверяйте лицензию перед коммерческим использованием.{" "}
-            <a href="https://fonts.google.com/" target="_blank" rel="noreferrer">
-              Сайт с бесплатными шрифтами
-            </a>
-          </p>
         </div>
       );
     }
@@ -4359,7 +4671,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                 previewMode={isPreviewMode}
                 showSlideBadge={false}
                 fontsReady={fontsReady}
-                isLoading={isGenerating}
+                isLoading={isGenerating || isCanvasTransitioning}
                 onNavigateToPrompt={() => router.push("/")}
               />
             </section>
@@ -4558,7 +4870,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
                 showSlideBadge={false}
                 fontsReady={fontsReady}
                 hideMobileSlideTools
-                isLoading={isGenerating}
+                isLoading={isGenerating || isCanvasTransitioning}
                 onNavigateToPrompt={() => router.push("/")}
               />
             </section>
@@ -4566,9 +4878,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             <section className="mobile-v3-action-bar" ref={mobileActionBarRef} aria-label="Action bar">
               <button
                 type="button"
-                className="mobile-v3-action-btn"
+                className={`mobile-v3-action-btn ${mobileToolTab === "slides" ? "active" : ""}`}
                 onClick={() =>
-                  handleMobileToolTabChange(mobileToolTab === "templates" ? null : "templates")
+                  handleMobileToolTabChange(mobileToolTab === "slides" ? null : "slides")
                 }
                 disabled={generationLocked}
                 title="Управление слайдами"
@@ -4577,8 +4889,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               </button>
               <button
                 type="button"
-                className="mobile-v3-action-btn"
-                onClick={() => setStatus("Порядок слоёв появится в следующей части.")}
+                className={`mobile-v3-action-btn ${mobileToolTab === "layers" ? "active" : ""}`}
+                onClick={() =>
+                  handleMobileToolTabChange(mobileToolTab === "layers" ? null : "layers")
+                }
                 disabled={generationLocked}
                 title="Порядок слоёв"
               >
@@ -4856,6 +5170,42 @@ function resolveEditableTextElementByRole(
   }
 
   return editable.find((element) => element.id !== editable[0].id) ?? editable[0];
+}
+
+function getMobileLayerTypeLabel(element: CanvasElement) {
+  if (element.type === "text") {
+    return "T";
+  }
+  if (element.type === "shape") {
+    return element.shape === "circle" ? "O" : "□";
+  }
+  return "IMG";
+}
+
+function getMobileLayerLabel(element: CanvasElement, index: number) {
+  if (element.type === "text") {
+    const text = trimTextLine(element.text, 34);
+    if (text) {
+      return text;
+    }
+    return element.role === "title" ? "Заголовок" : "Текст";
+  }
+
+  if (element.type === "shape") {
+    return element.shape === "circle" ? `Круг ${index}` : `Фигура ${index}`;
+  }
+
+  return "Фото";
+}
+
+function getMobileLayerMeta(element: CanvasElement) {
+  if (element.type === "text") {
+    return element.role === "title" ? "Заголовок" : "Текст";
+  }
+  if (element.type === "shape") {
+    return "Фигура";
+  }
+  return "Изображение";
 }
 
 function detectTextCaseMode(value: string): TextCaseMode {

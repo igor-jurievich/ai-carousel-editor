@@ -12,7 +12,7 @@ import {
   Text,
   Transformer
 } from "react-konva";
-import { getLegibleHighlight } from "@/lib/carousel";
+import { getLegibleHighlight, getTemplate } from "@/lib/carousel";
 import type { CanvasElement, ImageElement, ShapeElement, Slide, TextElement } from "@/types/editor";
 
 type SlideStageProps = {
@@ -963,12 +963,14 @@ function applySlidePhotoSettingsToImage(element: ImageElement, slide: Slide): Im
     0,
     0.8
   );
+  const dragOffsetX = Number.isFinite(element.naturalWidth) ? element.naturalWidth ?? 0 : 0;
+  const dragOffsetY = Number.isFinite(element.naturalHeight) ? element.naturalHeight ?? 0 : 0;
 
   return {
     ...element,
     zoom,
-    offsetX: (element.width * offsetXPercent) / 100,
-    offsetY: (element.height * offsetYPercent) / 100,
+    offsetX: (element.width * offsetXPercent) / 100 + dragOffsetX,
+    offsetY: (element.height * offsetYPercent) / 100 + dragOffsetY,
     darken: overlay
   };
 }
@@ -980,8 +982,10 @@ function SlideImageNode({
   onSelect,
   onDragEnd,
   onTransformEnd,
+  onManagedPhotoOffsetChange,
   nodeRef,
-  dragBoundFunc
+  dragBoundFunc,
+  applyDarkTemplateGradient = false
 }: {
   element: ImageElement;
   interactive?: boolean;
@@ -989,10 +993,20 @@ function SlideImageNode({
   onSelect?: () => void;
   onDragEnd?: (x: number, y: number) => void;
   onTransformEnd?: (node: Konva.Image) => void;
+  onManagedPhotoOffsetChange?: (offsetX: number, offsetY: number) => void;
   nodeRef: (node: Konva.Image | null) => void;
   dragBoundFunc?: (position: { x: number; y: number }) => { x: number; y: number };
+  applyDarkTemplateGradient?: boolean;
 }) {
   const [image] = useImage(element.src, "anonymous");
+  const managedPhotoDragRef = useRef<{
+    x: number;
+    y: number;
+    offsetX: number;
+    offsetY: number;
+    dragOffsetX: number;
+    dragOffsetY: number;
+  } | null>(null);
   const isManagedImageBlock = element.metaKey === "image-top";
   const sourceWidth = image?.naturalWidth || image?.width || 0;
   const sourceHeight = image?.naturalHeight || image?.height || 0;
@@ -1016,6 +1030,12 @@ function SlideImageNode({
   const drawWidth = element.width;
   const drawHeight = element.height;
   const darken = clamp(element.darken ?? 0, 0, 1);
+  const managedDragOffsetX =
+    isManagedImageBlock && Number.isFinite(element.naturalWidth) ? element.naturalWidth ?? 0 : 0;
+  const managedDragOffsetY =
+    isManagedImageBlock && Number.isFinite(element.naturalHeight) ? element.naturalHeight ?? 0 : 0;
+  const maxManagedOffsetX = drawWidth * 0.5;
+  const maxManagedOffsetY = drawHeight * 0.5;
   const outlineStroke =
     selected
       ? UI_ACCENT
@@ -1023,6 +1043,79 @@ function SlideImageNode({
         ? element.stroke
         : undefined;
   const outlineWidth = selected ? 2 : element.strokeWidth ?? 0;
+  const previewManagedPhotoCrop = (node: Konva.Image, totalOffsetX: number, totalOffsetY: number) => {
+    if (!shouldCrop) {
+      return;
+    }
+    const nextCrop = getCoverCrop(
+      sourceWidth,
+      sourceHeight,
+      drawWidth,
+      drawHeight,
+      element.zoom ?? 1,
+      totalOffsetX,
+      totalOffsetY
+    );
+    if (!nextCrop) {
+      return;
+    }
+    node.cropX(nextCrop.x);
+    node.cropY(nextCrop.y);
+    node.cropWidth(nextCrop.width);
+    node.cropHeight(nextCrop.height);
+  };
+  const resolveManagedPhotoDrag = (node: Konva.Image) => {
+    const start = managedPhotoDragRef.current;
+    if (!start) {
+      return {
+        dragOffsetX: managedDragOffsetX,
+        dragOffsetY: managedDragOffsetY,
+        totalOffsetX: element.offsetX ?? 0,
+        totalOffsetY: element.offsetY ?? 0
+      };
+    }
+
+    const deltaX = node.x() - start.x;
+    const deltaY = node.y() - start.y;
+    const dragOffsetX = clamp(start.dragOffsetX - deltaX, -maxManagedOffsetX, maxManagedOffsetX);
+    const dragOffsetY = clamp(start.dragOffsetY - deltaY, -maxManagedOffsetY, maxManagedOffsetY);
+
+    return {
+      dragOffsetX,
+      dragOffsetY,
+      totalOffsetX: start.offsetX + (dragOffsetX - start.dragOffsetX),
+      totalOffsetY: start.offsetY + (dragOffsetY - start.dragOffsetY)
+    };
+  };
+  const resetManagedPhotoNodePosition = (node: Konva.Image) => {
+    node.position({ x: drawX, y: drawY });
+    node.getLayer()?.batchDraw();
+  };
+  const handleManagedPhotoDragStart = (event: Konva.KonvaEventObject<DragEvent>) => {
+    const node = event.target as Konva.Image;
+    managedPhotoDragRef.current = {
+      x: node.x(),
+      y: node.y(),
+      offsetX: element.offsetX ?? 0,
+      offsetY: element.offsetY ?? 0,
+      dragOffsetX: managedDragOffsetX,
+      dragOffsetY: managedDragOffsetY
+    };
+  };
+  const handleManagedPhotoDragMove = (event: Konva.KonvaEventObject<DragEvent>) => {
+    const node = event.target as Konva.Image;
+    const nextDrag = resolveManagedPhotoDrag(node);
+    previewManagedPhotoCrop(node, nextDrag.totalOffsetX, nextDrag.totalOffsetY);
+    resetManagedPhotoNodePosition(node);
+  };
+  const handleManagedPhotoDragEnd = (event: Konva.KonvaEventObject<DragEvent>) => {
+    const node = event.target as Konva.Image;
+    const nextDrag = resolveManagedPhotoDrag(node);
+    managedPhotoDragRef.current = null;
+    previewManagedPhotoCrop(node, nextDrag.totalOffsetX, nextDrag.totalOffsetY);
+    resetManagedPhotoNodePosition(node);
+    onManagedPhotoOffsetChange?.(nextDrag.dragOffsetX, nextDrag.dragOffsetY);
+  };
 
   return (
     <>
@@ -1041,14 +1134,16 @@ function SlideImageNode({
         cropWidth={coverCrop?.width}
         cropHeight={coverCrop?.height}
         listening
-        draggable={interactive && selected && !isManagedImageBlock}
-        dragDistance={10}
+        draggable={interactive && selected}
+        dragDistance={isManagedImageBlock ? 3 : 10}
         dragBoundFunc={isManagedImageBlock ? undefined : dragBoundFunc}
         onClick={onSelect}
         onTap={onSelect}
+        onDragStart={isManagedImageBlock ? handleManagedPhotoDragStart : undefined}
+        onDragMove={isManagedImageBlock ? handleManagedPhotoDragMove : undefined}
         onDragEnd={
           isManagedImageBlock
-            ? undefined
+            ? handleManagedPhotoDragEnd
             : (event) => onDragEnd?.(event.target.x(), event.target.y())
         }
         onTransformEnd={(event) => onTransformEnd?.(event.target as Konva.Image)}
@@ -1057,6 +1152,26 @@ function SlideImageNode({
         shadowBlur={selected ? 10 : 0}
         shadowColor={selected ? UI_ACCENT_SOFT : undefined}
       />
+      {isManagedImageBlock && applyDarkTemplateGradient ? (
+        <Rect
+          x={drawX}
+          y={drawY}
+          width={drawWidth}
+          height={drawHeight}
+          cornerRadius={element.cornerRadius}
+          fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+          fillLinearGradientEndPoint={{ x: 0, y: drawHeight }}
+          fillLinearGradientColorStops={[
+            0,
+            "rgba(0, 0, 0, 0)",
+            0.3,
+            "rgba(0, 0, 0, 0)",
+            1,
+            "rgba(0, 0, 0, 0.7)"
+          ]}
+          listening={false}
+        />
+      ) : null}
       {darken > 0 ? (
         <Rect
           x={drawX}
@@ -1342,6 +1457,27 @@ export function SlideStage({
     }
     return slide.elements.find((element) => element.id === selectedElementId) ?? null;
   }, [selectedElementId, slide.elements]);
+  const selectedElementFrame = useMemo(() => {
+    if (!selectedElement || hideResizeHandles) {
+      return null;
+    }
+
+    const cornerRadius =
+      selectedElement.type === "shape" && selectedElement.shape === "circle"
+        ? Math.min(selectedElement.width, selectedElement.height) / 2
+        : "cornerRadius" in selectedElement
+          ? (selectedElement.cornerRadius ?? 2)
+          : 2;
+
+    return {
+      x: selectedElement.x,
+      y: selectedElement.y,
+      width: selectedElement.width,
+      height: selectedElement.height,
+      rotation: selectedElement.rotation,
+      cornerRadius: Math.max(0, cornerRadius)
+    };
+  }, [hideResizeHandles, selectedElement]);
 
   const likelyTitleElement = useMemo(() => resolveLikelyManagedTitle(slide), [slide]);
   const preferredManagedTitle = useMemo(
@@ -1353,6 +1489,10 @@ export function SlideStage({
     [slide]
   );
   const titleText = useMemo(() => likelyTitleElement?.text ?? "", [likelyTitleElement]);
+  const applyDarkTemplateGradient = useMemo(() => {
+    const template = getTemplate(slide.templateId ?? "light");
+    return template.category === "dark";
+  }, [slide.templateId]);
 
   const legacyChipRects = useMemo(
     () =>
@@ -1727,15 +1867,54 @@ export function SlideStage({
                 element={resolvedImageElement}
                 selected={selected}
                 interactive={interactive}
+                applyDarkTemplateGradient={applyDarkTemplateGradient}
                 nodeRef={nodeRef as (node: Konva.Image | null) => void}
                 dragBoundFunc={dragBoundFunc}
                 onSelect={() => onSelectElement?.(element.id)}
                 onDragEnd={handleDragEnd}
                 onTransformEnd={(node) => handleTransformEnd(element, node)}
+                onManagedPhotoOffsetChange={
+                  element.metaKey === "image-top"
+                    ? (offsetX, offsetY) =>
+                        onTransformElement?.(element.id, {
+                          naturalWidth: offsetX,
+                          naturalHeight: offsetY
+                        })
+                    : undefined
+                }
               />
             );
           });
         })()}
+
+        {selectedElementFrame ? (
+          <>
+            <Rect
+              x={selectedElementFrame.x}
+              y={selectedElementFrame.y}
+              width={selectedElementFrame.width}
+              height={selectedElementFrame.height}
+              rotation={selectedElementFrame.rotation}
+              cornerRadius={selectedElementFrame.cornerRadius}
+              stroke={UI_ACCENT}
+              strokeWidth={8}
+              opacity={0.12}
+              listening={false}
+            />
+            <Rect
+              x={selectedElementFrame.x}
+              y={selectedElementFrame.y}
+              width={selectedElementFrame.width}
+              height={selectedElementFrame.height}
+              rotation={selectedElementFrame.rotation}
+              cornerRadius={selectedElementFrame.cornerRadius}
+              stroke={UI_ACCENT}
+              strokeWidth={2}
+              opacity={1}
+              listening={false}
+            />
+          </>
+        ) : null}
 
         {interactive ? (
           <Transformer
