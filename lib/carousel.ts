@@ -269,6 +269,8 @@ type OutlineLike = Partial<CarouselOutlineSlide> & {
   before?: string;
   after?: string;
   type?: CarouselSlideRole;
+  image?: string | null;
+  hasImage?: boolean;
 };
 
 type SlideBlueprint = {
@@ -462,6 +464,16 @@ function normalizeMultilineText(value: string) {
     .trim();
 }
 
+function removeDanglingTail(value: string) {
+  return value
+    .replace(
+      /(?:^|[\s\u00A0])(и|а|но|или|что|чтобы|потому|когда|где|как|если|по|в|на|для|с|к|от|из|из-за|у|до|за|без|при|о|об|обо|над|под|между|через|про|который|которого|которой|которые|потом|затем|дальше|после|перед|вместо)\s*$/iu,
+      ""
+    )
+    .replace(/[,:;—–-]+\s*$/u, "")
+    .trim();
+}
+
 function normalizeWordTokens(value: string) {
   return value
     .toLowerCase()
@@ -568,8 +580,147 @@ function sanitizeBlueprintText(value: string, maxLength: number, dedupeGlobal = 
   return compactTextLength(compacted, maxLength);
 }
 
-function sanitizeBulletLine(value: string) {
-  return sanitizeBlueprintText(value, 132).replace(/^[•·\-–—→\s]+/u, "").trim();
+function sanitizeBulletLine(value: string, maxLength = 132) {
+  return sanitizeBlueprintText(value, maxLength).replace(/^[•·\-–—→\s]+/u, "").trim();
+}
+
+function maxBodyBulletsForRole(role: CarouselSlideRole) {
+  return role === "solution" ? 5 : 3;
+}
+
+function maxBulletLengthForRole(role: CarouselSlideRole) {
+  return role === "solution" ? 260 : 132;
+}
+
+function normalizeExampleAfter(value: string) {
+  const normalized = normalizeMultilineText(value).replace(/^после:\s*/iu, "");
+  if (/(?:добавили\s+конкретные\s+шаги|отклик\s+стал\s+стабильнее)/iu.test(normalized)) {
+    return "«Сменили подход — и результат стал стабильным»";
+  }
+
+  return normalized;
+}
+
+function sanitizeTopic(topic: string) {
+  const normalized = normalizeMultilineText(topic)
+    .replace(/[?!]+/gu, " ")
+    .replace(/[«»"'`]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!normalized) {
+    return "вашей теме";
+  }
+
+  const cleaned = normalized
+    .replace(/^(как\s+правильн[а-яё]*\s+)/iu, "")
+    .replace(/^(почему\s+)/iu, "")
+    .replace(/^(что\s*бы\s+)/iu, "")
+    .replace(/^(чтобы\s+)/iu, "")
+    .replace(/^(как\s+)/iu, "")
+    .replace(/^(что\s+делать\s+(?:с|если|когда)\s+)/iu, "")
+    .replace(/\bкак\s+правильн[а-яё]*\b/giu, "")
+    .replace(/\bпочему\b/giu, "")
+    .replace(/\bчто\s*бы\b/giu, "")
+    .replace(/\s+/gu, " ")
+    .replace(/^[\s,.:;—–-]+|[\s,.:;—–-]+$/gu, "")
+    .trim();
+
+  const compact = compactTextLength(cleaned || normalized, 40)
+    .replace(/[\s,.:;—–-]+$/u, "")
+    .trim();
+  return compact || "вашей теме";
+}
+
+function splitBodyToBullets(value: string, maxItems = 3) {
+  const normalized = normalizeMultilineText(value).replace(/\s+/gu, " ").trim();
+  if (!normalized) {
+    return [] as string[];
+  }
+
+  const sentenceParts = normalized.match(/[^.!?]+(?:[.!?]+|$)/gu) ?? [];
+  const bulletsFromSentences = sentenceParts
+    .map((item) => sanitizeBulletLine(item.replace(/[.!?]+\s*$/u, "")))
+    .filter(Boolean);
+
+  if (bulletsFromSentences.length >= 2) {
+    return bulletsFromSentences.slice(0, maxItems);
+  }
+
+  const bulletsFromDotSplit = normalized
+    .split(/(?:\.\s+)(?=[A-ZА-ЯЁ])/u)
+    .map((item) => sanitizeBulletLine(item.replace(/[.!?]+\s*$/u, "")))
+    .filter(Boolean);
+
+  if (bulletsFromDotSplit.length >= 2) {
+    return bulletsFromDotSplit.slice(0, maxItems);
+  }
+
+  return bulletsFromSentences.slice(0, maxItems);
+}
+
+function deriveTopicHintFromOutlineItem(outline: OutlineLike) {
+  const candidates: string[] = [];
+  if (typeof outline.title === "string") {
+    candidates.push(outline.title);
+  }
+  if (typeof outline.subtitle === "string") {
+    candidates.push(outline.subtitle);
+  }
+  if (typeof outline.text === "string") {
+    candidates.push(outline.text);
+  }
+  if (typeof outline.body === "string") {
+    candidates.push(outline.body);
+  }
+  if (typeof outline.before === "string") {
+    candidates.push(outline.before);
+  }
+  if (typeof outline.after === "string") {
+    candidates.push(outline.after);
+  }
+  if (Array.isArray(outline.bullets) && outline.bullets.length) {
+    candidates.push(outline.bullets.join(" "));
+  }
+
+  for (const candidate of candidates) {
+    const cleanedCandidate = normalizeMultilineText(candidate)
+      .replace(/^до:\s*/iu, "")
+      .replace(/^после:\s*/iu, "")
+      .trim();
+    if (!cleanedCandidate) {
+      continue;
+    }
+    const topicHint = sanitizeTopic(cleanedCandidate);
+    if (topicHint && topicHint !== "вашей теме" && topicHint.length >= 4) {
+      return topicHint;
+    }
+  }
+
+  return "";
+}
+
+function deriveTopicHintFromOutlines(outline: OutlineLike[]) {
+  const preferredRoles: CarouselSlideRole[] = ["hook", "problem", "amplify", "shift", "solution", "example"];
+
+  for (const role of preferredRoles) {
+    const item = outline.find((entry) => entry.type === role);
+    if (!item) {
+      continue;
+    }
+    const hint = deriveTopicHintFromOutlineItem(item);
+    if (hint) {
+      return hint;
+    }
+  }
+
+  for (const item of outline) {
+    const hint = deriveTopicHintFromOutlineItem(item);
+    if (hint) {
+      return hint;
+    }
+  }
+
+  return "вашей теме";
 }
 
 function collapseTitleRepetition(value: string) {
@@ -616,6 +767,7 @@ function compactTextLength(text: string, maxChars: number) {
   }
 
   const minBoundary = Math.max(20, Math.floor(maxChars * 0.45));
+  const cleanTruncated = (value: string) => removeDanglingTail(value) || value.trim();
   const sentenceBoundary = Math.max(
     sliced.lastIndexOf(". "),
     sliced.lastIndexOf("! "),
@@ -625,25 +777,25 @@ function compactTextLength(text: string, maxChars: number) {
     sliced.lastIndexOf("?\n")
   );
   if (sentenceBoundary >= minBoundary) {
-    return sliced.slice(0, sentenceBoundary + 1).trim();
+    return cleanTruncated(sliced.slice(0, sentenceBoundary + 1));
   }
 
   const lineBoundary = sliced.lastIndexOf("\n");
   if (lineBoundary >= minBoundary) {
-    return sliced.slice(0, lineBoundary).trim();
+    return cleanTruncated(sliced.slice(0, lineBoundary));
   }
 
   const pauseBoundary = Math.max(sliced.lastIndexOf(", "), sliced.lastIndexOf(": "), sliced.lastIndexOf(" — "));
   if (pauseBoundary >= minBoundary) {
-    return sliced.slice(0, pauseBoundary).trim();
+    return cleanTruncated(sliced.slice(0, pauseBoundary));
   }
 
   const wordBoundary = sliced.lastIndexOf(" ");
   if (wordBoundary >= Math.max(16, Math.floor(maxChars * 0.4))) {
-    return sliced.slice(0, wordBoundary).trim();
+    return cleanTruncated(sliced.slice(0, wordBoundary));
   }
 
-  return sliced.slice(0, maxChars).trim();
+  return cleanTruncated(sliced.slice(0, maxChars));
 }
 
 function estimateCharWidth(char: string, fontSize: number) {
@@ -724,7 +876,7 @@ function fitTextToBounds(
   }
 
   // Keep full copy whenever possible by allowing a small reserve below min font before truncation.
-  const reserveMinFontSize = Math.max(16, minFontSize - 10);
+  const reserveMinFontSize = Math.max(14, minFontSize - 12);
   while (fontSize > reserveMinFontSize && measuredHeight(normalized, fontSize) > maxHeight) {
     fontSize -= 1;
   }
@@ -1675,7 +1827,7 @@ function deriveTitleFromOutline(role: CarouselSlideRole, outline: OutlineLike) {
   return "";
 }
 
-function readBody(role: CarouselSlideRole, outline: OutlineLike) {
+function readBody(role: CarouselSlideRole, outline: OutlineLike, topicHint = "вашей теме") {
   if (role === "hook") {
     const subtitle = typeof outline.subtitle === "string" ? outline.subtitle.trim() : "";
     return sanitizeBlueprintText(
@@ -1684,67 +1836,100 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike) {
     );
   }
 
-  if (role === "problem" || role === "amplify" || role === "consequence" || role === "solution") {
+  if (role === "mistake") {
     const bullets = Array.isArray(outline.bullets)
       ? outline.bullets
           .map((item) => sanitizeBulletLine(String(item)))
           .filter(Boolean)
           .slice(0, 3)
       : [];
+    if (bullets.length > 0) {
+      return bullets.join("\n");
+    }
+
+    const rawBody =
+      typeof outline.body === "string" && outline.body.trim()
+        ? outline.body
+        : typeof outline.text === "string" && outline.text.trim()
+          ? outline.text
+          : "";
+    const parsedBullets = splitBodyToBullets(rawBody, 3);
+    if (parsedBullets.length > 0) {
+      return parsedBullets.join("\n");
+    }
+
+    return [
+      "Одна мысль — один слайд: не смешивай объяснение и совет",
+      "Начни с боли читателя, а не с вывода",
+      "Последний слайд — один конкретный шаг, не список"
+    ].join("\n");
+  }
+
+  if (role === "problem" || role === "amplify" || role === "consequence" || role === "solution") {
+    const maxBullets = maxBodyBulletsForRole(role);
+    const maxBulletLength = maxBulletLengthForRole(role);
+    const bullets = Array.isArray(outline.bullets)
+      ? outline.bullets
+          .map((item) => sanitizeBulletLine(String(item), maxBulletLength))
+          .filter(Boolean)
+          .slice(0, maxBullets)
+      : [];
 
     if (bullets.length > 0) {
-      return bullets.map((item) => `→ ${item}`).join("\n");
+      return bullets.join("\n");
     }
 
     if (typeof outline.text === "string" && outline.text.trim()) {
-      return sanitizeBlueprintText(outline.text, 430);
+      return sanitizeBlueprintText(outline.text, 620);
     }
 
     if (role === "consequence") {
-      return "→ Подписчики читают, но не доходят до действия и не возвращаются к материалу\n→ Экспертность воспринимается слабее из-за нечеткой логики подачи\n→ Команда тратит больше времени, а результат по отклику остается нестабильным";
+      return "Подписчики читают, но не доходят до действия и не возвращаются к материалу\nЭкспертность воспринимается слабее из-за нечеткой логики подачи\nКоманда тратит больше времени, а результат по отклику остается нестабильным";
     }
 
-    return "→ Покажите одну ключевую мысль и сразу добавьте практический контекст\n→ Подкрепите тезис фактом: цифрой, ситуацией или коротким кейсом\n→ Закройте слайд действием, которое читатель может сделать прямо сейчас";
+    return "Определи одну мысль, которую читатель унесёт с этого слайда\nДобавь конкретный пример или цифру — не общие слова\nЗаканчивай слайд действием, а не выводом";
   }
 
   if (role === "example") {
     const before = typeof outline.before === "string" ? outline.before.trim() : "";
-    const after = typeof outline.after === "string" ? outline.after.trim() : "";
+    const after = typeof outline.after === "string" ? normalizeExampleAfter(outline.after) : "";
     if (before || after) {
       return sanitizeBlueprintText(`До: ${before || "—"}\nПосле: ${after || "—"}`, 320);
     }
 
-    return "До: «Мы делаем качественно»\nПосле: «За 3 шага получили понятный и предсказуемый результат»";
+    const safeTopic = sanitizeTopic(topicHint);
+    return `До: «${safeTopic} — объясняли общо, читатель не понимал что делать»\nПосле: «Сменили подход — и результат стал стабильным»`;
   }
 
   if (role === "cta") {
     const subtitle = typeof outline.subtitle === "string" ? outline.subtitle.trim() : "";
     return sanitizeBlueprintText(
       subtitle || "Напишите «РАЗБОР» и получите структуру, адаптированную под вашу задачу.",
-      300
+      600
     );
   }
 
   if (typeof outline.text === "string" && outline.text.trim()) {
-    return sanitizeBlueprintText(outline.text, 340);
+    return sanitizeBlueprintText(outline.text, 560);
   }
 
   if (typeof outline.body === "string" && outline.body.trim()) {
-    return sanitizeBlueprintText(outline.body, 340);
+    return sanitizeBlueprintText(outline.body, 560);
   }
 
-  return "Добавьте короткий тезис и конкретный шаг.";
+  return "Определи одну мысль, которую читатель унесёт с этого слайда\nДобавь конкретный пример или цифру — не общие слова\nЗаканчивай слайд действием, а не выводом";
 }
 
 function outlineToBlueprint(
   outline: OutlineLike,
   index: number,
   totalSlides: number,
-  forcedSlideType?: CanvasSlideType
+  forcedSlideType?: CanvasSlideType,
+  topicHint = "вашей теме"
 ): SlideBlueprint {
   const role = resolveOutlineRole(outline, index, totalSlides);
   const title = readTitle(role, outline);
-  const body = readBody(role, outline);
+  const body = readBody(role, outline, topicHint);
 
   return {
     role,
@@ -1754,9 +1939,49 @@ function outlineToBlueprint(
   };
 }
 
+function resolveBase64ImageMimeType(base64: string) {
+  const normalized = base64.trim();
+
+  if (!normalized) {
+    return "image/jpeg";
+  }
+
+  if (normalized.startsWith("/9j/")) {
+    return "image/jpeg";
+  }
+
+  if (normalized.startsWith("iVBORw0KGgo")) {
+    return "image/png";
+  }
+
+  if (normalized.startsWith("UklGR")) {
+    return "image/webp";
+  }
+
+  return "image/jpeg";
+}
+
+function base64ToImageUrl(base64: string) {
+  const mimeType = resolveBase64ImageMimeType(base64);
+  return `data:${mimeType};base64,${base64}`;
+}
+
+function resolveOutlineImageDataUrl(outline: OutlineLike) {
+  const rawImage = typeof outline.image === "string" ? outline.image.trim() : "";
+  if (!rawImage) {
+    return null;
+  }
+
+  if (rawImage.startsWith("data:image/")) {
+    return rawImage;
+  }
+
+  return base64ToImageUrl(rawImage);
+}
+
 function resolveImageArea(format: SlideFormat) {
   const { width, height } = SLIDE_FORMAT_DIMENSIONS[format];
-  const imageHeightRatio = format === "9:16" ? 0.42 : format === "4:5" ? 0.44 : 0.45;
+  const imageHeightRatio = 0.5;
   const imageHeight = Math.round(height * imageHeightRatio);
 
   return {
@@ -2010,7 +2235,7 @@ function buildMainContent(
       ? "text"
       : blueprint.slideType;
   const metrics = resolveTextMetrics(format);
-  const bodyTextLimit = format === "9:16" ? 840 : format === "4:5" ? 740 : 660;
+  const bodyTextLimit = format === "9:16" ? 1040 : format === "4:5" ? 940 : 840;
   const footerTop = metrics.footerY - 8;
   const titleFill = palette.titleColor;
   const bodyFill = palette.bodyColor;
@@ -2140,7 +2365,7 @@ function buildMainContent(
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
-        text: compactTextLength(blueprint.body, format === "9:16" ? 620 : 540),
+        text: compactTextLength(blueprint.body, format === "9:16" ? 860 : 760),
         x: metrics.contentX,
         y: imageTextBodyY,
         width: metrics.contentWidth,
@@ -2176,7 +2401,7 @@ function buildMainContent(
       createFittedTextElement({
         role: "body",
         metaKey: "managed-body",
-        text: compactTextLength(blueprint.body, format === "9:16" ? 590 : 520),
+        text: compactTextLength(blueprint.body, format === "9:16" ? 960 : 860),
         x: metrics.contentX,
         y: ctaBodyY,
         width: metrics.contentWidth,
@@ -2557,6 +2782,10 @@ function isLegacyAccentArtifact(element: CanvasElement) {
   return isLegacyAccentChipShape(element);
 }
 
+function isCanvasImageElement(element: CanvasElement): element is ImageElement {
+  return element.type === "image" || element.type === "image_element";
+}
+
 function preserveManagedElementIds(previousSlide: Slide, nextElements: CanvasElement[]) {
   const prevByMeta = new Map<string, CanvasElement>();
   const preferredTitle = resolvePreferredManagedTextByMeta(previousSlide, "managed-title");
@@ -2580,6 +2809,19 @@ function preserveManagedElementIds(previousSlide: Slide, nextElements: CanvasEle
     const previous = prevByMeta.get(element.metaKey);
     if (!previous || previous.type !== element.type) {
       return element;
+    }
+
+    if (element.metaKey === "image-top" && isCanvasImageElement(element) && isCanvasImageElement(previous)) {
+      return {
+        ...element,
+        id: previous.id,
+        naturalWidth: Number.isFinite(previous.naturalWidth)
+          ? previous.naturalWidth
+          : element.naturalWidth,
+        naturalHeight: Number.isFinite(previous.naturalHeight)
+          ? previous.naturalHeight
+          : element.naturalHeight
+      };
     }
 
     return {
@@ -2682,13 +2924,22 @@ export function createSlideFromOutline(
   templateId: CarouselTemplateId = "light",
   format: SlideFormat = "1:1",
   totalSlides = 1,
-  forcedSlideType?: CanvasSlideType
+  forcedSlideType?: CanvasSlideType,
+  topicHint = "вашей теме"
 ): Slide {
+  const aiImageDataUrl = resolveOutlineImageDataUrl(outline);
   const resolvedTemplateId = resolveTemplateId(
     (outline as { templateId?: CarouselTemplateId }).templateId,
     templateId
   );
-  const blueprint = outlineToBlueprint(outline, index, totalSlides, forcedSlideType);
+  const baseBlueprint = outlineToBlueprint(outline, index, totalSlides, forcedSlideType, topicHint);
+  const blueprint: SlideBlueprint =
+    aiImageDataUrl && baseBlueprint.slideType !== "image_text"
+      ? {
+          ...baseBlueprint,
+          slideType: "image_text"
+        }
+      : baseBlueprint;
   const template = getTemplate(resolvedTemplateId);
   const palette = resolveSlidePalette(template, blueprint);
 
@@ -2699,12 +2950,12 @@ export function createSlideFromOutline(
     templateId: resolvedTemplateId,
     profileHandle: DEFAULT_PROFILE_HANDLE,
     profileSubtitle: DEFAULT_PROFILE_SUBTITLE,
-    backgroundImage: null,
+    backgroundImage: aiImageDataUrl,
     photoSettings: { ...DEFAULT_SLIDE_PHOTO_SETTINGS },
     generationRole: blueprint.role,
     generationCoreIdea: blueprint.body,
     slideType: blueprint.slideType,
-    photoSlotEnabled: false,
+    photoSlotEnabled: blueprint.slideType === "image_text" ? Boolean(aiImageDataUrl) : false,
     elements: []
   };
 
@@ -2793,7 +3044,7 @@ function resolveRoleFlow(targetCount: number) {
   return ROLE_FLOW_BY_COUNT[targetCount] ?? ROLE_FLOW_BY_COUNT[9];
 }
 
-function resolveFallbackOutline(role: CarouselSlideRole): CarouselOutlineSlide {
+function resolveFallbackOutline(role: CarouselSlideRole, topicHint = "вашей теме"): CarouselOutlineSlide {
   if (role === "hook") {
     return {
       type: "hook",
@@ -2830,31 +3081,47 @@ function resolveFallbackOutline(role: CarouselSlideRole): CarouselOutlineSlide {
   }
 
   if (role === "consequence") {
+    const safeTopic = sanitizeTopic(topicHint);
     return {
       type: "consequence",
-      bullets: ["Снижается доверие к подаче", "Люди не доходят до CTA", "Контент работает нестабильно"]
+      bullets: [
+        `Если «${safeTopic}» держится на случайности, результат скачет от раза к разу`,
+        "Каждая задержка усиливает цену ошибки и съедает доверие",
+        "Без повторяемой схемы приходится начинать заново каждый раз"
+      ]
     };
   }
 
   if (role === "shift") {
+    const safeTopic = sanitizeTopic(topicHint);
     return {
       type: "shift",
-      title: "Сдвиг: сначала ясная ценность, потом детали"
+      title: "Сдвиг: система вместо рывков",
+      body: [
+        `Начни с одного повторяемого процесса для темы «${safeTopic}»`,
+        "Разбей путь на маленькие шаги и закрепи порядок действий",
+        "Так результат перестает зависеть от настроения и случайного удачного дня"
+      ].join("\n")
     };
   }
 
   if (role === "solution") {
     return {
       type: "solution",
-      bullets: ["Одна мысль на один слайд", "Факты и примеры вместо общих обещаний", "Четкий следующий шаг в конце"]
+      bullets: [
+        "Выбери одно конкретное действие и начни с него сегодня",
+        "Результат приходит от системы, а не от разового усилия",
+        "Маленький стабильный шаг работает лучше большого но редкого"
+      ]
     };
   }
 
   if (role === "example") {
+    const safeTopic = sanitizeTopic(topicHint);
     return {
       type: "example",
-      before: "До: «Мы работаем качественно»",
-      after: "После: «За 14 дней получили стабильный отклик и входящие вопросы»"
+      before: `До: «${safeTopic} — объясняли общо, читатель не понимал что делать»`,
+      after: "После: «Сменили подход — и результат стал стабильным»"
     };
   }
 
@@ -2873,12 +3140,13 @@ export function createSlidesFromOutline(
 ): Slide[] {
   const targetCount = clampSlidesCount(requestedCount ?? outline.length ?? DEFAULT_SLIDES_COUNT);
   const flow = resolveRoleFlow(targetCount);
+  const topicHint = deriveTopicHintFromOutlines(outline);
 
   return flow.map((role, index) => {
     const fromInput = outline[index];
-    const fallback = resolveFallbackOutline(role);
+    const fallback = resolveFallbackOutline(role, topicHint);
     const item = fromInput ? { ...fallback, ...fromInput, type: role } : fallback;
-    return createSlideFromOutline(item, index, templateId, format, flow.length);
+    return createSlideFromOutline(item, index, templateId, format, flow.length, undefined, topicHint);
   });
 }
 

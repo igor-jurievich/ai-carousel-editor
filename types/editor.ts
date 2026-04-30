@@ -40,6 +40,16 @@ export type CarouselSlideRole =
   | "example"
   | "cta";
 
+export type ContentMode =
+  | "sales"
+  | "expert"
+  | "instruction"
+  | "diagnostic"
+  | "case"
+  | "social";
+
+export type ContentModeInput = ContentMode | "auto";
+
 export type CanvasSlideType = "text" | "list" | "big_text" | "image_text" | "cta";
 
 export type TextElement = {
@@ -145,20 +155,24 @@ export type AmplifyOutlineSlide = {
 export type MistakeOutlineSlide = {
   type: "mistake";
   title: string;
+  body?: string;
 };
 
 export type ConsequenceOutlineSlide = {
   type: "consequence";
+  title?: string;
   bullets: string[];
 };
 
 export type ShiftOutlineSlide = {
   type: "shift";
   title: string;
+  body?: string;
 };
 
 export type SolutionOutlineSlide = {
   type: "solution";
+  title?: string;
   bullets: string[];
 };
 
@@ -199,6 +213,7 @@ export type CarouselProject = {
   format?: SlideFormat;
   theme?: CarouselTemplateId;
   promptVariant?: "A" | "B";
+  contentMode?: ContentModeInput;
   niche?: string;
   audience?: string;
   tone?: string;
