@@ -365,7 +365,7 @@ const ROLE_FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
     "consequence",
     "shift",
     "solution",
-    "solution",
+    "example",
     "example",
     "cta"
   ]
@@ -425,9 +425,9 @@ const FALLBACK_TITLES: Record<CarouselSlideRole, string[]> = {
     "Как это сработало"
   ],
   cta: [
-    "Сохрани и примени",
-    "Напиши в директ — пришлю шаблон",
-    "Попробуй и напиши что получилось"
+    "Первый шаг сегодня",
+    "Выбери первый шаг сегодня",
+    "Проверь это у себя"
   ]
 };
 
@@ -1904,7 +1904,7 @@ function readBody(role: CarouselSlideRole, outline: OutlineLike, topicHint = "в
   if (role === "cta") {
     const subtitle = typeof outline.subtitle === "string" ? outline.subtitle.trim() : "";
     return sanitizeBlueprintText(
-      subtitle || "Напишите «РАЗБОР» и получите структуру, адаптированную под вашу задачу.",
+      subtitle || "Сохраните структуру и примените один шаг под свою задачу.",
       600
     );
   }
@@ -3127,8 +3127,8 @@ function resolveFallbackOutline(role: CarouselSlideRole, topicHint = "вашей
 
   return {
     type: "cta",
-    title: "Хотите такую же структуру под свою тему?",
-    subtitle: "Напишите «РАЗБОР» и получите каркас, адаптированный под вашу задачу"
+    title: "Сохраните структуру под свою тему",
+    subtitle: "Выберите один шаг и адаптируйте его под ближайшую задачу"
   };
 }
 

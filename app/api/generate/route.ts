@@ -10,6 +10,7 @@ import { getSupabasePublicConfig } from "@/lib/supabase";
 import {
   CAROUSEL_TEMPLATE_IDS,
   type CarouselOutlineSlide,
+  type ContentMode,
   type ContentModeInput,
   type CarouselTemplateId,
   type SlideFormat
@@ -29,8 +30,8 @@ const DEFAULT_GENERATE_WITH_IMAGES_NON_SALES_TIMEOUT_MS = 90_000;
 const DEFAULT_GENERATE_QA_TIMEOUT_MS = 120_000;
 const GENERATE_KEEP_ALIVE_INTERVAL_MS = 15_000;
 const DEFAULT_IMAGE_MODEL_RESOLVE_TIMEOUT_MS = 8_000;
-const DEFAULT_IMAGE_GENERATE_TIMEOUT_MS = 30_000;
-const DEFAULT_IMAGE_GENERATE_QA_TIMEOUT_MS = 45_000;
+const DEFAULT_IMAGE_GENERATE_TIMEOUT_MS = 60_000;
+const DEFAULT_IMAGE_GENERATE_QA_TIMEOUT_MS = 60_000;
 const DEFAULT_RATE_LIMIT_MAX = 12;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_SWEEP_THRESHOLD = 5000;
@@ -368,7 +369,8 @@ export async function POST(request: Request) {
                   slide: slides[index],
                   role,
                   topic,
-                  niche
+                  niche,
+                  mode: generationResult.generationProfile.modeEffective
                 }),
                 imageTimeoutMs,
                 {
@@ -478,7 +480,7 @@ export async function POST(request: Request) {
         imagesGenerated: withImages ? imagesGenerated : 0,
         creditsCharged
       },
-      generationProfile: generationResult.generationProfile,
+      generationProfile,
       withImages,
       fallbackReason: generationResult.fallbackReason,
       project: {
@@ -654,7 +656,7 @@ function resolveImageGenerateTimeoutMs(qaBypass = false) {
     return fallback;
   }
 
-  return Math.max(5000, Math.min(120_000, Math.round(raw)));
+  return Math.max(60_000, Math.min(120_000, Math.round(raw)));
 }
 
 function resolveGenerateTimeoutMs(
@@ -890,8 +892,9 @@ async function generateSlideImage(options: {
   role: ImageSlideRole;
   topic: string;
   niche: string;
+  mode: ContentMode;
 }) {
-  const { client, model, slide, role, topic, niche } = options;
+  const { client, model, slide, role, topic, niche, mode } = options;
   const slideTitle = getOutlineSlideTitle(slide);
   const slideBody = getOutlineSlideBody(slide);
   const imagePrompt = buildImagePrompt({
@@ -899,7 +902,8 @@ async function generateSlideImage(options: {
     slideBody,
     slideRole: role,
     topic,
-    niche: niche || undefined
+    niche: niche || undefined,
+    mode
   });
 
   const result = await client.images.generate({
@@ -926,15 +930,21 @@ function buildImagePrompt(input: {
   slideRole: ImageSlideRole;
   topic: string;
   niche?: string;
+  mode: ContentMode;
 }) {
-  const { slideTitle, slideBody, slideRole, topic, niche } = input;
+  const { slideTitle, slideBody, slideRole, topic, niche, mode } = input;
   const nicheContext = niche ? `Ниша: ${niche}.` : "";
   const bodyContext = slideBody ? `Текст слайда: "${slideBody}".` : "";
+  const modeContext =
+    mode === "sales"
+      ? "Режим: sales. Можно больше напряжения, контраста и коммерческого контекста."
+      : "Режим: non-sales. Фото спокойное, экспертное, без давления, страха и чрезмерной драматизации.";
 
   const styleByRole: Record<ImageSlideRole, string> = {
     hook: `
 Создай привлекательное фото для обложки Instagram-карусели.
 Тема: "${topic}". ${nicheContext}
+${modeContext}
 Заголовок слайда: "${slideTitle}".
 ${bodyContext}
 
@@ -954,6 +964,7 @@ ${bodyContext}
     mistake: `
 Создай фото для слайда про типичную ошибку в Instagram-карусели.
 Тема: "${topic}". ${nicheContext}
+${modeContext}
 Заголовок слайда: "${slideTitle}".
 ${bodyContext}
 
@@ -971,6 +982,7 @@ ${bodyContext}
     example: `
 Создай фото для слайда с кейсом/примером в Instagram-карусели.
 Тема: "${topic}". ${nicheContext}
+${modeContext}
 Заголовок слайда: "${slideTitle}".
 ${bodyContext}
 
