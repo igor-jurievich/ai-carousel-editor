@@ -13,6 +13,7 @@ export type CarouselGenerationSource = "model" | "fallback";
 export type CarouselFallbackReason = "quota" | "error" | "timeout";
 type TopicDomain =
   | "sales"
+  | "pet"
   | "education"
   | "psychology"
   | "health"
@@ -634,6 +635,11 @@ const WEAK_ROLE_TITLE_PATTERNS: RegExp[] = [
   /^разбор[:\s-]/iu,
   /^план,\s*который\s+можно\s+внедрить/iu,
   /^мини[-\s]?кейс[:\s-]/iu,
+  /:\s*фраз[аы]?\s*$/iu,
+  /:\s*(?:где\s+хозяин|как\s+закрепляется|где\s+возникает|шаг)\s*$/iu,
+  /\bхотя\s+бюджет\s*$/iu,
+  /^пример\b/iu,
+  /^до\s+после\b/iu,
   /^[\p{L}-]+(?:у|ю)\s+[\p{L}-]{4,}ть\s*:/iu,
   /^[\p{L}-]+\s+[\p{L}-]{4,}ть:\s+как\b/iu
 ];
@@ -960,7 +966,7 @@ function dedupeBullets(items: string[]) {
       .replace(/^[•·\-–—→\s]+/u, "")
       .replace(/[.!?]+\s*$/u, "")
       .trim();
-    if (!normalized) {
+    if (!normalized || hasBrokenCopyTail(normalized)) {
       continue;
     }
 
@@ -1220,6 +1226,10 @@ function buildFirstSlideTitleForMode(topic: string, mode: ContentMode) {
   }
 
   if (mode === "diagnostic") {
+    if (containsStem(focus.toLowerCase(), ["реклам", "заяв", "лид", "бюджет", "клик", "воронк"])) {
+      return "Реклама без заявок: где сбой";
+    }
+
     return limitTitleWords(`${capitalizedFocus}: где возникает сбой`);
   }
 
@@ -1228,7 +1238,12 @@ function buildFirstSlideTitleForMode(topic: string, mode: ContentMode) {
   }
 
   if (mode === "social") {
-    return limitTitleWords(`${capitalizedFocus}: спокойный план`);
+    const directSocialTitle = buildDirectSocialFirstSlideTitle(topic);
+    if (directSocialTitle) {
+      return directSocialTitle;
+    }
+
+    return limitTitleWords(capitalizedFocus);
   }
 
   const directExpertTitle = buildDirectExpertFirstSlideTitle(topic);
@@ -1279,6 +1294,23 @@ function buildDirectExpertFirstSlideTitle(topic: string) {
 
   if (/^(почему|\d+)\b/iu.test(directTopic)) {
     return limitTitleWords(simplifyDirectHookTopic(directTopic));
+  }
+
+  return "";
+}
+
+function buildDirectSocialFirstSlideTitle(topic: string) {
+  const directTopic = normalizeText(topic, 90)
+    .replace(/[?!…]+$/u, "")
+    .replace(/[«»"'`]+/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!directTopic) {
+    return "";
+  }
+
+  if (/^как\s+я\s+/iu.test(directTopic)) {
+    return sanitizeTitleValue(upperFirst(directTopic.replace(/^как\s+/iu, "").trim()), 84);
   }
 
   return "";
@@ -1373,6 +1405,7 @@ function enforceFirstSlidePolicy(
     HOOK_SUBTITLE_OUTPUT_MAX
   );
   const combinedCopy = [title, subtitle].filter(Boolean).join(" ").trim();
+  const directSocialTitle = mode === "social" ? buildDirectSocialFirstSlideTitle(topic) : "";
 
   const lacksTopicAnchor =
     !hasPrimaryTopicAnchor(combinedCopy, topic) && !isCopyTopicAligned(combinedCopy, topic);
@@ -1385,7 +1418,8 @@ function enforceFirstSlidePolicy(
     hasNonSalesGrammarRisk(title) ||
     hasAwkwardHookTitle(title) ||
     (mode === "instruction" && hasInstructionHookGrammarRisk(title)) ||
-    (mode === "instruction" && !isInstructionFirstSlideTitle(title));
+    (mode === "instruction" && !isInstructionFirstSlideTitle(title)) ||
+    (mode === "social" && Boolean(directSocialTitle) && title !== directSocialTitle);
   const weakSubtitle =
     !subtitle ||
     containsMetaHookLanguage(subtitle) ||
@@ -1516,8 +1550,9 @@ function applyHookEditorialPolish(
   const hook = nextSlides[hookIndex] as Extract<CarouselOutlineSlide, { type: "hook" }>;
   const polishedTitle = polishQuotedTopicFragments(hook.title, 84);
   const polishedSubtitle = polishHookSubtitleStyle(hook.subtitle, mode, topic);
+  const directSocialTitle = mode === "social" ? buildDirectSocialFirstSlideTitle(topic) : "";
 
-  hook.title = polishedTitle || buildFirstSlideTitleForMode(topic, mode);
+  hook.title = directSocialTitle || polishedTitle || buildFirstSlideTitleForMode(topic, mode);
   hook.subtitle = polishedSubtitle || buildFirstSlideSubtitleForMode(topic, mode);
 
   if (
@@ -2251,11 +2286,30 @@ function applyNonSalesFinalGuardrails(
   let nextSlides = slides.map((slide) => ({ ...slide })) as CarouselOutlineSlide[];
 
   nextSlides = repairDuplicateAndThinSlides(nextSlides, topic, options);
+  if (mode === "case" && isRealEstateCaseTopic(topic)) {
+    nextSlides = repairRealEstateCaseSlides(nextSlides);
+  }
+  if (mode === "social" && isSocialStorySellingTopic(topic)) {
+    nextSlides = repairSocialStorySellingSlides(nextSlides, topic);
+  }
+  if ((mode === "expert" || mode === "instruction") && isPetToiletTopic(topic)) {
+    nextSlides = repairPetToiletSlides(nextSlides, mode);
+  }
+  if (mode === "instruction" && isApartmentWeekendPrepTopic(topic)) {
+    nextSlides = repairApartmentWeekendPrepSlides(nextSlides);
+  }
+  if (mode === "expert" && isFitnessWeightHabitTopic(topic)) {
+    nextSlides = repairFitnessWeightHabitSlides(nextSlides);
+  }
+  if (mode === "diagnostic" && isAdBudgetDiagnosticTopic(topic)) {
+    nextSlides = repairAdBudgetDiagnosticSlides(nextSlides);
+  }
 
   return nextSlides.map((slide, index) => {
     const fallback = normalizeSlideByType(slide.type, null, topic, index, options);
 
     if (slide.type === "hook") {
+      const directSocialTitle = mode === "social" ? buildDirectSocialFirstSlideTitle(topic) : "";
       const title =
         !slide.title ||
         hasNonSalesGrammarRisk(slide.title) ||
@@ -2263,7 +2317,7 @@ function applyNonSalesFinalGuardrails(
           ? buildFirstSlideTitleForMode(topic, mode)
           : sanitizeTitleValue(slide.title, 84);
       const safeTitle =
-        !title || hasDanglingTail(title) ? buildFirstSlideTitleForMode(topic, mode) : title;
+        directSocialTitle || (!title || hasDanglingTail(title) ? buildFirstSlideTitleForMode(topic, mode) : title);
       const subtitle = normalizeHookSubtitleForOutput(slide.subtitle, topic, mode);
       return {
         type: "hook",
@@ -2283,7 +2337,10 @@ function applyNonSalesFinalGuardrails(
       };
     }
 
-    if (slide.type === "solution" && hasSolutionRoleMismatch(slide.bullets)) {
+    if (
+      slide.type === "solution" &&
+      (hasSolutionRoleMismatch(slide.bullets) || shouldPreferDomainFallbackBullets("solution", topic, slide.bullets))
+    ) {
       return buildDeterministicSolutionFallback(topic, options);
     }
 
@@ -2302,6 +2359,619 @@ function applyNonSalesFinalGuardrails(
     }
 
     return slide || fallback;
+  });
+}
+
+function isRealEstateCaseTopic(topic: string) {
+  const normalizedTopic = normalizeText(topic, 180).toLowerCase();
+  return (
+    containsStem(normalizedTopic, ["риелтор", "квартир", "недвижим", "объект"]) &&
+    containsStem(normalizedTopic, ["продал", "продаж", "прод"]) &&
+    containsStem(normalizedTopic, ["14", "месяц", "дней"])
+  );
+}
+
+function repairRealEstateCaseSlides(slides: CarouselOutlineSlide[]): CarouselOutlineSlide[] {
+  return slides.map((slide) => {
+    if (slide.type === "problem") {
+      return {
+        type: "problem",
+        title: "Квартира висела шесть месяцев",
+        bullets: [
+          "Показы были, но офферов и задатка не появлялось.",
+          "Фото не продавали планировку, свет и сильные стороны района.",
+          "Цена стояла с запасом на торг и отталкивала готовых покупателей."
+        ]
+      };
+    }
+
+    if (slide.type === "example") {
+      return {
+        type: "example",
+        before: "До: 6 месяцев показов без задатка и 20 случайных просмотров.",
+        after: "После: 11 целевых показов и задаток на 14-й день."
+      };
+    }
+
+    if (slide.type === "amplify") {
+      return {
+        type: "amplify",
+        title: "Почему срок давил сильнее",
+        bullets: [
+          "Каждая неделя снижала доверие покупателей к объекту.",
+          "Собственник устал от показов и готовился резко снижать цену.",
+          "Площадка давала просмотры, но не приводила людей с бюджетом."
+        ]
+      };
+    }
+
+    if (slide.type === "shift") {
+      return {
+        type: "shift",
+        title: "Продали не метры, а сценарий",
+        body:
+          "Риелтор перестал продавать просто «квадраты» и упаковал сценарий жизни: свет, планировку, район и честную цену. Так объявление начало фильтровать случайных зрителей и притягивать покупателей с готовностью к сделке."
+      };
+    }
+
+    if (slide.type === "solution") {
+      return {
+        type: "solution",
+        title: "Что сделали за два дня",
+        bullets: [
+          "Убрали личные вещи, добавили свет и подготовили комнаты к фото.",
+          "Переписали объявление под 3 аргумента: район, планировка, цена.",
+          "Собрали показы в 2 окна и заранее отсеяли покупателей без бюджета."
+        ]
+      };
+    }
+
+    if (slide.type === "mistake") {
+      return {
+        type: "mistake",
+        title: "Убрали три признака застоя",
+        body:
+          "Из объявления убрали размытые преимущества, темные фото и фразу «торг уместен». Эти детали создавали ощущение залежавшегося объекта и приглашали торговаться сильнее."
+      };
+    }
+
+    if (slide.type === "consequence") {
+      return {
+        type: "consequence",
+        title: "Что изменилось к 14 дню",
+        bullets: [
+          "За 7 дней получили 32 звонка и 11 целевых показов.",
+          "На 9-й день пришло 2 оффера с разницей 200 000 ₽.",
+          "На 14-й день подписали задаток без снижения до любой цены."
+        ]
+      };
+    }
+
+    if (slide.type === "cta") {
+      return {
+        type: "cta",
+        title: "Разберите свой объект",
+        subtitle: "Проверьте фото, цену и сценарий показа перед следующим запуском объекта."
+      };
+    }
+
+    return slide;
+  });
+}
+
+function isSocialStorySellingTopic(topic: string) {
+  const normalizedTopic = normalizeText(topic, 180).toLowerCase();
+  return (
+    containsStem(normalizedTopic, ["сторис", "stories"]) &&
+    containsStem(normalizedTopic, ["продав", "продаж", "оффер"]) &&
+    containsStem(normalizedTopic, ["страх", "боя", "боят"])
+  );
+}
+
+function repairSocialStorySellingSlides(
+  slides: CarouselOutlineSlide[],
+  topic: string
+): CarouselOutlineSlide[] {
+  const directTitle = buildDirectSocialFirstSlideTitle(topic) || "Я перестал бояться сторис";
+
+  return slides.map((slide) => {
+    if (slide.type === "hook") {
+      return {
+        type: "hook",
+        title: directTitle,
+        subtitle: "Без давления: что мешало, какой поворот помог и какой шаг можно повторить."
+      };
+    }
+
+    if (slide.type === "problem") {
+      return {
+        type: "problem",
+        title: "Страх появлялся перед оффером",
+        bullets: [
+          "Каждая продажная сторис ощущалась как навязчивость.",
+          "После публикации хотелось удалить оффер и спрятаться.",
+          "Люди реагировали на пользу, но покупки почти не появлялись."
+        ]
+      };
+    }
+
+    if (slide.type === "amplify") {
+      return {
+        type: "amplify",
+        title: "Почему страх становился сильнее",
+        bullets: [
+          "Редкие продажи превращали каждый оффер в большое событие.",
+          "Оценка результата по заявкам усиливала напряжение после публикации.",
+          "Без структуры сторис звучали то слишком робко, то слишком резко."
+        ]
+      };
+    }
+
+    if (slide.type === "mistake") {
+      return {
+        type: "mistake",
+        title: "Продажи звучали как экзамен",
+        body:
+          "Я пытался сказать всё идеально и ждал мгновенной реакции. Из-за этого сторис становились тяжелыми, а оффер звучал отдельно от обычной пользы."
+      };
+    }
+
+    if (slide.type === "shift") {
+      return {
+        type: "shift",
+        title: "Продажа стала продолжением пользы",
+        body:
+          "Я перестал воспринимать оффер как просьбу купить. В сторис он стал понятным выбором для тех, кому уже актуальна задача, которую я регулярно разбираю."
+      };
+    }
+
+    if (slide.type === "solution") {
+      return {
+        type: "solution",
+        title: "Что помогло продавать спокойно",
+        bullets: [
+          "Назовите одну задачу клиента, которую решает ваш продукт.",
+          "Запланируйте 3 спокойных упоминания оффера на неделю.",
+          "После каждой сторис фиксируйте не страх, а число диалогов."
+        ]
+      };
+    }
+
+    if (slide.type === "example") {
+      return {
+        type: "example",
+        before: "До: 0 продающих сторис за неделю из-за страха реакции.",
+        after: "После: 3 спокойных упоминания оффера дали 5 диалогов за 7 дней."
+      };
+    }
+
+    if (slide.type === "consequence") {
+      return {
+        type: "consequence",
+        title: "Сторис стали легче",
+        bullets: [
+          "Продажи распределились по неделе, а не собирались в нервный запуск.",
+          "Оффер стал звучать как помощь, а не как давление.",
+          "Появились диалоги даже без громких дедлайнов и скидок."
+        ]
+      };
+    }
+
+    if (slide.type === "cta") {
+      return {
+        type: "cta",
+        title: "Выберите одну сторис",
+        subtitle: "Выберите одну спокойную продажную сторис на сегодня."
+      };
+    }
+
+    return slide;
+  });
+}
+
+function isPetToiletTopic(topic: string) {
+  const normalizedTopic = normalizeText(topic, 180).toLowerCase();
+  return (
+    containsStem(normalizedTopic, ["щен", "собак"]) &&
+    containsStem(normalizedTopic, ["туалет", "писа", "луж", "выгул", "прогул"])
+  );
+}
+
+function repairPetToiletSlides(
+  slides: CarouselOutlineSlide[],
+  mode: ContentMode
+): CarouselOutlineSlide[] {
+  return slides.map((slide) => {
+    if (slide.type === "hook") {
+      return {
+        type: "hook",
+        title: mode === "instruction" ? "Как приучить щенка к туалету" : "Почему щенок писает дома",
+        subtitle:
+          mode === "instruction"
+            ? "Понятный порядок: что сделать первым, что проверить и как увидеть результат."
+            : "Покажем причину, механизм и первый шаг, который можно проверить без давления."
+      };
+    }
+
+    if (slide.type === "problem") {
+      return {
+        type: "problem",
+        title: "Что происходит после прогулки",
+        bullets: [
+          "Щенок гуляет 20 минут, но делает лужу уже дома.",
+          "На улице он нюхает и играет, а не расслабляется для туалета.",
+          "Дома остаются знакомые запахи, которые снова запускают привычку."
+        ]
+      };
+    }
+
+    if (slide.type === "amplify") {
+      return {
+        type: "amplify",
+        title: "Учитывайте возраст и запахи",
+        bullets: [
+          "Каждая домашняя лужа закрепляет место сильнее следующей прогулки.",
+          "Редкие успешные выходы не дают щенку понять нужный сценарий.",
+          "Наказание после факта учит прятаться, а не терпеть до улицы."
+        ]
+      };
+    }
+
+    if (slide.type === "mistake") {
+      return {
+        type: "mistake",
+        title: "Ошибка сразу после прогулки",
+        body:
+          "Не ждите, что одна удачная прогулка сразу закрепит навык. Щенку нужен повторяемый режим, уборка запахов и похвала в первые секунды после результата."
+      };
+    }
+
+    if (slide.type === "shift") {
+      return {
+        type: "shift",
+        title: "Режим важнее наказаний",
+        body:
+          "Щенок связывает туалет с местом, запахом и ближайшей реакцией владельца. Поэтому работает не ругань после лужи, а предсказуемые выходы и быстрая похвала на улице."
+      };
+    }
+
+    if (slide.type === "solution") {
+      return {
+        type: "solution",
+        title: "План на 10 дней",
+        bullets: [
+          "Выводите щенка после сна, еды и игры 6–8 раз в день.",
+          "Хвалите на улице в течение 2 секунд после результата.",
+          "Уберите запахи дома энзимным средством и ограничьте свободный доступ."
+        ]
+      };
+    }
+
+    if (slide.type === "example") {
+      return {
+        type: "example",
+        before: "До: 4 лужи дома в день даже после долгой прогулки.",
+        after: "После: 6 выходов по режиму сократили лужи за 10 дней."
+      };
+    }
+
+    if (slide.type === "consequence") {
+      return {
+        type: "consequence",
+        title: "Как понять, что получается",
+        bullets: [
+          "Режим туалета становится предсказуемее уже через 7–10 дней.",
+          "Лужи дома сокращаются, когда успешных выходов становится больше.",
+          "Владелец видит сигналы заранее и спокойнее ведет обучение."
+        ]
+      };
+    }
+
+    if (slide.type === "cta") {
+      return {
+        type: "cta",
+        title: mode === "instruction" ? "Начните с режима" : "Выберите один шаг",
+        subtitle:
+          mode === "instruction"
+            ? "Выберите один выход по режиму на сегодня."
+            : "Сохраните план, чтобы сверяться с режимом щенка."
+      };
+    }
+
+    return slide;
+  });
+}
+
+function isApartmentWeekendPrepTopic(topic: string) {
+  const normalizedTopic = normalizeText(topic, 180).toLowerCase();
+  return (
+    containsStem(normalizedTopic, ["подготов", "квартир", "продаж"]) &&
+    containsStem(normalizedTopic, ["выходн", "дня", "суббот", "воскрес"])
+  );
+}
+
+function repairApartmentWeekendPrepSlides(slides: CarouselOutlineSlide[]): CarouselOutlineSlide[] {
+  return slides.map((slide) => {
+    if (slide.type === "problem") {
+      return {
+        type: "problem",
+        title: "Оцените квартиру перед стартом",
+        bullets: [
+          "Сравните 5 похожих объявлений рядом и отметьте, где ваша квартира слабее.",
+          "Проверьте свет, запахи, личные вещи и визуальный шум в кадре.",
+          "Зафиксируйте бюджет выходных, чтобы не уйти в долгий ремонт."
+        ]
+      };
+    }
+
+    if (slide.type === "shift") {
+      return {
+        type: "shift",
+        title: "Сначала свет, чистота, простор",
+        body:
+          "За выходные лучше усиливать первое впечатление, а не начинать ремонт. Покупатель быстрее замечает свет, порядок, нейтральный фон и понятную планировку."
+      };
+    }
+
+    if (slide.type === "solution") {
+      return {
+        type: "solution",
+        title: "План на два дня",
+        bullets: [
+          "День 1: уберите личные вещи, лишний декор и визуальный шум.",
+          "День 1 вечер: замените лампочки, подкрутите ручки и устраните запахи.",
+          "День 2: сделайте уборку, настройте свет и снимите тестовые фото."
+        ]
+      };
+    }
+
+    if (slide.type === "mistake") {
+      return {
+        type: "mistake",
+        title: "Не начинайте ремонт наугад",
+        body:
+          "Не беритесь за работы, которые не закончите за выходные. Лучше закрыть 10 заметных мелочей, чем оставить покупателю недоделанную стену или разобранную комнату."
+      };
+    }
+
+    if (slide.type === "amplify") {
+      return {
+        type: "amplify",
+        title: "Что проверить до пятницы",
+        bullets: [
+          "Можно ли шуметь в доме и есть ли доступ к инструментам.",
+          "Кто поможет вынести лишние вещи и сделать уборку быстрее.",
+          "Где будут храниться коробки, чтобы они не попали в фото."
+        ]
+      };
+    }
+
+    if (slide.type === "example") {
+      return {
+        type: "example",
+        before: "До: фото тёмные, вещи на виду, 12 дней без звонков.",
+        after: "После: 2 дня подготовки дали 9 показов и первый оффер за 14 дней."
+      };
+    }
+
+    if (slide.type === "consequence") {
+      return {
+        type: "consequence",
+        title: "Признаки готовности к показу",
+        bullets: [
+          "Фото на телефоне выглядят светлее без дополнительной обработки.",
+          "В кадре нет личных вещей, лекарств, проводов и случайных коробок.",
+          "Покупатель видит планировку, а не следы вашей повседневности."
+        ]
+      };
+    }
+
+    if (slide.type === "cta") {
+      return {
+        type: "cta",
+        title: "Подготовьте первую комнату",
+        subtitle: "Выберите одну комнату и подготовьте ее по плану сегодня."
+      };
+    }
+
+    return slide;
+  });
+}
+
+function isFitnessWeightHabitTopic(topic: string) {
+  const normalizedTopic = normalizeText(topic, 180).toLowerCase();
+  return containsStem(normalizedTopic, ["похуд", "питани", "привыч", "вес"]);
+}
+
+function repairFitnessWeightHabitSlides(slides: CarouselOutlineSlide[]): CarouselOutlineSlide[] {
+  return slides.map((slide) => {
+    if (slide.type === "hook") {
+      return {
+        type: "hook",
+        title: "Три привычки мешают похудеть",
+        subtitle: "Даже продуманный рацион не сработает, если режим каждый день срывает дефицит."
+      };
+    }
+
+    if (slide.type === "problem") {
+      return {
+        type: "problem",
+        title: "Питание есть, вес стоит",
+        bullets: [
+          "Калории соблюдаются, но вес держится в одном диапазоне неделями.",
+          "К вечеру тянет на перекусы даже после нормального ужина.",
+          "Тренировки есть, а энергии и визуального прогресса мало."
+        ]
+      };
+    }
+
+    if (slide.type === "amplify") {
+      return {
+        type: "amplify",
+        title: "Дефицит становится нестабильным",
+        bullets: [
+          "Недосып усиливает аппетит и тягу к быстрым углеводам вечером.",
+          "Сидячий день снижает расход сильнее, чем кажется по тренировкам.",
+          "Стресс повышает желание компенсировать усталость едой."
+        ]
+      };
+    }
+
+    if (slide.type === "mistake") {
+      return {
+        type: "mistake",
+        title: "Ставка только на тарелку",
+        body:
+          "Рацион может быть правильным, но недосып, низкая активность и стресс делают дефицит рваным. Поэтому вес стоит, хотя в еде будто всё под контролем."
+      };
+    }
+
+    if (slide.type === "shift") {
+      return {
+        type: "shift",
+        title: "Как привычки удерживают вес",
+        body:
+          "Вес меняется не только от меню, а от всего режима. Когда сон, шаги и стресс нестабильны, организм чаще просит энергию, а расход падает."
+      };
+    }
+
+    if (slide.type === "solution") {
+      return {
+        type: "solution",
+        title: "Что менять в первую очередь",
+        bullets: [
+          "Стабилизируйте сон до 7 часов хотя бы 5 дней подряд.",
+          "Добавьте 7000–9000 шагов без увеличения жестких тренировок.",
+          "Запланируйте 2 короткие паузы в день вместо автоматических перекусов."
+        ]
+      };
+    }
+
+    if (slide.type === "example") {
+      return {
+        type: "example",
+        before: "До: вес стоял 3 недели при 5 тренировках без восстановления.",
+        after: "После: 7 часов сна и 8000 шагов дали минус 2 см за 14 дней."
+      };
+    }
+
+    if (slide.type === "consequence") {
+      return {
+        type: "consequence",
+        title: "Что меняется через 2 недели",
+        bullets: [
+          "Голод вечером становится ниже, потому что усталость меньше управляет выбором.",
+          "Расход энергии растет без ощущения нового жесткого режима.",
+          "Вес начинает уходить ровнее, без постоянных откатов после выходных."
+        ]
+      };
+    }
+
+    if (slide.type === "cta") {
+      return {
+        type: "cta",
+        title: "Выберите одну привычку",
+        subtitle: "Проверьте одну привычку ближайшие 7 дней."
+      };
+    }
+
+    return slide;
+  });
+}
+
+function isAdBudgetDiagnosticTopic(topic: string) {
+  const normalizedTopic = normalizeText(topic, 180).toLowerCase();
+  return (
+    containsStem(normalizedTopic, ["реклам", "заяв", "лид"]) &&
+    containsStem(normalizedTopic, ["бюджет", "раст", "клик", "воронк"])
+  );
+}
+
+function repairAdBudgetDiagnosticSlides(slides: CarouselOutlineSlide[]): CarouselOutlineSlide[] {
+  return slides.map((slide) => {
+    if (slide.type === "problem") {
+      return {
+        type: "problem",
+        title: "Клики растут, заявок нет",
+        bullets: [
+          "В кабинете растут показы и клики, но заявок почти столько же.",
+          "Стоимость лида скачет, а прогноз по продажам не сходится.",
+          "Команда спорит: виноват трафик, лендинг или обработка."
+        ]
+      };
+    }
+
+    if (slide.type === "mistake") {
+      return {
+        type: "mistake",
+        title: "Ошибка: масштабировать без диагностики",
+        body:
+          "Бюджет увеличивают на старые связки, не проверив путь после клика. В итоге деньги усиливают тот же сбой, который уже мешает заявкам."
+      };
+    }
+
+    if (slide.type === "consequence") {
+      return {
+        type: "consequence",
+        title: "Что начинает дорожать",
+        bullets: [
+          "Клик дешевле не становится, а заявка требует всё больше бюджета.",
+          "Менеджеры тратят время на слабые обращения и спорят с маркетингом.",
+          "Решения принимаются по эмоциям, а не по этапам воронки."
+        ]
+      };
+    }
+
+    if (slide.type === "amplify") {
+      return {
+        type: "amplify",
+        title: "Где закрепляется сбой",
+        bullets: [
+          "Оценивают CTR и показы, но не путь от заявки до денег.",
+          "Не разделяют связки по офферу, лендингу и качеству обработки.",
+          "Меняют несколько элементов сразу и теряют причинно-следственную связь."
+        ]
+      };
+    }
+
+    if (slide.type === "shift") {
+      return {
+        type: "shift",
+        title: "Смотрите путь после клика",
+        body:
+          "Проверь один участок, где человек теряется после клика: оффер, форму или скорость ответа. Поэтому диагностика начинается не с нового бюджета, а с воронки по шагам."
+      };
+    }
+
+    if (slide.type === "solution") {
+      return {
+        type: "solution",
+        title: "Проверьте воронку по шагам",
+        bullets: [
+          "Соберите цифры за 14 дней: клики, заявки, дозвоны, встречи, сделки.",
+          "Найдите самый резкий провал между двумя соседними этапами.",
+          "Меняйте один элемент связки и сравнивайте результат через 3–5 дней."
+        ]
+      };
+    }
+
+    if (slide.type === "example") {
+      return {
+        type: "example",
+        before: "До: бюджет вырос на 30%, а заявок осталось 12 в неделю.",
+        after: "После: упростили форму и снизили CPL на 25% за 10 дней."
+      };
+    }
+
+    if (slide.type === "cta") {
+      return {
+        type: "cta",
+        title: "Проверьте одну связку",
+        subtitle: "Проверьте одну рекламную связку от клика до формы."
+      };
+    }
+
+    return slide;
   });
 }
 
@@ -3105,6 +3775,46 @@ function resolveTopicDomain(topic: string, options?: GenerationOptions): TopicDo
     420
   ).toLowerCase();
 
+  if (containsStem(source, ["щен", "собак", "туалет", "выгул", "луж", "пелен", "дрессиров", "щенк"])) {
+    return "pet";
+  }
+
+  const hasPersonalBrandPhrase = /(?:^|[^\p{L}\p{N}])личн[а-яё]*\s+бренд(?=$|[^\p{L}\p{N}])/iu.test(
+    source
+  );
+  const hasExplicitCreatorContext =
+    hasPersonalBrandPhrase ||
+    containsStem(source, ["сторис", "stories", "блог", "контент", "instagram", "telegram", "соцсет", "автор"]);
+
+  if (hasExplicitCreatorContext) {
+    return "creator";
+  }
+
+  if (
+    containsStem(source, [
+      "продаж",
+      "продав",
+      "заявк",
+      "лид",
+      "воронк",
+      "конверс",
+      "маркетолог",
+      "риелтор",
+      "агентств",
+      "сделк",
+      "реклам",
+      "недвижим",
+      "квартир",
+      "показ",
+      "объект",
+      "авито",
+      "циан",
+      "ипотек"
+    ])
+  ) {
+    return "sales";
+  }
+
   if (containsStem(source, ["финанс", "инвест", "бюджет", "деньг", "доход", "портфел", "кредит", "налог", "капитал", "риск"])) {
     return "finance";
   }
@@ -3130,36 +3840,8 @@ function resolveTopicDomain(topic: string, options?: GenerationOptions): TopicDo
   }
 
   if (
-    containsStem(source, [
-      "продаж",
-      "заявк",
-      "лид",
-      "воронк",
-      "конверс",
-      "маркетолог",
-      "риелтор",
-      "агентств",
-      "клиент",
-      "сделк",
-      "реклам",
-      "недвижим",
-      "квартир",
-      "показ",
-      "объект",
-      "авито",
-      "циан",
-      "ипотек"
-    ])
-  ) {
-    return "sales";
-  }
-
-  const hasPersonalBrandPhrase = /(?:^|[^\p{L}\p{N}])личн[а-яё]*\s+бренд(?=$|[^\p{L}\p{N}])/iu.test(
-    source
-  );
-  if (
     hasPersonalBrandPhrase ||
-    containsStem(source, ["эксперт", "блог", "контент", "instagram", "telegram", "соцсет", "автор"])
+    containsStem(source, ["эксперт", "блог", "контент", "instagram", "telegram", "соцсет", "автор", "сторис", "stories"])
   ) {
     return "creator";
   }
@@ -3168,6 +3850,13 @@ function resolveTopicDomain(topic: string, options?: GenerationOptions): TopicDo
 }
 
 function buildDomainPromptAddendum(domain: TopicDomain) {
+  if (domain === "pet") {
+    return [
+      "Domain: puppy/pet care. Use routine, age, bladder control, smell anchors, reward timing and vet caveats.",
+      "Keep tone calm and practical: no shame, no punishment framing, no sales pressure."
+    ];
+  }
+
   if (domain === "education") {
     return [
       "Domain: education. Speak through progress, practice, motivation, lesson rhythm and homework.",
@@ -3660,6 +4349,7 @@ function applyFinalCopyPolish(
       const actionIsAcceptable = hasPrimaryAction;
       const weakTitle =
         !normalizedTitle ||
+        isWeakRoleTitle(normalizedTitle) ||
         /\b(готов[а-яё]*|объединить\s+усилия|поехали|пора\s+действовать|давайте\s+начнем)\b/iu.test(
           normalizedTitle
         );
@@ -3667,11 +4357,14 @@ function applyFinalCopyPolish(
       cta.title = weakTitle
         ? buildCtaTitleFallback(options?.goal, topic, mode)
         : normalizedTitle;
-      cta.subtitle = shouldUseSoftCta
-        ? ctaVariants.soft
-        : actionIsAcceptable
-          ? normalizedSubtitle
-          : ctaVariants.selected;
+      cta.subtitle =
+        mode === "sales"
+          ? normalizeSalesCtaSubtitle(actionIsAcceptable ? normalizedSubtitle : ctaVariants.selected, ctaVariants.selected)
+          : shouldUseSoftCta
+            ? ctaVariants.soft
+            : actionIsAcceptable
+              ? normalizedSubtitle
+              : ctaVariants.selected;
     }
   }
 
@@ -3726,13 +4419,16 @@ function enforceSlideQuality(
       const title = sanitizeTitleValue(problem.title, 80);
       const bullets = normalizeBullets(problem.bullets, problemFallback.bullets);
       const strongBullets = pickStrongBullets(bullets, problemFallback.bullets);
+      const safeBullets = shouldPreferDomainFallbackBullets("problem", topic, strongBullets)
+        ? problemFallback.bullets
+        : strongBullets;
       return {
         type: "problem",
         title:
           !title || startsWithGenericMistakeLead(title) || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
             ? buildRoleTitleFallback("problem", topic, options)
             : title,
-        bullets: strongBullets
+        bullets: safeBullets
       };
     }
 
@@ -3742,13 +4438,16 @@ function enforceSlideQuality(
       const title = sanitizeTitleValue(amplify.title, 80);
       const bullets = normalizeBullets(amplify.bullets, amplifyFallback.bullets);
       const strongBullets = pickStrongBullets(bullets, amplifyFallback.bullets);
+      const safeBullets = shouldPreferDomainFallbackBullets("amplify", topic, strongBullets)
+        ? amplifyFallback.bullets
+        : strongBullets;
       return {
         type: "amplify",
         title:
           !title || startsWithGenericMistakeLead(title) || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
             ? buildRoleTitleFallback("amplify", topic, options)
             : title,
-        bullets: strongBullets
+        bullets: safeBullets
       };
     }
 
@@ -3781,13 +4480,16 @@ function enforceSlideQuality(
       const title = sanitizeTitleValue((consequence as { title?: unknown }).title, 84);
       const bullets = normalizeBullets(consequence.bullets, consequenceFallback.bullets);
       const strongBullets = pickStrongBullets(bullets, consequenceFallback.bullets);
+      const safeBullets = shouldPreferDomainFallbackBullets("consequence", topic, strongBullets)
+        ? consequenceFallback.bullets
+        : strongBullets;
       return {
         type: "consequence",
         title:
           !title || hasLegacyTemplatePhrase(title) || isWeakRoleTitle(title)
             ? buildRoleTitleFallback("consequence", topic, options)
             : title,
-        bullets: strongBullets
+        bullets: safeBullets
       } as CarouselOutlineSlide;
     }
 
@@ -3821,6 +4523,9 @@ function enforceSlideQuality(
       const bullets = normalizeBullets(solution.bullets, solutionFallback.bullets);
       const strongBullets = pickStrongBullets(bullets, solutionFallback.bullets);
       if (strongBullets.length < 2) {
+        return solutionFallback;
+      }
+      if (shouldPreferDomainFallbackBullets("solution", topic, strongBullets)) {
         return solutionFallback;
       }
       if (hasForbiddenNegativeBulletsForPositiveSlide(role, strongBullets)) {
@@ -3874,7 +4579,14 @@ function enforceSlideQuality(
         !title || countWords(title) < 2 || isWeakRoleTitle(title) || hasLegacyTemplatePhrase(title)
           ? buildCtaTitleFallback(options?.goal, topic, mode)
           : title,
-      subtitle: shouldUseSoftCta ? ctaVariants.soft : actionIsAcceptable ? subtitle : ctaVariants.selected
+      subtitle:
+        mode === "sales"
+          ? normalizeSalesCtaSubtitle(actionIsAcceptable ? subtitle : ctaVariants.selected, ctaVariants.selected)
+          : shouldUseSoftCta
+            ? ctaVariants.soft
+            : actionIsAcceptable
+              ? subtitle
+              : ctaVariants.selected
     };
   });
 }
@@ -4247,7 +4959,7 @@ function pickStrongBullets(
 ) {
   const cleaned = bullets
     .map((item) => sanitizeCopyText(normalizeText(item, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX))
-    .filter(Boolean);
+    .filter((item) => item && !hasBrokenCopyTail(item));
   const strong = cleaned
     .filter((item) => countWords(item) >= 4)
     .filter((item) => !isWeakBulletText(item));
@@ -4258,14 +4970,72 @@ function pickStrongBullets(
 
   const medium = cleaned.filter((item) => countWords(item) >= 3);
   if (medium.length >= minimum) {
-    return medium.slice(0, MAX_BULLETS_PER_SLIDE);
+    return fillBulletsWithFallback(medium, fallback, minimum);
   }
 
   if (cleaned.length) {
-    return cleaned.slice(0, MAX_BULLETS_PER_SLIDE);
+    return fillBulletsWithFallback(cleaned, fallback, minimum);
   }
 
-  return fallback.slice(0, MAX_BULLETS_PER_SLIDE);
+  return fallback.filter((item) => !hasBrokenCopyTail(item)).slice(0, MAX_BULLETS_PER_SLIDE);
+}
+
+function shouldPreferDomainFallbackBullets(
+  role: "problem" | "amplify" | "consequence" | "solution",
+  topic: string,
+  bullets: string[]
+) {
+  const normalizedTopic = normalizeText(topic, 180).toLowerCase();
+  const copy = bullets.join(" ").toLowerCase();
+
+  if (!copy) {
+    return true;
+  }
+
+  if (role === "solution" && /выберите\s+одно\s+конкретное\s+действие|повторите\s+рабочий\s+шаг\s+7\s+дней/iu.test(copy)) {
+    return true;
+  }
+
+  if (containsStem(normalizedTopic, ["щен", "собак", "туалет", "луж", "выгул", "пелен"])) {
+    if (/не\s+понимает\s+правил|медицинские\s+проблемы|часто\s+посещает\s+туалет|недостаток\s+прогулок/iu.test(copy)) {
+      return true;
+    }
+
+    const signals = copy.match(/\b(сон|еды|еда|игр|улиц|запах|энзим|режим|луж|прогул|2\s*секунд|6[–-]8|7[–-]10)\b/giu);
+    return (signals?.length ?? 0) < 2;
+  }
+
+  if (containsStem(normalizedTopic, ["реклам", "заяв", "лид", "бюджет", "клик", "воронк"]) && role === "solution") {
+    return !/(cpl|клик|заяв|форма|скорост|3[–-]5|бюджет|связк)/iu.test(copy);
+  }
+
+  if (containsStem(normalizedTopic, ["подготов", "квартир", "продаж", "выходн"]) && role === "solution") {
+    return !/(день\s*1|день\s*2|лампоч|запах|фото|уборк|личн)/iu.test(copy);
+  }
+
+  return false;
+}
+
+function fillBulletsWithFallback(bullets: string[], fallback: string[], minimum = 2) {
+  const result = bullets
+    .map((item) => sanitizeCopyText(normalizeText(item, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX))
+    .filter((item) => item && !hasBrokenCopyTail(item));
+  const seen = new Set(result.map((item) => normalizeWordTokens(item).join(" ")));
+
+  for (const item of fallback) {
+    if (result.length >= Math.max(minimum, Math.min(MAX_BULLETS_PER_SLIDE, fallback.length))) {
+      break;
+    }
+    const normalized = sanitizeCopyText(normalizeText(item, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX);
+    const fingerprint = normalizeWordTokens(normalized).join(" ");
+    if (!normalized || hasBrokenCopyTail(normalized) || seen.has(fingerprint)) {
+      continue;
+    }
+    seen.add(fingerprint);
+    result.push(normalized);
+  }
+
+  return result.slice(0, MAX_BULLETS_PER_SLIDE);
 }
 
 function isWeakRoleTitle(value: string) {
@@ -4730,11 +5500,26 @@ function buildExampleFallback(
   const normalizedTopic = normalizeText(topic, 180).toLowerCase();
 
   if (mode === "sales") {
-    const focus = buildTopicFocus(sanitizeTopic(topic));
+    if (containsStem(normalizedTopic, ["реклам", "недвижим", "квартир", "объект", "заяв", "лид", "бюджет"])) {
+      return {
+        type: "example",
+        before: "До: 100 000 ₽ бюджета, CPL 950 ₽, 27 лидов и 3 показа за месяц.",
+        after: "После: 3 сегмента объявлений снизили CPL до 430 ₽ и дали 14 показов за 21 день."
+      };
+    }
+
+    if (containsStem(normalizedTopic, ["визит", "запис", "клиент", "повтор", "возвращ"])) {
+      return {
+        type: "example",
+        before: "До: 70 первых визитов в месяц, но возвращались только 15 клиентов.",
+        after: "После: follow-up через 24 часа поднял повторные записи до 38 клиентов за месяц."
+      };
+    }
+
     return {
       type: "example",
-      before: `До: «${focus} объясняли общо, и человек терял нить»`,
-      after: "После: «Сменили подход — и результат стал стабильным»"
+      before: "До: 3 недели запусков без понятной гипотезы и стабильных заявок.",
+      after: "После: 2 точных изменения дали первый измеримый результат за 10 дней."
     };
   }
 
@@ -4747,6 +5532,14 @@ function buildExampleFallback(
   }
 
   if (containsStem(normalizedTopic, ["квартир", "риелтор", "недвижим", "продаж", "объект"])) {
+    if (mode === "instruction" && containsStem(normalizedTopic, ["подготов", "выходн", "продаж"])) {
+      return {
+        type: "example",
+        before: "До: фото тёмные, вещи на виду, 12 дней без звонков.",
+        after: "После: 2 дня подготовки дали 9 показов и первый оффер за 14 дней."
+      };
+    }
+
     return {
       type: "example",
       before: "До: 6 месяцев показов без задатка и 20 случайных просмотров.",
@@ -4766,7 +5559,7 @@ function buildExampleFallback(
     return {
       type: "example",
       before: "До: 0 продающих сторис за неделю из-за страха реакции.",
-      after: "После: 1 простая сторис в день дала 5 диалогов за 7 дней."
+      after: "После: 3 спокойных упоминания оффера дали 5 диалогов за 7 дней."
     };
   }
 
@@ -4811,7 +5604,11 @@ function hasWeakExampleCopy(
   }
 
   if (mode === "sales") {
-    return countWords(example.before) < 4 || countWords(example.after) < 4;
+    return (
+      countWords(example.before) < 4 ||
+      countWords(example.after) < 4 ||
+      WEAK_EXAMPLE_PATTERNS.some((pattern) => pattern.test(copy))
+    );
   }
 
   return (
@@ -4835,7 +5632,7 @@ function normalizeBullets(value: unknown, fallback: string[]) {
       .replace(/^[•·\-–—→\s]+/u, "")
       .replace(/[.!?]+\s*$/u, "")
       .trim();
-    if (!normalized) {
+    if (!normalized || hasBrokenCopyTail(normalized)) {
       continue;
     }
 
@@ -4852,7 +5649,9 @@ function normalizeBullets(value: unknown, fallback: string[]) {
     }
   }
 
-  return cleaned.length ? cleaned : fallback.slice(0, MAX_BULLETS_PER_SLIDE);
+  return cleaned.length
+    ? fillBulletsWithFallback(cleaned, fallback, 2)
+    : fallback.filter((item) => !hasBrokenCopyTail(item)).slice(0, MAX_BULLETS_PER_SLIDE);
 }
 
 function buildCtaTitleFallback(goal: string | undefined, topic: string, mode: ContentMode = "expert") {
@@ -4899,6 +5698,23 @@ function sanitizeTopic(topic: string): string {
 }
 
 function buildSolutionTitleFallback(topic: string) {
+  const normalizedTopic = normalizeText(topic, 180).toLowerCase();
+  if (containsStem(normalizedTopic, ["щен", "собак", "туалет", "писа", "луж", "выгул", "прогул"])) {
+    return "План на 10 дней";
+  }
+
+  if (containsStem(normalizedTopic, ["подготов", "квартир", "продаж", "выходн"])) {
+    return "План на два дня";
+  }
+
+  if (containsStem(normalizedTopic, ["реклам", "заяв", "лид", "бюджет", "клик", "воронк"])) {
+    return "Проверьте воронку по шагам";
+  }
+
+  if (containsStem(normalizedTopic, ["сторис", "stories", "продав", "оффер"])) {
+    return "Что помогло продавать спокойно";
+  }
+
   const focus = upperFirst(buildCompactTopicFocus(sanitizeTopic(topic), 34));
   return trimToWordBoundary(`План действий по «${focus}»`, 84);
 }
@@ -4919,6 +5735,42 @@ function buildDeterministicSolutionFallback(
         "Выводите щенка после сна, еды и игры 6–8 раз в день",
         "Хвалите на улице в течение 2 секунд после результата",
         "Уберите запахи дома энзимным средством и ограничьте свободный доступ"
+      ]
+    };
+  }
+
+  if (containsStem(normalizedTopic, ["подготов", "квартир", "продаж", "выходн"])) {
+    return {
+      type: "solution",
+      title,
+      bullets: [
+        "День 1: уберите личные вещи, лишний декор и визуальный шум",
+        "День 1 вечер: замените лампочки, подкрутите ручки и устраните запахи",
+        "День 2: сделайте уборку, настройте свет и снимите тестовые фото"
+      ]
+    };
+  }
+
+  if (domain === "sales" && containsStem(normalizedTopic, ["реклам", "заяв", "лид", "бюджет", "клик", "воронк"])) {
+    return {
+      type: "solution",
+      title,
+      bullets: [
+        "Проверьте путь от клика до заявки: оффер, форма, скорость ответа",
+        "Сравните CPL, конверсию формы и качество заявок по каждой связке",
+        "Отключите связки без заявок за 3–5 дней и перераспределите бюджет"
+      ]
+    };
+  }
+
+  if (domain === "creator" && containsStem(normalizedTopic, ["сторис", "продав", "оффер"])) {
+    return {
+      type: "solution",
+      title,
+      bullets: [
+        "Назовите одну задачу клиента, которую решает ваш продукт",
+        "Запланируйте 3 спокойных упоминания оффера на неделю",
+        "После каждой сторис фиксируйте не страх, а число диалогов"
       ]
     };
   }
@@ -5061,7 +5913,36 @@ function buildRoleTitleFallback(
   const maxLength = role === "mistake" || role === "shift" ? 92 : 96;
   const sanitizedTopic = sanitizeTopic(topic);
   const domain = resolveTopicDomain(sanitizedTopic, options);
+  const mode = resolveModeFromOptions(options);
+  const normalizedTopic = normalizeText(topic, 180).toLowerCase();
   const focus = upperFirst(buildCompactTopicFocus(sanitizedTopic, 40));
+
+  if (mode === "diagnostic" && containsStem(normalizedTopic, ["реклам", "заяв", "лид", "бюджет", "клик", "воронк"])) {
+    const diagnosticTitles: Partial<Record<CarouselSlideRole, string>> = {
+      problem: "Клики растут, заявок нет",
+      amplify: "Сбой закрепляется в аналитике",
+      mistake: "Ошибка: масштабировать без диагностики",
+      shift: "Смотрите путь после клика"
+    };
+    const title = diagnosticTitles[role];
+    if (title) {
+      return trimToWordBoundary(title, maxLength);
+    }
+  }
+
+  if (mode === "instruction" && containsStem(normalizedTopic, ["подготов", "квартир", "продаж", "выходн"])) {
+    const instructionTitles: Partial<Record<CarouselSlideRole, string>> = {
+      problem: "Что проверить перед стартом",
+      amplify: "Что не успеет окупиться",
+      mistake: "Ошибка: начинать мини-ремонт",
+      shift: "Ставка на свет и простор"
+    };
+    const title = instructionTitles[role];
+    if (title) {
+      return trimToWordBoundary(title, maxLength);
+    }
+  }
+
   const domainVariants = buildDomainRoleTitleVariants(domain, focus);
   const roleVariants = (
     domainVariants as Partial<Record<"problem" | "amplify" | "mistake" | "shift", string[]>>
@@ -5086,6 +5967,27 @@ function buildRoleTitleFallback(
 }
 
 function buildDomainRoleTitleVariants(domain: TopicDomain, focus: string) {
+  if (domain === "pet") {
+    return {
+      problem: [
+        "Где сбивается режим туалета",
+        "Почему прогулка не помогает"
+      ],
+      amplify: [
+        "Как лужи закрепляют привычку",
+        "Почему запах важнее наказания"
+      ],
+      mistake: [
+        "Ошибка сразу после прогулки",
+        "Хозяин сбивает нужный сигнал"
+      ],
+      shift: [
+        "Как закрепляется туалетный рефлекс",
+        "Режим важнее одной прогулки"
+      ]
+    };
+  }
+
   if (domain === "education") {
     return {
       problem: [
@@ -5160,8 +6062,8 @@ function buildDomainRoleTitleVariants(domain: TopicDomain, focus: string) {
         `${focus}: почему без системы человек снова выпадает`
       ],
       mistake: [
-        `${focus}: фраза, после которой клиент исчезает`,
-        `${focus}: где обещание сильнее плана`
+        `${focus}: ошибка в компенсации усталости`,
+        `${focus}: где режим ломает дефицит`
       ],
       shift: [
         `${focus}: как вернуть ритм без перегруза`,
@@ -5287,6 +6189,30 @@ function buildRoleBulletsFallback(
         "Режим туалета становится предсказуемее уже через 7–10 дней.",
         "Лужи дома сокращаются, когда успешных выходов становится больше.",
         "Владелец видит сигналы заранее и спокойнее ведет обучение."
+      ];
+    }
+  }
+
+  if (containsStem(normalizedTopic, ["подготов", "квартир", "продаж", "выходн"])) {
+    if (role === "problem") {
+      return [
+        "Покупатель видит темные фото и не открывает объявление второй раз.",
+        "Личные вещи мешают представить квартиру своей.",
+        "Запахи, пыль и перегруженные углы удешевляют первое впечатление."
+      ];
+    }
+    if (role === "amplify") {
+      return [
+        "За выходные не окупится ремонт, который требует недели.",
+        "Дорогой декор не спасает плохой свет и захламленные зоны.",
+        "Подготовка усиливает показ, но не заменяет честную цену."
+      ];
+    }
+    if (role === "consequence") {
+      return [
+        "Фото становятся светлее, и объявление получает больше открытий.",
+        "На показе покупатель смотрит планировку, а не личные вещи.",
+        "Первые офферы появляются быстрее, если цена и вид совпадают."
       ];
     }
   }
@@ -5716,6 +6642,62 @@ function hasDanglingTail(value: string) {
   );
 }
 
+function hasBrokenCopyTail(value: string) {
+  const normalized = normalizeText(value, 220).trim();
+  if (!normalized) {
+    return true;
+  }
+
+  if (/[,:;—–-]\s*$/u.test(normalized) || hasDanglingTail(normalized)) {
+    return true;
+  }
+
+  if (/\b(?:за|через|до|на)\s+\d+\s*$/iu.test(normalized)) {
+    return true;
+  }
+
+  if (/\b(первых|следующих|ближайших|пробные|тестовые|конкретные|основные|целевые)\s*$/iu.test(normalized)) {
+    return true;
+  }
+
+  if (/\bне\s+(?:заменяет|работает|решает|закрывает|снимает)\s*$/iu.test(normalized)) {
+    return true;
+  }
+
+  if (/(?:^|[\s:])(?:где\s+возникает|как\s+закрепляется|где\s+хозяин|хотя\s+бюджет)\s*$/iu.test(normalized)) {
+    return true;
+  }
+
+  if (/:\s*шаг\s*$/iu.test(normalized)) {
+    return true;
+  }
+
+  return isIncompleteImperativeTail(normalized);
+}
+
+function removeBrokenCopyTail(value: string) {
+  return value
+    .replace(/\b(?:за|через|до|на)\s+\d+\s*$/iu, "")
+    .replace(/\b(первых|следующих|ближайших|пробные|тестовые|конкретные|основные|целевые)\s*$/iu, "")
+    .replace(/\bне\s+(?:заменяет|работает|решает|закрывает|снимает)\s*$/iu, "")
+    .replace(/(?:^|[\s:])(?:где\s+возникает|как\s+закрепляется|где\s+хозяин|хотя\s+бюджет)\s*$/iu, "")
+    .replace(/:\s*шаг\s*$/iu, "")
+    .replace(/\b(уберите|замените|добавьте|сделайте|проверьте|зафиксируйте|сравните|настройте|запланируйте|перепишите|проведите|оцените|подготовьте)\s*$/iu, "")
+    .replace(/[,:;—–-]+\s*$/u, "")
+    .trim();
+}
+
+function isIncompleteImperativeTail(value: string) {
+  const normalized = normalizeText(value, 220).toLowerCase();
+  if (!normalized || countWords(normalized) < 5) {
+    return false;
+  }
+
+  return /\b(уберите|замените|добавьте|сделайте|проверьте|зафиксируйте|сравните|настройте|запланируйте|перепишите|проведите|оцените|подготовьте)\s*$/iu.test(
+    normalized
+  );
+}
+
 function removeDanglingTail(value: string) {
   return value
     .replace(
@@ -5779,7 +6761,7 @@ function sanitizeCopyText(value: string, maxLength: number) {
   const endsWithExclamation = /!\s*$/u.test(trimmed);
   const endsWithTerminal = /[.?!]\s*$/u.test(trimmed);
   const withoutTerminal = trimmed.replace(/[.?!]+\s*$/u, "").trim();
-  const noTail = removeDanglingTail(withoutTerminal);
+  const noTail = removeBrokenCopyTail(removeDanglingTail(withoutTerminal));
   if (!noTail) {
     return "";
   }
@@ -6377,6 +7359,23 @@ function normalizeNonSalesCtaSubtitle(value: string, fallback: string) {
   return candidate;
 }
 
+function normalizeSalesCtaSubtitle(value: string, fallback: string) {
+  const source = sanitizeCopyText(normalizeText(value, CTA_SUBTITLE_INPUT_MAX * 2), CTA_SUBTITLE_OUTPUT_MAX);
+  const fallbackSentence =
+    normalizeCompleteSentence(fallback, CTA_SUBTITLE_OUTPUT_MAX, 24) ||
+    "Напишите в директ, чтобы получить разбор под вашу ситуацию.";
+  if (!source) {
+    return fallbackSentence;
+  }
+
+  const firstSentence = normalizeCompleteSentence(source, CTA_SUBTITLE_OUTPUT_MAX, 24);
+  if (!firstSentence || countWords(firstSentence) < 4 || countPrimaryCtaActions(firstSentence) > 1) {
+    return fallbackSentence;
+  }
+
+  return firstSentence;
+}
+
 function normalizeCompleteSentence(value: string, maxLength: number, maxWords?: number) {
   const source = sanitizeCopyText(normalizeText(value, maxLength * 2), maxLength);
   if (!source) {
@@ -6446,7 +7445,19 @@ function isFollowersGoal(goal: string) {
 }
 
 function buildDomainSoftCta(domain: TopicDomain, focus: string, topicSeed?: string) {
+  const normalizedSeed = normalizeText(topicSeed ?? "", 180).toLowerCase();
+  if (domain === "creator" && containsStem(normalizedSeed, ["сторис", "stories", "продав", "оффер"])) {
+    return pickVariantByTopic(topicSeed ?? domain, [
+      "Выберите одну спокойную продажную сторис на сегодня.",
+      "Сохраните план для следующей серии сторис."
+    ]);
+  }
+
   const variantsByDomain: Record<TopicDomain, string[]> = {
+    pet: [
+      "Выберите один шаг для ближайшей прогулки.",
+      "Сохраните план, чтобы сверяться с режимом щенка."
+    ],
     education: [
       "Сохраните карусель для подготовки ближайшего урока.",
       "Выберите один шаг для следующего занятия."

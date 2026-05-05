@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "smoke:generate": "node scripts/smoke-generate.mjs",
     "quality:generate": "node scripts/quality-gate.mjs",
+    "quality:generation-audit": "node scripts/generation-quality-audit.mjs",
     "quality:baseline:update": "node scripts/quality-baseline-update.mjs",
     "quality:baseline:diff": "node scripts/quality-baseline-diff.mjs",
     "smoke:mobile": "node scripts/mobile-ui-smoke.mjs",
