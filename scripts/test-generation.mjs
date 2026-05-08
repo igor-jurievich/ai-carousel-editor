@@ -311,7 +311,13 @@ function checkCarousel(slides, mode, topic) {
       "перенастрой",
       "перенастройте",
       "проанализируй",
-      "проанализируйте"
+      "проанализируйте",
+      "упрости",
+      "упростите",
+      "уведи",
+      "уведите",
+      "подготовь",
+      "подготовьте"
     ];
 
     const lines = solutionBody.split("\n").map(normalize).filter(Boolean);
