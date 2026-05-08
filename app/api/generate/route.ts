@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import { cookies } from "next/headers";
 import { timingSafeEqual } from "node:crypto";
-import { clampSlidesCount } from "@/lib/slides";
+import { clampSlidesCount, MAX_TOPIC_CHARS } from "@/lib/slides";
 import { generateCarouselFromTopic, type PromptVariant } from "@/lib/openai";
 import { getSupabasePublicConfig } from "@/lib/supabase";
 import { deductCredits, normalizeCredits } from "@/lib/generation/credits";
@@ -26,7 +26,6 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const MAX_TOPIC_CHARS = 800;
 const MIN_TOPIC_CHARS = 3;
 const DEFAULT_GENERATE_TIMEOUT_MS = 90_000;
 const DEFAULT_GENERATE_AUTO_TIMEOUT_MS = 90_000;

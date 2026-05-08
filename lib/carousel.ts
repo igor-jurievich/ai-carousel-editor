@@ -20,6 +20,7 @@ import {
   MAX_SLIDES_COUNT,
   MIN_SLIDES_COUNT
 } from "@/lib/slides";
+import { TOPIC_STOP_WORDS } from "@/lib/generation/constants";
 
 export const SLIDE_SIZE = 1080;
 export const DEFAULT_PROFILE_HANDLE = "@username";
@@ -483,39 +484,11 @@ function normalizeWordTokens(value: string) {
 }
 
 const GENERIC_ERROR_LEAD_RE = /^(одн[а-яё]*\s+)?(типичн[а-яё]*\s+)?(главн[а-яё]*\s+)?ошиб[а-яё]*/iu;
-const TITLE_DEDUPE_STOP_WORDS = new Set([
-  "как",
-  "что",
-  "это",
-  "или",
-  "для",
-  "про",
-  "под",
-  "без",
-  "при",
-  "где",
-  "когда",
-  "почему",
-  "вместо",
-  "после",
-  "до"
-]);
+const TITLE_DEDUPE_STOP_WORDS = new Set([...TOPIC_STOP_WORDS, "вместо", "после", "до"]);
 const LEGACY_TITLE_TEMPLATE_RE =
   /\b(по\s+теме|в\s+теме|где\s+ломается\s+поток|что\s+это\s+стоит\s+в\s+теме|разбор\s+под\s+ваш\s+кейс)\b/iu;
 const TITLE_ACCENT_STOP_WORDS = new Set([
-  "как",
-  "когда",
-  "почему",
-  "что",
-  "это",
-  "если",
-  "или",
-  "чтобы",
-  "для",
-  "про",
-  "под",
-  "без",
-  "при",
+  ...TOPIC_STOP_WORDS,
   "у",
   "в",
   "на",

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test:generation": "node scripts/test-generation.mjs",
     "smoke:generate": "node scripts/smoke-generate.mjs",
     "quality:generate": "node scripts/quality-gate.mjs",
     "quality:generation-audit": "node scripts/generation-quality-audit.mjs",

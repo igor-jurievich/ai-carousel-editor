@@ -7,9 +7,11 @@ type ToolbarProps = {
   topic: string;
   slidesCount: number;
   topicMaxLength: number;
+  withImages: boolean;
   status: string;
   onTopicChange: (value: string) => void;
   onSlidesCountChange: (value: number) => void;
+  onWithImagesChange: (value: boolean) => void;
   onGenerate: () => void;
   isGenerating: boolean;
   disabled?: boolean;
@@ -19,9 +21,11 @@ export function Toolbar({
   topic,
   slidesCount,
   topicMaxLength,
+  withImages,
   status,
   onTopicChange,
   onSlidesCountChange,
+  onWithImagesChange,
   onGenerate,
   isGenerating,
   disabled = false
@@ -57,6 +61,18 @@ export function Toolbar({
                 label: String(count)
               }))}
             />
+          </label>
+          <label className="prompt-toggle-field">
+            <input
+              type="checkbox"
+              checked={withImages}
+              onChange={(event) => onWithImagesChange(event.target.checked)}
+              disabled={isGenerating || disabled}
+            />
+            <span>
+              Добавить AI-фото
+              <small>-5 кредитов</small>
+            </span>
           </label>
           <button
             className="btn prompt-generate-btn"

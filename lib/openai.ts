@@ -61,7 +61,10 @@ import {
 import {
   CAROUSEL_SYSTEM_PROMPT,
   CAROUSEL_SYSTEM_PROMPT_EXPERT,
-  CAROUSEL_SYSTEM_PROMPT_INSTRUCTION
+  CAROUSEL_SYSTEM_PROMPT_INSTRUCTION,
+  CAROUSEL_SYSTEM_PROMPT_DIAGNOSTIC,
+  CAROUSEL_SYSTEM_PROMPT_CASE,
+  CAROUSEL_SYSTEM_PROMPT_SOCIAL
 } from "@/lib/generation/prompts";
 
 type CaptionGenerationInput = {
@@ -542,70 +545,28 @@ function resolveModeFromOptions(options?: GenerationOptions): ContentMode {
 }
 
 function buildSystemPrompt(mode: ContentMode, topic: string, options?: GenerationOptions) {
-  const domainHints = buildDomainPromptAddendum(resolveTopicDomain(topic, options))
-    .map((line) => `- ${line}`)
-    .join("\n");
   const basePrompt =
     mode === "sales"
       ? CAROUSEL_SYSTEM_PROMPT
       : mode === "instruction"
         ? CAROUSEL_SYSTEM_PROMPT_INSTRUCTION
-        : CAROUSEL_SYSTEM_PROMPT_EXPERT;
+        : mode === "diagnostic"
+          ? CAROUSEL_SYSTEM_PROMPT_DIAGNOSTIC
+          : mode === "case"
+            ? CAROUSEL_SYSTEM_PROMPT_CASE
+            : mode === "social"
+              ? CAROUSEL_SYSTEM_PROMPT_SOCIAL
+              : CAROUSEL_SYSTEM_PROMPT_EXPERT;
 
-  if (mode === "sales") {
-    return `${basePrompt}\n\nDOMAIN CONTEXT:\n${domainHints}`;
+  const domainAddendum = buildDomainPromptAddendum(resolveTopicDomain(topic, options))
+    .map((line) => `- ${line}`)
+    .join("\n");
+
+  if (!domainAddendum) {
+    return basePrompt;
   }
 
-  const nonSalesOverrides = [
-    "ПРИОРИТЕТНЫЕ ПРАВИЛА ДЛЯ NON-SALES (важнее базовых правил выше):",
-    "- Никакой воронки дожима. Удержание через ясность и пользу, а не через страх.",
-    "- Слайд 1 обязан прямо назвать предмет темы. Запрещены мета-хуки про дочитывание/сохранение.",
-    "- Избегай формулировок: «узкое место», «результат буксует», «покажу как раскрыть тему».",
-    "- Не обвиняй читателя. Нельзя токсичный тон и давление через стыд.",
-    "- Не усиливай драму искусственно. Допустима только реалистичная конкретика.",
-    "- CTA только мягкий или отсутствует. Нельзя «напиши слово в директ» и двойные CTA.",
-    "- CTA: одно полное предложение до 20 слов, без обрыва и без raw topic в падеже.",
-    "- Subtitle первого слайда не начинает разбор словами «разберём», «в теме», «рассмотрим», «поговорим о».",
-    "- Example: обязательно конкретный кейс с цифрами. До: ситуация с числами. После: результат с числами.",
-    "- Пункты списка без символов в начале строки (без →, •, -).",
-    "- Каждый слайд строго соответствует роли: solution содержит только действия и решения."
-  ];
-
-  if (mode === "instruction") {
-    nonSalesOverrides.push(
-      "- Логика контента: цель, шаги, условия, частые ошибки и итог.",
-      "- Каждый шаг практичный и применимый сразу."
-    );
-  } else if (mode === "diagnostic") {
-    nonSalesOverrides.push(
-      "- Логика контента: симптомы, причины, механизм и как исправить.",
-      "- Не запугивай последствиями, объясняй причинно-следственно."
-    );
-  } else if (mode === "case") {
-    nonSalesOverrides.push(
-      "- Логика контента: контекст, действия, результат и вывод.",
-      "- Цифры и факты допускаются только реалистичные и проверяемые."
-    );
-  } else if (mode === "social") {
-    nonSalesOverrides.push(
-      "- Допускается более живой тон, но без крика, продавливания и агрессивного дожима."
-    );
-  } else {
-    nonSalesOverrides.push(
-      "- Логика контента: объяснение, причины, механизм, решение, пример и краткий итог."
-    );
-  }
-
-  const modeExamples = buildModePromptExamples(mode);
-
-  return [
-    basePrompt,
-    nonSalesOverrides.join("\n"),
-    modeExamples ? `MODE EXAMPLES:\n${modeExamples}` : "",
-    `DOMAIN CONTEXT:\n${domainHints}`
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  return `${basePrompt}\n\nДОПОЛНИТЕЛЬНЫЙ КОНТЕКСТ:\n${domainAddendum}`;
 }
 
 function buildModePromptExamples(mode: ContentMode) {
@@ -695,8 +656,6 @@ function buildFirstSlideTitleForMode(topic: string, mode: ContentMode) {
 }
 
 function buildFirstSlideSubtitleForMode(topic: string, mode: ContentMode) {
-  void topic;
-
   if (mode === "instruction") {
     return "Понятный порядок: что сделать первым, что проверить и как увидеть результат.";
   }
@@ -713,7 +672,12 @@ function buildFirstSlideSubtitleForMode(topic: string, mode: ContentMode) {
     return "Без давления: что мешало, какой поворот помог и какой шаг можно повторить.";
   }
 
-  return "Покажем причину, механизм и первый шаг, который можно проверить без давления.";
+  if (isPetToiletTopic(topic)) {
+    return "До 4 месяцев щенок часто не выдерживает больше 2 часов — это физиология, а не упрямство.";
+  }
+
+  const topicFocus = buildCompactTopicFocus(sanitizeTopic(topic), 42);
+  return `Один конкретный признак в теме «${topicFocus}» покажет, где искать настоящую причину.`;
 }
 
 function buildInstructionFirstSlideTitle(topic: string, focus: string) {
@@ -2029,7 +1993,7 @@ function repairPetToiletSlides(
         subtitle:
           mode === "instruction"
             ? "Понятный порядок: что сделать первым, что проверить и как увидеть результат."
-            : "Покажем причину, механизм и первый шаг, который можно проверить без давления."
+            : "До 4 месяцев щенок часто не выдерживает больше 2 часов — это физиология, а не упрямство."
       };
     }
 

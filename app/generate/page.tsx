@@ -21,7 +21,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { createSlidesFromOutline, projectTitleFromTopic } from "@/lib/carousel";
-import { clampSlidesCount, DEFAULT_SLIDES_COUNT, SLIDES_COUNT_OPTIONS } from "@/lib/slides";
+import {
+  clampSlidesCount,
+  DEFAULT_SLIDES_COUNT,
+  MAX_TOPIC_CHARS,
+  SLIDES_COUNT_OPTIONS
+} from "@/lib/slides";
 import { saveLocalProject } from "@/lib/projects";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { trackEvent } from "@/lib/telemetry";
@@ -95,7 +100,6 @@ type SelectOption = {
 };
 type GenerationStatus = "idle" | "loading" | "success" | "error";
 
-const MAX_TOPIC_CHARS = 4000;
 const STATUS_ROTATION_MS = 2500;
 const STATUS_MESSAGES_BY_MODE: Record<ContentModeInput, string[]> = {
   auto: [

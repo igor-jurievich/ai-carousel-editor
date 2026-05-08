@@ -63,8 +63,10 @@ import {
 import {
   clampSlidesCount,
   DEFAULT_SLIDES_COUNT,
+  MAX_TOPIC_CHARS,
   SLIDES_COUNT_OPTIONS
 } from "@/lib/slides";
+import { resolveContentModeInput } from "@/lib/content-mode";
 import { getLocalProject, saveLocalProject } from "@/lib/projects";
 import { trackEvent } from "@/lib/telemetry";
 import type {
@@ -85,11 +87,18 @@ import type {
 const DEFAULT_STATUS =
   "Откройте demo-серию, затем введите свою тему и нажмите «Сгенерировать».";
 const MOBILE_BREAKPOINT = 768;
-const MAX_TOPIC_CHARS = 4000;
 const MIN_TOPIC_CHARS = 3;
 const EXPORT_LOCK_STATUS = "Дождитесь завершения экспорта и повторите действие.";
 const GENERATE_LOCK_STATUS = "Дождитесь завершения генерации и повторите действие.";
 const GENERATE_TIMEOUT_MS = 110_000;
+const GENERATE_PROGRESS_INTERVAL_MS = 3_000;
+const AUTOSAVE_DEBOUNCE_MS = 1_200;
+const DOUBLE_TAP_THRESHOLD_MS = 320;
+const HISTORY_SNAPSHOT_THROTTLE_MS = 320;
+const FONTS_READY_TIMEOUT_MS = 2_200;
+const CANVAS_TRANSITION_MS = 260;
+const LAYOUT_SETTLE_MS = 220;
+const GRID_VISIBLE_OPACITY_THRESHOLD = 0.04;
 
 type ExportMode = "zip" | "png" | "jpg" | "pdf";
 const HISTORY_LIMIT = 40;
@@ -516,10 +525,6 @@ function buildGridDecorationElements(
   return elements;
 }
 
-function resolveGridElementOpacity(element: Pick<ShapeElement, "shape">) {
-  return element.shape === "circle" ? 1 : 1;
-}
-
 function normalizeHighlightRanges(ranges: TextHighlightRange[] | undefined, textLength: number) {
   if (!ranges?.length || textLength <= 0) {
     return [] as TextHighlightRange[];
@@ -635,6 +640,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const [projectId, setProjectId] = useState<string | null>(initialProjectId);
   const [promptVariant, setPromptVariant] = useState<"A" | "B">("B");
   const [contentMode, setContentMode] = useState<ContentModeInput>("auto");
+  const [withImages, setWithImages] = useState(false);
   const [niche, setNiche] = useState("");
   const [audience, setAudience] = useState("");
   const [tone, setTone] = useState("balanced");
@@ -791,7 +797,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       if (!cancelled) {
         setFontsReady(true);
       }
-    }, 2200);
+    }, FONTS_READY_TIMEOUT_MS);
 
     document.fonts.ready
       .catch(() => undefined)
@@ -870,7 +876,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
     updateSize();
     const settleTimerA = window.setTimeout(updateSize, 0);
-    const settleTimerB = window.setTimeout(updateSize, 220);
+    const settleTimerB = window.setTimeout(updateSize, LAYOUT_SETTLE_MS);
     const observer = new ResizeObserver(updateSize);
     if (desktopCanvasHostRef.current) {
       observer.observe(desktopCanvasHostRef.current);
@@ -924,7 +930,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       }
 
       const now = Date.now();
-      if (now - lastTapAt < 320) {
+      if (now - lastTapAt < DOUBLE_TAP_THRESHOLD_MS) {
         event.preventDefault();
       }
       lastTapAt = now;
@@ -1117,7 +1123,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       (element) =>
         element.type === "shape" &&
         element.metaKey === "decor-grid-line" &&
-        (element.opacity ?? 1) > 0.04
+        (element.opacity ?? 1) > GRID_VISIBLE_OPACITY_THRESHOLD
     )
   );
 
@@ -1229,7 +1235,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     canvasTransitionTimerRef.current = window.setTimeout(() => {
       setIsCanvasTransitioning(false);
       canvasTransitionTimerRef.current = null;
-    }, 260);
+    }, CANVAS_TRANSITION_MS);
   };
 
   useEffect(() => {
@@ -1264,19 +1270,12 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
     skipAutosaveRef.current = true;
     setProjectId(existing.id ?? initialProjectId);
-    setSlides(existing.slides?.length ? cloneSlides(existing.slides) : createStarterSlides("light", "1:1"));
+    setSlides(
+      existing.slides?.length ? normalizeSlidesForEditor(existing.slides) : createStarterSlides("light", "1:1")
+    );
     setTopic(existing.topic ?? "");
     setPromptVariant(existing.promptVariant === "A" ? "A" : "B");
-    setContentMode(
-      existing.contentMode === "sales" ||
-        existing.contentMode === "expert" ||
-        existing.contentMode === "instruction" ||
-        existing.contentMode === "diagnostic" ||
-        existing.contentMode === "case" ||
-        existing.contentMode === "social"
-        ? existing.contentMode
-        : "auto"
-    );
+    setContentMode(resolveContentModeInput(existing.contentMode));
     setSlidesCount(clampSlidesCount(existing.slides?.length ?? DEFAULT_SLIDES_COUNT));
     setNiche(existing.niche ?? "");
     setAudience(existing.audience ?? "");
@@ -1319,7 +1318,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           id: projectId ?? undefined,
           title: projectTitleFromTopic(topic),
           topic,
-          slides: cloneSlides(slides),
+          slides,
           format: slideFormat,
           theme: activeTemplateId,
           promptVariant,
@@ -1352,7 +1351,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           );
         }
       }
-    }, 420);
+    }, AUTOSAVE_DEBOUNCE_MS);
 
     return () => {
       if (autosaveTimerRef.current) {
@@ -1468,7 +1467,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
   const pushHistorySnapshot = (force = false) => {
     const now = Date.now();
-    if (!force && now - lastHistoryAtRef.current < 320) {
+    if (!force && now - lastHistoryAtRef.current < HISTORY_SNAPSHOT_THROTTLE_MS) {
       return;
     }
     lastHistoryAtRef.current = now;
@@ -1801,12 +1800,18 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     const source = options?.source ?? "editor";
     const openPostTool = Boolean(options?.openPostTool);
     let controller: AbortController | null = null;
+    let progressIntervalId: number | null = null;
+    const generationStartTime = Date.now();
 
     try {
       setIsGenerating(true);
       setStatus(
         `Генерирую структуру через OpenAI (${requestedSlidesCount} слайдов, формат ${slideFormat})...`
       );
+      progressIntervalId = window.setInterval(() => {
+        const elapsedSeconds = Math.round((Date.now() - generationStartTime) / 1000);
+        setStatus(`Генерирую карусель... ${elapsedSeconds}с`);
+      }, GENERATE_PROGRESS_INTERVAL_MS);
       trackEvent({
         name: "generate_started",
         payload: {
@@ -1814,6 +1819,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           format: slideFormat,
           slidesCount: requestedSlidesCount,
           promptVariant,
+          withImages,
           openPostTool
         }
       });
@@ -1837,7 +1843,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           format: slideFormat,
           theme: activeTemplateId,
           promptVariant,
-          contentMode
+          contentMode,
+          withImages
         }),
         signal: activeController.signal
       }).finally(() => {
@@ -1887,16 +1894,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       setEditingTextElementId(null);
       setCaptionResult(null);
       setPromptVariant(data.project?.promptVariant === "A" ? "A" : "B");
-      setContentMode(
-        data.project?.contentMode === "sales" ||
-          data.project?.contentMode === "expert" ||
-          data.project?.contentMode === "instruction" ||
-          data.project?.contentMode === "diagnostic" ||
-          data.project?.contentMode === "case" ||
-          data.project?.contentMode === "social"
-          ? data.project.contentMode
-          : contentMode
-      );
+      const nextContentMode = resolveContentModeInput(data.project?.contentMode);
+      setContentMode(nextContentMode === "auto" ? contentMode : nextContentMode);
       setIsGeneratePanelVisible(false);
       trackEvent({
         name: "generate_succeeded",
@@ -1905,6 +1904,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           format: slideFormat,
           slidesCount: nextSlides.length,
           promptVariant: data.project?.promptVariant ?? "B",
+          withImages,
           openPostTool
         }
       });
@@ -1933,6 +1933,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         toast.error("Не удалось сгенерировать");
       }
     } finally {
+      if (progressIntervalId !== null) {
+        window.clearInterval(progressIntervalId);
+      }
       if (requestId === generateRequestRef.current) {
         setIsGenerating(false);
       }
@@ -2183,8 +2186,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         }
       });
       setStatus(`Изображение "${file.name}" добавлено в макет.`);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Не удалось добавить изображение.");
+    } catch {
+      setStatus("Не удалось загрузить изображение. Проверьте формат файла (PNG, JPG, WebP).");
+      toast.error("Ошибка загрузки изображения");
     } finally {
       setPendingImageSlideId(null);
       if (imageInputRef.current) {
@@ -2232,8 +2236,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
         }
       });
       setStatus(`Фон "${file.name}" добавлен.`);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Не удалось добавить фоновое изображение.");
+    } catch {
+      setStatus("Не удалось загрузить изображение. Проверьте формат файла (PNG, JPG, WebP).");
+      toast.error("Ошибка загрузки изображения");
     } finally {
       setPendingBackgroundSlideId(null);
       if (backgroundImageInputRef.current) {
@@ -3206,7 +3211,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       const gridColor = resolveGridColorForBackground(preset.background);
       const nextGrid = buildGridDecorationElements(slideFormat, preset.gridMode, gridColor).map((element) => ({
         ...element,
-        opacity: resolveGridElementOpacity(element)
+        opacity: 1
       }));
 
       return {
@@ -3258,7 +3263,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       if (!hasGrid) {
         const nextGrid = buildGridDecorationElements(slideFormat, inferredMode, gridColor).map((element) => ({
           ...element,
-          opacity: resolveGridElementOpacity(element)
+          opacity: 1
         }));
         return {
           ...slide,
@@ -3276,9 +3281,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
             ...element,
             fill: gridColor,
             opacity:
-              (element.opacity ?? 0) > 0.04
-                ? element.opacity ?? resolveGridElementOpacity(element)
-                : resolveGridElementOpacity(element)
+              (element.opacity ?? 0) > GRID_VISIBLE_OPACITY_THRESHOLD
+                ? element.opacity ?? 1
+                : 1
           };
         })
       };
@@ -4584,9 +4589,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
               topic={topic}
               slidesCount={slidesCount}
               topicMaxLength={MAX_TOPIC_CHARS}
+              withImages={withImages}
               status={status}
               onTopicChange={setTopic}
               onSlidesCountChange={(value) => setSlidesCount(clampSlidesCount(value))}
+              onWithImagesChange={setWithImages}
               onGenerate={handleGenerate}
               isGenerating={isGenerating}
               disabled={generationLocked}
@@ -5699,8 +5706,27 @@ function stripLegacyAccentArtifactsFromSlide(slide: Slide): Slide {
   };
 }
 
-function cloneSlides(slides: Slide[]): Slide[] {
+function normalizeSlidesForEditor(slides: Slide[]): Slide[] {
   return slides.map(stripLegacyAccentArtifactsFromSlide);
+}
+
+function cloneCanvasElement(element: CanvasElement): CanvasElement {
+  if (element.type === "text") {
+    return {
+      ...element,
+      highlights: element.highlights?.map((range) => ({ ...range }))
+    };
+  }
+
+  return { ...element };
+}
+
+function cloneSlides(slides: Slide[]): Slide[] {
+  return slides.map((slide) => ({
+    ...slide,
+    photoSettings: slide.photoSettings ? { ...slide.photoSettings } : slide.photoSettings,
+    elements: slide.elements.map(cloneCanvasElement)
+  }));
 }
 
 function buildOutlineFromSlides(slides: Slide[]): CarouselOutlineSlide[] {
