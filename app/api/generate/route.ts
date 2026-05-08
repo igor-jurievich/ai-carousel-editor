@@ -7,6 +7,13 @@ import { timingSafeEqual } from "node:crypto";
 import { clampSlidesCount } from "@/lib/slides";
 import { generateCarouselFromTopic, type PromptVariant } from "@/lib/openai";
 import { getSupabasePublicConfig } from "@/lib/supabase";
+import { deductCredits, normalizeCredits } from "@/lib/generation/credits";
+import {
+  consumeGenerateSlot,
+  acquireImageGenerationLock,
+  releaseImageGenerationLock,
+  getClientIp
+} from "@/lib/generation/rate-limit";
 import {
   CAROUSEL_TEMPLATE_IDS,
   type CarouselOutlineSlide,
@@ -32,11 +39,6 @@ const GENERATE_KEEP_ALIVE_INTERVAL_MS = 15_000;
 const DEFAULT_IMAGE_MODEL_RESOLVE_TIMEOUT_MS = 8_000;
 const DEFAULT_IMAGE_GENERATE_TIMEOUT_MS = 60_000;
 const DEFAULT_IMAGE_GENERATE_QA_TIMEOUT_MS = 60_000;
-const DEFAULT_RATE_LIMIT_MAX = 12;
-const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_SWEEP_THRESHOLD = 5000;
-const IMAGE_GENERATION_LOCK_SWEEP_THRESHOLD = 4000;
-const DEFAULT_IMAGE_GENERATION_LOCK_TTL_MS = 60_000;
 const GENERATE_QA_BYPASS_HEADER = "x-qa-generate-key";
 const GENERATE_QA_BYPASS_HEADER_LEGACY = "x-generate-qa-key";
 const IMAGE_MODEL_CANDIDATES = ["gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini"] as const;
@@ -51,12 +53,6 @@ const CONTENT_MODE_SET = new Set<ContentModeInput>([
   "social"
 ]);
 
-type RateLimitBucket = {
-  count: number;
-  resetAt: number;
-};
-
-type GenerationCreditsReason = "carousel_text" | "carousel_with_images";
 type ImageSlideRole = "hook" | "mistake" | "example";
 type CarouselOutlineSlideWithImage = CarouselOutlineSlide & {
   image?: string | null;
@@ -66,9 +62,6 @@ type GenerateRouteClients = {
   sessionClient: any;
   serviceClient: any;
 };
-
-const generateRateLimit = new Map<string, RateLimitBucket>();
-const imageGenerationLocks = new Map<string, number>();
 
 export async function GET() {
   const clients = await createGenerateRouteClients();
@@ -414,7 +407,7 @@ export async function POST(request: Request) {
 
     const { generationResult, slides, imageModel, imagesGenerated } = generationData;
     const creditsToCharge = withImages && imagesGenerated === 0 ? 1 : withImages ? 5 : 1;
-    const creditsReason: GenerationCreditsReason =
+    const creditsReason =
       creditsToCharge >= 5 ? "carousel_with_images" : "carousel_text";
     let remainingCredits: number | null = null;
     const creditsCharged = qaBypass ? 0 : creditsToCharge;
@@ -428,7 +421,7 @@ export async function POST(request: Request) {
         return { error: "Сервис недоступен: не удалось определить пользователя." };
       }
 
-      const creditsResult = await consumeGenerationCredits({
+      const creditsResult = await deductCredits({
         clients,
         userId,
         amount: creditsToCharge,
@@ -713,137 +706,6 @@ function resolveGenerateTimeoutMs(
   return Math.max(10000, Math.min(180000, Math.round(raw)));
 }
 
-function getClientIp(request: Request) {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) {
-    const first = forwardedFor
-      .split(",")
-      .map((value) => value.trim())
-      .find(Boolean);
-
-    if (first) {
-      return first;
-    }
-  }
-
-  return request.headers.get("x-real-ip")?.trim() || "unknown";
-}
-
-function consumeGenerateSlot(ip: string, now: number) {
-  const maxRequests = resolveRateLimitMax();
-  const windowMs = resolveRateLimitWindowMs();
-
-  sweepRateLimit(now);
-
-  const current = generateRateLimit.get(ip);
-  if (!current || now >= current.resetAt) {
-    generateRateLimit.set(ip, {
-      count: 1,
-      resetAt: now + windowMs
-    });
-
-    return {
-      allowed: true,
-      retryAfterSeconds: 0
-    };
-  }
-
-  if (current.count >= maxRequests) {
-    const retryAfterSeconds = Math.max(1, Math.ceil((current.resetAt - now) / 1000));
-
-    return {
-      allowed: false,
-      retryAfterSeconds
-    };
-  }
-
-  current.count += 1;
-  generateRateLimit.set(ip, current);
-
-  return {
-    allowed: true,
-    retryAfterSeconds: 0
-  };
-}
-
-function resolveRateLimitMax() {
-  const raw = Number(process.env.GENERATE_RATE_LIMIT_MAX);
-
-  if (!Number.isFinite(raw)) {
-    return DEFAULT_RATE_LIMIT_MAX;
-  }
-
-  return Math.max(1, Math.min(200, Math.round(raw)));
-}
-
-function resolveRateLimitWindowMs() {
-  const raw = Number(process.env.GENERATE_RATE_LIMIT_WINDOW_MS);
-
-  if (!Number.isFinite(raw)) {
-    return DEFAULT_RATE_LIMIT_WINDOW_MS;
-  }
-
-  return Math.max(5000, Math.min(10 * 60_000, Math.round(raw)));
-}
-
-function sweepRateLimit(now: number) {
-  if (generateRateLimit.size < RATE_LIMIT_SWEEP_THRESHOLD) {
-    return;
-  }
-
-  for (const [key, value] of generateRateLimit.entries()) {
-    if (now >= value.resetAt) {
-      generateRateLimit.delete(key);
-    }
-  }
-}
-
-function resolveImageGenerationLockTtlMs() {
-  const raw = Number(process.env.GENERATE_IMAGE_LOCK_TTL_MS);
-
-  if (!Number.isFinite(raw)) {
-    return DEFAULT_IMAGE_GENERATION_LOCK_TTL_MS;
-  }
-
-  return Math.max(10_000, Math.min(300_000, Math.round(raw)));
-}
-
-function sweepImageGenerationLocks(now: number) {
-  if (imageGenerationLocks.size < IMAGE_GENERATION_LOCK_SWEEP_THRESHOLD) {
-    return;
-  }
-
-  for (const [key, expiresAt] of imageGenerationLocks.entries()) {
-    if (now >= expiresAt) {
-      imageGenerationLocks.delete(key);
-    }
-  }
-}
-
-function acquireImageGenerationLock(key: string, now: number) {
-  sweepImageGenerationLocks(now);
-
-  const expiresAt = imageGenerationLocks.get(key);
-  if (typeof expiresAt === "number" && expiresAt > now) {
-    return {
-      allowed: false as const,
-      retryAfterSeconds: Math.max(1, Math.ceil((expiresAt - now) / 1000))
-    };
-  }
-
-  const ttlMs = resolveImageGenerationLockTtlMs();
-  imageGenerationLocks.set(key, now + ttlMs);
-
-  return {
-    allowed: true as const,
-    retryAfterSeconds: 0
-  };
-}
-
-function releaseImageGenerationLock(key: string) {
-  imageGenerationLocks.delete(key);
-}
-
 let openAiClient: OpenAI | null = null;
 
 function getOpenAiClient() {
@@ -1060,110 +922,6 @@ function isModelUnavailableError(error: unknown) {
   );
 }
 
-async function consumeGenerationCredits(params: {
-  clients: GenerateRouteClients;
-  userId: string;
-  amount: number;
-  reason: GenerationCreditsReason;
-}) {
-  const { clients, userId, amount, reason } = params;
-  const creditsToCharge = Math.max(1, Math.trunc(amount));
-  const maxAttempts = 4;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const { data: profile, error: profileError } = await clients.serviceClient
-      .from("profiles")
-      .select("credits")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (profileError) {
-      console.error("Failed to load profile before credits consume:", profileError);
-      return {
-        ok: false as const,
-        code: "failed" as const,
-        message: "Не удалось списать кредиты за генерацию. Попробуйте снова."
-      };
-    }
-
-    if (!profile) {
-      return {
-        ok: false as const,
-        code: "failed" as const,
-        message: "Профиль пользователя не найден."
-      };
-    }
-
-    const availableCredits = normalizeCredits(profile.credits);
-    if (availableCredits < creditsToCharge) {
-      return {
-        ok: false as const,
-        code: "no_credits" as const,
-        currentCredits: availableCredits
-      };
-    }
-
-    const nextCredits = availableCredits - creditsToCharge;
-    const { data: updatedProfile, error: updateError } = await clients.serviceClient
-      .from("profiles")
-      .update({ credits: nextCredits })
-      .eq("id", userId)
-      .eq("credits", availableCredits)
-      .select("credits")
-      .maybeSingle();
-
-    if (updateError) {
-      console.error("Failed to update credits balance:", updateError);
-      return {
-        ok: false as const,
-        code: "failed" as const,
-        message: "Не удалось списать кредиты за генерацию. Попробуйте снова."
-      };
-    }
-
-    if (!updatedProfile) {
-      continue;
-    }
-
-    const { error: logError } = await clients.serviceClient.from("credits_log").insert({
-      user_id: userId,
-      amount: -creditsToCharge,
-      reason
-    });
-
-    if (logError) {
-      console.error("Failed to write generation credits log:", logError);
-
-      const { error: rollbackError } = await clients.serviceClient
-        .from("profiles")
-        .update({ credits: availableCredits })
-        .eq("id", userId)
-        .eq("credits", nextCredits);
-
-      if (rollbackError) {
-        console.error("Failed to rollback credits after credits_log insert error:", rollbackError);
-      }
-
-      return {
-        ok: false as const,
-        code: "failed" as const,
-        message: "Не удалось записать историю списания кредитов."
-      };
-    }
-
-    return {
-      ok: true as const,
-      remainingCredits: normalizeCredits(updatedProfile.credits)
-    };
-  }
-
-  return {
-    ok: false as const,
-    code: "failed" as const,
-    message: "Не удалось списать кредиты из-за параллельной генерации. Попробуйте снова."
-  };
-}
-
 function isValidSlidesPayload(slides: unknown): slides is CarouselOutlineSlide[] {
   if (!Array.isArray(slides) || slides.length < 8 || slides.length > 10) {
     return false;
@@ -1322,15 +1080,6 @@ function isStringArray(value: unknown, minLength = 0) {
     value.length >= minLength &&
     value.every((item) => typeof item === "string" && item.trim().length > 0)
   );
-}
-
-function normalizeCredits(value: unknown) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.trunc(numeric));
 }
 
 async function createGenerateRouteClients(): Promise<GenerateRouteClients | null> {
