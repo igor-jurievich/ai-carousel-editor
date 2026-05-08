@@ -8,29 +8,55 @@ import type {
   ContentModeInput
 } from "@/types/editor";
 
-export type PromptVariant = "A" | "B";
-export type CarouselGenerationSource = "model" | "fallback";
-export type CarouselFallbackReason = "quota" | "error" | "timeout";
-type TopicDomain =
-  | "sales"
-  | "pet"
-  | "education"
-  | "psychology"
-  | "health"
-  | "fitness"
-  | "beauty"
-  | "finance"
-  | "creator"
-  | "general";
+export type { PromptVariant, CarouselGenerationSource, CarouselFallbackReason } from "@/lib/generation/constants";
 
-type GenerationOptions = {
-  niche?: string;
-  audience?: string;
-  tone?: string;
-  goal?: string;
-  promptVariant?: PromptVariant;
-  contentMode?: ContentModeInput;
-};
+import type {
+  PromptVariant,
+  CarouselGenerationSource,
+  CarouselFallbackReason,
+  TopicDomain,
+  GenerationOptions,
+  CarouselGenerationMeta,
+  ModeDecision,
+  TonePreference,
+  ModeSlidePlanStep
+} from "@/lib/generation/constants";
+
+import {
+  HOOK_SUBTITLE_INPUT_MAX,
+  HOOK_SUBTITLE_OUTPUT_MAX,
+  CTA_SUBTITLE_INPUT_MAX,
+  CTA_SUBTITLE_OUTPUT_MAX,
+  BODY_BLOCK_INPUT_MAX,
+  BODY_BLOCK_OUTPUT_MAX,
+  BULLET_INPUT_MAX,
+  BULLET_OUTPUT_MAX,
+  MAX_BULLETS_PER_SLIDE,
+  DEFAULT_MODEL_CANDIDATES,
+  DEFAULT_MODEL_ATTEMPTS,
+  DEFAULT_MODEL_CANDIDATE_LIMIT,
+  CONTENT_MODE_LIST,
+  CANONICAL_FLOW,
+  FLOW_BY_COUNT,
+  MODE_SLIDE_PLANS,
+  FALLBACK_TITLES,
+  TOPIC_STOP_WORDS
+} from "@/lib/generation/constants";
+
+import {
+  META_HOOK_PATTERNS,
+  NON_SALES_TONE_PATTERNS,
+  NON_SALES_TONE_REPLACEMENTS,
+  BANNED_TEMPLATE_PATTERNS,
+  FIRST_SLIDE_SUBTITLE_BANNED_PATTERNS,
+  WEAK_EXAMPLE_PATTERNS,
+  SOLUTION_ROLE_NEGATIVE_PATTERNS,
+  SOLUTION_ROLE_ACTION_PATTERNS,
+  WEAK_SHIFT_PATTERNS,
+  WEAK_ROLE_TITLE_PATTERNS,
+  WEAK_BULLET_PATTERNS,
+  OPENING_STYLE_RISK_PATTERNS
+} from "@/lib/generation/patterns";
 
 type CaptionGenerationInput = {
   topic: string;
@@ -41,13 +67,6 @@ type CaptionGenerationInput = {
   goal?: string;
   contentMode?: ContentModeInput;
   resolvedMode?: ContentMode;
-};
-
-type CarouselGenerationMeta = {
-  model: string;
-  tokensUsed: number;
-  validationErrors: string[];
-  retried: boolean;
 };
 
 type CarouselGenerationResult = {
@@ -73,255 +92,6 @@ type CarouselGenerationResult = {
   };
   fallbackReason?: CarouselFallbackReason;
 };
-
-type ModeDecision = {
-  modeDetected: ContentMode;
-  modeEffective: ContentMode;
-  modeSource: "auto" | "manual";
-  confidence: number;
-  reasonCodes: string[];
-};
-
-type TonePreference = "soft" | "balanced" | "sharp";
-
-const CANONICAL_FLOW: CarouselSlideRole[] = [
-  "hook",
-  "problem",
-  "amplify",
-  "mistake",
-  "consequence",
-  "shift",
-  "solution",
-  "example",
-  "cta"
-];
-
-const FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
-  8: ["hook", "problem", "mistake", "consequence", "shift", "solution", "example", "cta"],
-  9: [...CANONICAL_FLOW],
-  10: [
-    "hook",
-    "problem",
-    "amplify",
-    "mistake",
-    "consequence",
-    "shift",
-    "solution",
-    "example",
-    "example",
-    "cta"
-  ]
-};
-
-type ModeSlidePlanStep = {
-  role: CarouselSlideRole;
-  intent: string;
-};
-
-const MODE_SLIDE_PLANS: Record<ContentMode, ModeSlidePlanStep[]> = {
-  sales: [
-    { role: "hook", intent: "сильный захват внимания" },
-    { role: "problem", intent: "узнаваемые симптомы боли" },
-    { role: "amplify", intent: "усиление цены бездействия" },
-    { role: "mistake", intent: "ключевая ошибка аудитории" },
-    { role: "consequence", intent: "чем это заканчивается" },
-    { role: "shift", intent: "поворот мышления" },
-    { role: "solution", intent: "практические действия" },
-    { role: "example", intent: "мини-кейс или до/после" },
-    { role: "cta", intent: "прямой следующий шаг" }
-  ],
-  expert: [
-    { role: "hook", intent: "прямо назвать тему и пользу" },
-    { role: "problem", intent: "описать симптомы ситуации" },
-    { role: "amplify", intent: "раскрыть ключевые причины" },
-    { role: "mistake", intent: "показать типичную ошибку" },
-    { role: "shift", intent: "объяснить механизм: как работает на деле" },
-    { role: "solution", intent: "дать рабочие шаги" },
-    { role: "example", intent: "короткий пример применения" },
-    { role: "consequence", intent: "какой результат получим при внедрении" },
-    { role: "cta", intent: "мягкий вывод/следующий шаг" }
-  ],
-  instruction: [
-    { role: "hook", intent: "какую задачу решаем" },
-    { role: "problem", intent: "исходная точка и ограничения" },
-    { role: "shift", intent: "главный принцип выполнения" },
-    { role: "solution", intent: "пошаговый алгоритм действий" },
-    { role: "mistake", intent: "типичные ошибки при выполнении" },
-    { role: "amplify", intent: "условия, тайминг, важные нюансы" },
-    { role: "example", intent: "как это выглядит на практике" },
-    { role: "consequence", intent: "критерии, что все идет правильно" },
-    { role: "cta", intent: "сделать первый шаг сегодня" }
-  ],
-  diagnostic: [
-    { role: "hook", intent: "какой сбой разбираем" },
-    { role: "problem", intent: "внешние симптомы" },
-    { role: "mistake", intent: "частая неверная реакция" },
-    { role: "consequence", intent: "к чему ведет текущий сценарий" },
-    { role: "amplify", intent: "почему сбой закрепляется" },
-    { role: "shift", intent: "что меняем в понимании" },
-    { role: "solution", intent: "корректирующие действия" },
-    { role: "example", intent: "мини-диагностика на примере" },
-    { role: "cta", intent: "проверка у себя без давления" }
-  ],
-  case: [
-    { role: "hook", intent: "контекст кейса" },
-    { role: "problem", intent: "исходная проблема" },
-    { role: "example", intent: "точка до: факты и цифры" },
-    { role: "amplify", intent: "ключевые ограничения" },
-    { role: "shift", intent: "гипотеза и поворот подхода" },
-    { role: "solution", intent: "что конкретно сделали" },
-    { role: "mistake", intent: "что убрали/исправили" },
-    { role: "consequence", intent: "результат после изменений" },
-    { role: "cta", intent: "вывод и мягкий следующий шаг" }
-  ],
-  social: [
-    { role: "hook", intent: "узнаваемая бытовая ситуация" },
-    { role: "problem", intent: "что мешает и раздражает" },
-    { role: "amplify", intent: "почему это затягивается" },
-    { role: "mistake", intent: "неочевидная ошибка" },
-    { role: "shift", intent: "спокойный разворот мысли" },
-    { role: "solution", intent: "что реально помогает" },
-    { role: "example", intent: "живой короткий пример" },
-    { role: "consequence", intent: "как меняется повседневность" },
-    { role: "cta", intent: "мягкое вовлечение без дожима" }
-  ]
-};
-
-const DEFAULT_MODEL_CANDIDATES = [
-  "gpt-5.1",
-  "gpt-4o"
-] as const;
-
-const HOOK_SUBTITLE_INPUT_MAX = 154;
-const HOOK_SUBTITLE_OUTPUT_MAX = 148;
-const CTA_SUBTITLE_INPUT_MAX = 160;
-const CTA_SUBTITLE_OUTPUT_MAX = 152;
-const BODY_BLOCK_INPUT_MAX = 380;
-const BODY_BLOCK_OUTPUT_MAX = 330;
-const BULLET_INPUT_MAX = 112;
-const BULLET_OUTPUT_MAX = 92;
-const MAX_BULLETS_PER_SLIDE = 3;
-const DEFAULT_MODEL_ATTEMPTS = 1;
-const DEFAULT_MODEL_CANDIDATE_LIMIT = 3;
-
-const FALLBACK_TITLES: Record<CarouselSlideRole, string[]> = {
-  hook: [
-    "Это ломает результат с первого дня",
-    "Пока ты это делаешь — результат стоит",
-    "Одна деталь, которую все пропускают"
-  ],
-  problem: [
-    "Знакомая ситуация?",
-    "Вот с чего всё начинается",
-    "Так выглядит проблема изнутри"
-  ],
-  amplify: [
-    "Дальше — хуже",
-    "Масштаб больше, чем кажется",
-    "Это тянет за собой всё остальное"
-  ],
-  mistake: [
-    "Главная ошибка — вот эта",
-    "Вот что делают не так",
-    "Ошибка, которая дорого обходится"
-  ],
-  consequence: [
-    "Цена этой ошибки",
-    "Вот чем это заканчивается",
-    "К чему это приводит"
-  ],
-  shift: [
-    "А теперь посмотри иначе",
-    "Вот что меняет картину",
-    "Разворот: всё проще чем кажется"
-  ],
-  solution: [
-    "Вот что работает",
-    "Три шага к результату",
-    "Делай так — и увидишь разницу"
-  ],
-  example: [
-    "Пример из практики",
-    "До/после: реальный кейс",
-    "Как это сработало"
-  ],
-  cta: [
-    "Сохраните и примените",
-    "Проверьте это у себя",
-    "Сделайте первый шаг сегодня"
-  ]
-};
-
-const CONTENT_MODE_LIST: ContentMode[] = [
-  "sales",
-  "expert",
-  "instruction",
-  "diagnostic",
-  "case",
-  "social"
-];
-
-const META_HOOK_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])(дочитыва|досматрива|сохраня[а-яё]*|пересыла|вовлечени|удержани)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(узк[а-яё]*\s+мест[а-яё]*|результат\s+буксует|шаги\s+есть,\s*а\s+результат)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(покажу,\s*как\s+раскрыть|чтобы\s+люди\s+дочитывали|раскрыть\s+тему\s+так)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(карусел[ьи]|контент)(?=$|[^\p{L}])/iu
-];
-
-const NON_SALES_TONE_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])ты\s+делаешь\s+неправильно(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])у\s+тебя\s+вс[её]\s+плохо(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])дом\s+превращается\s+в\s+собачий\s+туалет(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])это\s+не\s+пройдет\s+само(?:\s+по\s+себе)?(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])ты\s+учишь\s+через\s+страх\s+и\s+случай(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])стыдно\s+показывать(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])вечно(?:й|го)\s+(?:запах|хаос)(?=$|[^\p{L}])/iu,
-  /!{2,}/u
-];
-
-type NonSalesToneReplacement = {
-  detect: RegExp;
-  replace: RegExp;
-  value: string;
-};
-
-const NON_SALES_TONE_REPLACEMENTS: NonSalesToneReplacement[] = [
-  {
-    detect: /дом\s+превращается\s+в\s+собачий\s+туалет/iu,
-    replace: /дом\s+превращается\s+в\s+собачий\s+туалет/giu,
-    value: "дома регулярно появляются лужи"
-  },
-  {
-    detect: /это\s+не\s+пройдет\s+само(?:\s+по\s+себе)?/iu,
-    replace: /это\s+не\s+пройдет\s+само(?:\s+по\s+себе)?/giu,
-    value: "само по себе это редко стабилизируется"
-  },
-  {
-    detect: /ты\s+учишь\s+через\s+страх\s+и\s+случай/iu,
-    replace: /ты\s+учишь\s+через\s+страх\s+и\s+случай/giu,
-    value: "обучение получается непоследовательным"
-  },
-  {
-    detect: /ты\s+делаешь\s+неправильно/iu,
-    replace: /ты\s+делаешь\s+неправильно/giu,
-    value: "этот подход обычно не срабатывает"
-  },
-  {
-    detect: /у\s+тебя\s+вс[её]\s+плохо/iu,
-    replace: /у\s+тебя\s+вс[её]\s+плохо/giu,
-    value: "в этой точке часто возникает сбой"
-  },
-  {
-    detect: /стыдно\s+показывать/iu,
-    replace: /стыдно\s+показывать/giu,
-    value: "некомфортно показывать"
-  },
-  {
-    detect: /вечно(?:й|го)\s+(?:запах|хаос)/iu,
-    replace: /вечно(?:й|го)\s+(?:запах|хаос)/giu,
-    value: "постоянный запах и беспорядок"
-  }
-];
 
 const CAROUSEL_SYSTEM_PROMPT = `Ты — топовый Instagram-копирайтер. Пишешь карусели которые люди сохраняют, пересылают друзьям и комментируют "блин, это про меня".
 
@@ -546,118 +316,6 @@ CTA:
 - ровно столько слайдов, сколько запросили;
 - каждый слайд: role, title, body;
 - caption отдельным полем, без markdown.`;
-
-const BANNED_TEMPLATE_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])в\s+современном\s+мире(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])давайте\s+разбер[её]мся(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])как\s+известно(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])не\s+секрет\s+что(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])многие\s+задаются\s+вопросом(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])сегодня\s+как\s+никогда(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])в\s+эпоху\s+цифровизац(?:ии|и)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])как\s+показывает\s+практика(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])важно\s+понимать(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])на\s+самом\s+деле(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])стоит\s+отметить(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])следует\s+учитывать(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])необходимо\s+помнить(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])ключ\s+к\s+успеху(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])почему\s+это\s+важно(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])что\s+нужно\s+знать(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])главный\s+секрет(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])простой\s+способ(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])эффективный\s+метод(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])ключевые\s+моменты(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])обратите\s+внимание(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(эффективн[а-яё]*|качественн[а-яё]*|уникальн[а-яё]*|инновационн[а-яё]*)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(топ|лучших|способов)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])где\s+ломается\s+поток(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])по\s+теме(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])в\s+теме(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])разбор\s+под\s+ваш\s+кейс(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])быстрый\s+рычаг(?=$|[^\p{L}])/iu
-];
-
-const FIRST_SLIDE_SUBTITLE_BANNED_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])в\s+теме(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])разбер[её]м(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])рассмотрим(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])поговорим\s+о(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])почему\s+вокруг\s+тем[аы](?=$|[^\p{L}])/iu
-];
-
-const WEAK_EXAMPLE_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])объясняли\s+общо(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])человек\s+терял\s+нить(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])разбирали\s+по\s+верхам(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])не\s+было\s+конкретики(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])сменили\s+подход(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])результат\s+стал\s+стабильным(?=$|[^\p{L}])/iu
-];
-
-const SOLUTION_ROLE_NEGATIVE_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])(проблем|ошиб|меша|не\s+работа|плохо|усталост|голод|падени[ея]\s+энергии)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(без\s+восстановлен|лишн[а-яё]*\s+кардио|сократить\s+движение|снова\s+срыва)(?=$|[^\p{L}])/iu
-];
-
-const SOLUTION_ROLE_ACTION_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])(сделай|сделайте|выбери|выберите|проверь|проверьте|добавь|добавьте|убери|уберите)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(начни|начните|зафиксируй|зафиксируйте|используй|используйте|настрой|настройте|стабилизируй|стабилизируйте)(?=$|[^\p{L}])/iu
-];
-
-const WEAK_SHIFT_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])важно\s+выслушать(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])важнее\s+всего(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])пора\s+смотреть(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])нужно\s+просто(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])главное\s+—?\s*быть\s+собой(?=$|[^\p{L}])/iu
-];
-
-const WEAK_ROLE_TITLE_PATTERNS: RegExp[] = [
-  /^почему\s+это\s+важно\??$/iu,
-  /^что\s+нужно\s+знать\??$/iu,
-  /^главный\s+секрет\??$/iu,
-  /^простой\s+способ\??$/iu,
-  /^эффективный\s+метод\??$/iu,
-  /^ключевые\s+моменты\??$/iu,
-  /^обратите\s+внимание\??$/iu,
-  /(?:^|[^\p{L}])(топ|лучших|способов)(?=$|[^\p{L}])/iu,
-  /^что\s+это\s+значит(\s+для\s+вас)?\??$/iu,
-  /^что\s+делать\s+по\s+шагам\??$/iu,
-  /^что\s+изменится,\s*если\s+оставить\s+как\s+есть\??$/iu,
-  /^готов[а-яё]*\s+объединить\s+усилия\??$/iu,
-  /^пора\s+работать\s+как\s+одна\s+команда\??$/iu,
-  /^вместе\s+тестировать\s+новые\s+подходы\??$/iu,
-  /^как\s+переформулировать\s+мысль\??$/iu,
-  /^всё\s+держится\s+на\s+отдельных\s+звеньях\??$/iu,
-  /^разные\s+цели\s+—?\s*слепые\s+зоны\??$/iu,
-  /^что\s+теряет\s+бизнес\s+из[-\s]за\s+разногласий\??$/iu,
-  /^разбор[:\s-]/iu,
-  /^план,\s*который\s+можно\s+внедрить/iu,
-  /^мини[-\s]?кейс[:\s-]/iu,
-  /:\s*фраз[аы]?\s*$/iu,
-  /:\s*(?:где\s+хозяин|как\s+закрепляется|где\s+возникает|шаг)\s*$/iu,
-  /\bхотя\s+бюджет\s*$/iu,
-  /^пример\b/iu,
-  /^до\s+после\b/iu,
-  /^[\p{L}-]+(?:у|ю)\s+[\p{L}-]{4,}ть\s*:/iu,
-  /^[\p{L}-]+\s+[\p{L}-]{4,}ть:\s+как\b/iu
-];
-
-const WEAK_BULLET_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])(важно\s+понимать|нужно\s+просто|следует\s+помнить|в\s+целом|в\s+общем|как\s+правило|на\s+самом\s+деле|стоит\s+отметить|следует\s+учитывать|необходимо\s+помнить)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(как\s+известно|не\s+секрет\s+что|многие\s+задаются\s+вопросом|сегодня\s+как\s+никогда|в\s+эпоху\s+цифровизац(?:ии|и)|как\s+показывает\s+практика)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(работайте\s+системно|держите\s+фокус|будьте\s+на\s+связи)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(улучшить|усилить|повысить)\s+(процесс|эффективность|результат)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(делать\s+контент|вести\s+соцсети|развивать\s+блог)\s*(?:регулярно)?(?=$|[^\p{L}])/iu
-];
-
-const OPENING_STYLE_RISK_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])(необходимо|следует|требуется|важно)\s+(обеспечить|осуществить|реализовать|проводить|формировать)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(эффективн[а-яё]*|качественн[а-яё]*|оптимальн[а-яё]*)\s+(подход|решени[ея]|процесс|взаимодействи[ея]|механизм)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(улучшить|повысить|оптимизировать)\s+(эффективность|процесс)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(в\s+целом|в\s+общем|как\s+правило)(?=$|[^\p{L}])/iu
-];
 
 function resolveModelCandidates(mode: ContentMode = "expert") {
   const uniqueCandidates = [
@@ -6957,30 +6615,6 @@ function sanitizeTitleValue(value: unknown, maxLength: number) {
     .replace(/[.!]+\s*$/u, "")
     .trim();
 }
-
-const TOPIC_STOP_WORDS = new Set([
-  "как",
-  "что",
-  "это",
-  "или",
-  "для",
-  "про",
-  "под",
-  "без",
-  "при",
-  "где",
-  "надо",
-  "нужно",
-  "тема",
-  "теме",
-  "почему",
-  "когда",
-  "чтобы",
-  "если",
-  "так",
-  "еще",
-  "ещё"
-]);
 
 function topicStem(token: string) {
   return token.slice(0, Math.min(6, token.length));
