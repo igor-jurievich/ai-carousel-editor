@@ -22,7 +22,6 @@ import {
 } from "@/lib/slides";
 import { TOPIC_STOP_WORDS } from "@/lib/generation/constants";
 
-export const SLIDE_SIZE = 1080;
 export const DEFAULT_PROFILE_HANDLE = "@username";
 export const DEFAULT_PROFILE_SUBTITLE = "";
 const DEFAULT_SLIDE_PHOTO_SETTINGS: SlidePhotoSettings = {
@@ -444,10 +443,6 @@ function resolveTemplateId(candidate: CarouselTemplateId | undefined, fallback: 
   return fallback;
 }
 
-export function getPrimaryTemplates() {
-  return PRIMARY_TEMPLATE_IDS.map((id) => getTemplate(id));
-}
-
 export function getTemplatesByCategory(category: CarouselTemplateCategory) {
   return CAROUSEL_TEMPLATES.filter((template) => template.category === category);
 }
@@ -585,12 +580,17 @@ function sanitizeTopic(topic: string) {
   }
 
   const cleaned = normalized
+    .replace(
+      /^(?:сделай|создай|сгенерируй|напиши|подготовь|собери)\s+(?:карусель|пост|текст|контент|сер(?:ию|ию\s+слайдов)|слайды?)\s*(?:для|про|о|об|на\s+тему)?\s*/iu,
+      ""
+    )
     .replace(/^(как\s+правильн[а-яё]*\s+)/iu, "")
     .replace(/^(почему\s+)/iu, "")
     .replace(/^(что\s*бы\s+)/iu, "")
     .replace(/^(чтобы\s+)/iu, "")
     .replace(/^(как\s+)/iu, "")
     .replace(/^(что\s+делать\s+(?:с|если|когда)\s+)/iu, "")
+    .replace(/\b(?:instagram|инстаграм|инстаграме|инсты|карусел[ьи]|пост)\b/giu, " ")
     .replace(/\bкак\s+правильн[а-яё]*\b/giu, "")
     .replace(/\bпочему\b/giu, "")
     .replace(/\bчто\s*бы\b/giu, "")
@@ -2821,7 +2821,7 @@ function rebuildSlide(
     role: slide.generationRole ?? (index === 0 ? "hook" : index === totalSlides - 1 ? "cta" : "solution"),
     slideType: slide.slideType ?? "text",
     title: managedTitle?.text ?? slide.name ?? "Новый слайд",
-    body: managedBody?.text ?? "Добавьте основной тезис"
+    body: managedBody?.text ?? "Ключевой тезис слайда"
   };
   const nextTemplate = getTemplate(templateId);
   const palette = resolveSlidePalette(nextTemplate, blueprint);
@@ -3207,10 +3207,14 @@ export function createBlankSlide(
           title: "Новый заголовок",
           subtitle: "Коротко раскройте ценность этого слайда"
         }
-      : role === "solution"
+          : role === "solution"
         ? {
             type: "solution",
-            bullets: ["Добавьте пункт 1", "Добавьте пункт 2", "Добавьте пункт 3"]
+            bullets: [
+              "Сформулируйте один понятный шаг",
+              "Покажите пример или критерий результата",
+              "Завершите слайд конкретным действием"
+            ]
           }
         : role === "shift"
           ? {
@@ -3225,8 +3229,8 @@ export function createBlankSlide(
               }
             : {
                 type: "example",
-                before: "До: ваш старый вариант",
-                after: "После: усиленный вариант"
+                before: "До: мысль звучала слишком общо",
+                after: "После: появился понятный шаг и ожидаемый результат"
               };
 
   return createSlideFromOutline(blueprint, index, templateId, format, totalSlides, slideType);
