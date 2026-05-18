@@ -173,7 +173,7 @@ export default function AdminPage() {
         <header className={styles.header}>
           <div className={styles.brandWrap}>
             <h1 className={styles.brand}>pastello.io</h1>
-            <span className={styles.panelLabel}>Admin Panel</span>
+            <span className={styles.panelLabel}>Панель администратора</span>
           </div>
           <button type="button" className={styles.signOutButton} onClick={() => void handleSignOut()}>
             Выйти
@@ -217,6 +217,8 @@ export default function AdminPage() {
                     const plusTenActionKey = `${user.id}:add:10`;
                     const resetActionKey = `${user.id}:reset:none`;
                     const customValue = customAmounts[user.id] ?? "";
+                    const customActionKey = `${user.id}:add:${Number(customValue)}`;
+                    const isRowPending = Boolean(pendingActionKey?.startsWith(`${user.id}:`));
 
                     return (
                       <tr key={user.id}>
@@ -232,15 +234,16 @@ export default function AdminPage() {
                             <button
                               type="button"
                               className={styles.actionButton}
-                              disabled={pendingActionKey === plusTenActionKey}
+                              disabled={isRowPending}
                               onClick={() => void applyCreditsAction(user.id, "add", 10)}
                             >
-                              +10
+                              {pendingActionKey === plusTenActionKey ? "..." : "+10"}
                             </button>
                             <div className={styles.customAction}>
                               <input
                                 className={styles.customInput}
                                 value={customValue}
+                                disabled={isRowPending}
                                 onChange={(event) =>
                                   setCustomAmounts((current) => ({
                                     ...current,
@@ -253,29 +256,29 @@ export default function AdminPage() {
                               <button
                                 type="button"
                                 className={styles.actionButton}
-                                disabled={pendingActionKey === `${user.id}:add:${customValue}`}
+                                disabled={isRowPending}
                                 onClick={() => void handleCustomTopUp(user.id)}
                               >
-                                Добавить
+                                {pendingActionKey === customActionKey ? "Добавляем..." : "Добавить"}
                               </button>
                             </div>
                             <button
                               type="button"
                               className={styles.actionButtonSecondary}
-                              disabled={pendingActionKey === resetActionKey}
+                              disabled={isRowPending}
                               onClick={() => void applyCreditsAction(user.id, "reset")}
                             >
-                              Сбросить
+                              {pendingActionKey === resetActionKey ? "..." : "Сбросить"}
                             </button>
                           </div>
 
                           <button
                             type="button"
                             className={styles.mobileTopUp}
-                            disabled={pendingActionKey === plusTenActionKey}
+                            disabled={isRowPending}
                             onClick={() => void applyCreditsAction(user.id, "add", 10)}
                           >
-                            +10
+                            {pendingActionKey === plusTenActionKey ? "..." : "+10"}
                           </button>
                         </td>
                       </tr>

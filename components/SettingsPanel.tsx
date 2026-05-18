@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import * as Popover from "@radix-ui/react-popover";
 import * as Switch from "@radix-ui/react-switch";
 import {
@@ -667,9 +668,12 @@ export function SettingsPanel({
         </div>
         <div className="desktop-photo-preview-row">
           {hasBackgroundImage && slide.backgroundImage ? (
-            <img
+            <Image
               src={slide.backgroundImage}
               alt="Превью фото"
+              width={96}
+              height={96}
+              unoptimized
               className="desktop-photo-preview"
             />
           ) : (
@@ -1131,18 +1135,18 @@ export function SettingsPanel({
         {captionResult ? (
           <>
             <label className="field-label">
-              CTA
+              Основной призыв
               <textarea className="field" readOnly value={captionResult.cta} rows={2} />
             </label>
             {captionResult.ctaSoft ? (
               <label className="field-label">
-                CTA Soft
+                Мягкий призыв
                 <textarea className="field" readOnly value={captionResult.ctaSoft} rows={2} />
               </label>
             ) : null}
             {captionResult.ctaAggressive ? (
               <label className="field-label">
-                CTA Aggressive
+                Активный призыв
                 <textarea className="field" readOnly value={captionResult.ctaAggressive} rows={2} />
               </label>
             ) : null}
