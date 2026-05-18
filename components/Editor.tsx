@@ -91,6 +91,7 @@ const MIN_TOPIC_CHARS = 3;
 const EXPORT_LOCK_STATUS = "Дождитесь завершения экспорта и повторите действие.";
 const GENERATE_LOCK_STATUS = "Дождитесь завершения генерации и повторите действие.";
 const GENERATE_TIMEOUT_MS = 110_000;
+const CAPTION_TIMEOUT_MS = 60_000;
 const GENERATE_PROGRESS_INTERVAL_MS = 3_000;
 const AUTOSAVE_DEBOUNCE_MS = 1_200;
 const DOUBLE_TAP_THRESHOLD_MS = 320;
@@ -709,6 +710,8 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const backgroundImageInputRef = useRef<HTMLInputElement | null>(null);
   const generateRequestRef = useRef(0);
   const generateAbortRef = useRef<AbortController | null>(null);
+  const captionRequestRef = useRef(0);
+  const captionAbortRef = useRef<AbortController | null>(null);
   const canvasTransitionTimerRef = useRef<number | null>(null);
   const lastHistoryAtRef = useRef(0);
   const skipAutosaveRef = useRef(false);
@@ -1436,8 +1439,12 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
   useEffect(() => {
     return () => {
+      generateRequestRef.current += 1;
       generateAbortRef.current?.abort();
       generateAbortRef.current = null;
+      captionRequestRef.current += 1;
+      captionAbortRef.current?.abort();
+      captionAbortRef.current = null;
       if (canvasTransitionTimerRef.current !== null) {
         window.clearTimeout(canvasTransitionTimerRef.current);
         canvasTransitionTimerRef.current = null;
@@ -1889,7 +1896,11 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       pushHistorySnapshot(true);
       setSlides(nextSlides);
       setNeedsPostGenerateRelayout(true);
-      setActiveSlideId(nextSlides[0]?.id ?? null);
+      const firstSlideId = nextSlides[0]?.id ?? null;
+      setActiveSlideId(firstSlideId);
+      if (firstSlideId) {
+        setScrollToSlideRequest({ id: firstSlideId, token: Date.now() });
+      }
       setSelectedElementId(null);
       setEditingTextElementId(null);
       setCaptionResult(null);
@@ -2526,10 +2537,18 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       return;
     }
 
+    const requestId = captionRequestRef.current + 1;
+    captionRequestRef.current = requestId;
+    let controller: AbortController | null = null;
+
     try {
       setIsGeneratingCaption(true);
       setStatus("Генерирую подпись к посту...");
 
+      const activeController = new AbortController();
+      controller = activeController;
+      captionAbortRef.current = activeController;
+      const timeoutId = window.setTimeout(() => activeController.abort(), CAPTION_TIMEOUT_MS);
       const response = await fetch("/api/caption", {
         method: "POST",
         headers: {
@@ -2543,7 +2562,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           goal,
           contentMode,
           slides: outline
-        })
+        }),
+        signal: activeController.signal
+      }).finally(() => {
+        window.clearTimeout(timeoutId);
       });
 
       const data = (await response.json()) as {
@@ -2553,6 +2575,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
 
       if (!response.ok || !data.caption) {
         throw new Error(data.error || "Не удалось сгенерировать подпись.");
+      }
+
+      if (requestId !== captionRequestRef.current) {
+        return;
       }
 
       setCaptionResult(data.caption);
@@ -2566,9 +2592,20 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       });
       setStatus("Подпись к посту готова.");
     } catch (error) {
-      setStatus(resolveUserFacingError(error, "Ошибка генерации подписи. Попробуйте снова."));
+      if (requestId === captionRequestRef.current) {
+        const message =
+          error instanceof DOMException && error.name === "AbortError"
+            ? "Генерация подписи заняла слишком много времени. Попробуйте ещё раз."
+            : resolveUserFacingError(error, "Ошибка генерации подписи. Попробуйте снова.");
+        setStatus(message);
+      }
     } finally {
-      setIsGeneratingCaption(false);
+      if (requestId === captionRequestRef.current) {
+        setIsGeneratingCaption(false);
+      }
+      if (controller && captionAbortRef.current === controller) {
+        captionAbortRef.current = null;
+      }
     }
   };
 
@@ -2580,10 +2617,10 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     const ctaLines = [
       captionResult.cta,
       captionResult.ctaSoft && captionResult.ctaSoft !== captionResult.cta
-        ? `Soft CTA: ${captionResult.ctaSoft}`
+        ? `Мягкий призыв: ${captionResult.ctaSoft}`
         : "",
       captionResult.ctaAggressive && captionResult.ctaAggressive !== captionResult.cta
-        ? `Aggressive CTA: ${captionResult.ctaAggressive}`
+        ? `Активный призыв: ${captionResult.ctaAggressive}`
         : ""
     ]
       .filter(Boolean)

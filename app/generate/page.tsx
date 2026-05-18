@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -101,6 +102,7 @@ type SelectOption = {
 type GenerationStatus = "idle" | "loading" | "success" | "error";
 
 const STATUS_ROTATION_MS = 2500;
+const GENERATE_TIMEOUT_MS = 110_000;
 const STATUS_MESSAGES_BY_MODE: Record<ContentModeInput, string[]> = {
   auto: [
     "Определяю структуру темы...",
@@ -341,6 +343,8 @@ export default function GeneratePage() {
   const previewRevealTimeoutRef = useRef<number | null>(null);
   const hideErrorStatusTimeoutRef = useRef<number | null>(null);
   const hideProgressTimeoutRef = useRef<number | null>(null);
+  const generationRequestRef = useRef(0);
+  const generationAbortRef = useRef<AbortController | null>(null);
 
   const slidesCountOptions = useMemo<SelectOption[]>(
     () => SLIDES_COUNT_OPTIONS.map((count) => ({ value: String(count), label: String(count) })),
@@ -547,6 +551,9 @@ export default function GeneratePage() {
 
   useEffect(() => {
     return () => {
+      generationRequestRef.current += 1;
+      generationAbortRef.current?.abort();
+      generationAbortRef.current = null;
       if (previewRevealTimeoutRef.current !== null) {
         window.clearTimeout(previewRevealTimeoutRef.current);
       }
@@ -582,6 +589,10 @@ export default function GeneratePage() {
       hideProgressTimeoutRef.current = null;
     }
 
+    const requestId = generationRequestRef.current + 1;
+    generationRequestRef.current = requestId;
+    let controller: AbortController | null = null;
+
     try {
       setIsAdvancedOpen(false);
       setOpenSelectId(null);
@@ -613,6 +624,10 @@ export default function GeneratePage() {
         }
       });
 
+      const activeController = new AbortController();
+      controller = activeController;
+      generationAbortRef.current = activeController;
+      const timeoutId = window.setTimeout(() => activeController.abort(), GENERATE_TIMEOUT_MS);
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
@@ -629,10 +644,17 @@ export default function GeneratePage() {
           format,
           theme,
           withImages
-        })
+        }),
+        signal: activeController.signal
+      }).finally(() => {
+        window.clearTimeout(timeoutId);
       });
 
       const data = (await response.json()) as GenerateResponse;
+      if (requestId !== generationRequestRef.current) {
+        return;
+      }
+
       if (!response.ok) {
         if (response.status === 403 && data.error === "no_credits") {
           const needed =
@@ -739,25 +761,34 @@ export default function GeneratePage() {
             generationError instanceof Error ? generationError.message.slice(0, 120) : "unknown"
         }
       });
-      const message =
-        generationError instanceof Error
-          ? generationError.message
-          : "Не смогли сгенерировать. Попробуйте переформулировать тему.";
-      setGenerationStatus("error");
-      setGenerationErrorMessage(message);
-      setIsProgressVisible(false);
-      setIsProgressFading(false);
-      setProgressWidth(0);
-      toast.error("Не удалось сгенерировать");
-      setPreviewSlides(null);
-      setGeneratedProjectMeta(null);
-      hideErrorStatusTimeoutRef.current = window.setTimeout(() => {
-        setGenerationStatus("idle");
-        setGenerationErrorMessage(null);
-        hideErrorStatusTimeoutRef.current = null;
-      }, 5000);
+      if (requestId === generationRequestRef.current) {
+        const message =
+          generationError instanceof DOMException && generationError.name === "AbortError"
+            ? "Генерация заняла слишком много времени. Попробуйте ещё раз."
+            : generationError instanceof Error
+              ? generationError.message
+              : "Не смогли сгенерировать. Попробуйте переформулировать тему.";
+        setGenerationStatus("error");
+        setGenerationErrorMessage(message);
+        setIsProgressVisible(false);
+        setIsProgressFading(false);
+        setProgressWidth(0);
+        toast.error("Не удалось сгенерировать");
+        setPreviewSlides(null);
+        setGeneratedProjectMeta(null);
+        hideErrorStatusTimeoutRef.current = window.setTimeout(() => {
+          setGenerationStatus("idle");
+          setGenerationErrorMessage(null);
+          hideErrorStatusTimeoutRef.current = null;
+        }, 5000);
+      }
     } finally {
-      setIsGenerating(false);
+      if (requestId === generationRequestRef.current) {
+        setIsGenerating(false);
+      }
+      if (controller && generationAbortRef.current === controller) {
+        generationAbortRef.current = null;
+      }
     }
   };
 
@@ -853,7 +884,7 @@ export default function GeneratePage() {
       <header className={styles.stickyHeader}>
         <div className={styles.headerInner}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <img src="/logo.svg" alt="pastello.io" width={32} height={32} />
+            <Image src="/logo.svg" alt="pastello.io" width={32} height={32} priority />
             <span className={styles.logo}>
               pastello
               <span style={{ color: "#6366f1", fontWeight: 400 }}>.io</span>
