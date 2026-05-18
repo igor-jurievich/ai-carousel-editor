@@ -1,5 +1,7 @@
+import type { AppServiceSupabaseClient } from "@/types/supabase";
+
 export type GenerationCreditsReason = "carousel_text" | "carousel_with_images";
-export type CreditsClients = { serviceClient: any };
+export type CreditsClients = { serviceClient: AppServiceSupabaseClient };
 
 export async function deductCredits(params: {
   clients: CreditsClients;
