@@ -5,7 +5,11 @@ import OpenAI from "openai";
 import { cookies } from "next/headers";
 import { timingSafeEqual } from "node:crypto";
 import { clampSlidesCount, MAX_TOPIC_CHARS } from "@/lib/slides";
-import { generateCarouselFromTopic, type PromptVariant } from "@/lib/openai";
+import {
+  generateCarouselFromTopic,
+  generateFallbackCarouselFromTopic,
+  type PromptVariant
+} from "@/lib/openai";
 import { getSupabasePublicConfig } from "@/lib/supabase";
 import { deductCredits, normalizeCredits } from "@/lib/generation/credits";
 import {
@@ -22,22 +26,27 @@ import {
   type CarouselTemplateId,
   type SlideFormat
 } from "@/types/editor";
+import type {
+  AppDatabase,
+  AppRouteSupabaseClient,
+  AppServiceSupabaseClient
+} from "@/types/supabase";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const MIN_TOPIC_CHARS = 3;
-const DEFAULT_GENERATE_TIMEOUT_MS = 90_000;
-const DEFAULT_GENERATE_AUTO_TIMEOUT_MS = 90_000;
-const DEFAULT_GENERATE_NON_SALES_TIMEOUT_MS = 90_000;
-const DEFAULT_GENERATE_WITH_IMAGES_TIMEOUT_MS = 90_000;
-const DEFAULT_GENERATE_WITH_IMAGES_AUTO_TIMEOUT_MS = 90_000;
-const DEFAULT_GENERATE_WITH_IMAGES_NON_SALES_TIMEOUT_MS = 90_000;
+const DEFAULT_GENERATE_TIMEOUT_MS = 60_000;
+const DEFAULT_GENERATE_AUTO_TIMEOUT_MS = 60_000;
+const DEFAULT_GENERATE_NON_SALES_TIMEOUT_MS = 60_000;
+const DEFAULT_GENERATE_WITH_IMAGES_TIMEOUT_MS = 24_000;
+const DEFAULT_GENERATE_WITH_IMAGES_AUTO_TIMEOUT_MS = 24_000;
+const DEFAULT_GENERATE_WITH_IMAGES_NON_SALES_TIMEOUT_MS = 24_000;
 const DEFAULT_GENERATE_QA_TIMEOUT_MS = 120_000;
 const GENERATE_KEEP_ALIVE_INTERVAL_MS = 15_000;
-const DEFAULT_IMAGE_MODEL_RESOLVE_TIMEOUT_MS = 8_000;
-const DEFAULT_IMAGE_GENERATE_TIMEOUT_MS = 60_000;
-const DEFAULT_IMAGE_GENERATE_QA_TIMEOUT_MS = 60_000;
+const DEFAULT_IMAGE_MODEL_RESOLVE_TIMEOUT_MS = 6_000;
+const DEFAULT_IMAGE_GENERATE_TIMEOUT_MS = 72_000;
+const DEFAULT_IMAGE_GENERATE_QA_TIMEOUT_MS = 80_000;
 const GENERATE_QA_BYPASS_HEADER = "x-qa-generate-key";
 const GENERATE_QA_BYPASS_HEADER_LEGACY = "x-generate-qa-key";
 const IMAGE_MODEL_CANDIDATES = ["gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini"] as const;
@@ -58,8 +67,8 @@ type CarouselOutlineSlideWithImage = CarouselOutlineSlide & {
   hasImage?: boolean;
 };
 type GenerateRouteClients = {
-  sessionClient: any;
-  serviceClient: any;
+  sessionClient: AppRouteSupabaseClient;
+  serviceClient: AppServiceSupabaseClient;
 };
 
 export async function GET() {
@@ -281,21 +290,42 @@ export async function POST(request: Request) {
   return createKeepAliveJsonResponse(async () => {
     try {
       const generationData = await (async () => {
-        const generationResult = await withTimeout(
-          generateCarouselFromTopic(topic, slidesCount, {
+        const generationOptions = {
             niche,
             audience,
             tone,
             goal,
             promptVariant,
-            contentMode
-          }),
-          timeoutMs,
-          {
-            errorName: "GenerateTimeoutError",
-            errorMessage: "Text generation timed out."
+            contentMode,
+            requestTimeoutMs: resolveTextRequestTimeoutMs(timeoutMs, withImages)
+          };
+        let generationResult: Awaited<ReturnType<typeof generateCarouselFromTopic>>;
+
+        try {
+          generationResult = await withTimeout(
+            generateCarouselFromTopic(topic, slidesCount, generationOptions),
+            timeoutMs,
+            {
+              errorName: "GenerateTimeoutError",
+              errorMessage: "Text generation timed out."
+            }
+          );
+        } catch (generationError) {
+          if (!isTimeoutError(generationError)) {
+            throw generationError;
           }
-        );
+
+          console.warn(
+            "[WARN] Text generation timed out; using deterministic fallback slides.",
+            generationError
+          );
+          generationResult = generateFallbackCarouselFromTopic(
+            topic,
+            slidesCount,
+            generationOptions,
+            generationError
+          );
+        }
 
         const slidesPayload: unknown = generationResult.slides;
 
@@ -340,14 +370,7 @@ export async function POST(request: Request) {
 
         if (withImages) {
           const imageClient = getOpenAiClient();
-          const resolvedImageModel = await withTimeout(
-            resolveImageModel(imageClient),
-            resolveImageModelResolveTimeoutMs(qaBypass),
-            {
-              errorName: "ImageModelResolveTimeoutError",
-              errorMessage: "Image model resolution timed out."
-            }
-          );
+          const resolvedImageModel = await resolveImageModelWithFallback(imageClient, qaBypass);
           imageModel = resolvedImageModel;
 
           const imageTargets = resolveImageTargets(slides);
@@ -362,7 +385,8 @@ export async function POST(request: Request) {
                   role,
                   topic,
                   niche,
-                  mode: generationResult.generationProfile.modeEffective
+                  mode: generationResult.generationProfile.modeEffective,
+                  timeoutMs: imageTimeoutMs
                 }),
                 imageTimeoutMs,
                 {
@@ -443,20 +467,22 @@ export async function POST(request: Request) {
       remainingCredits = creditsResult.remainingCredits;
     }
 
-    console.log("[generation-profile]", JSON.stringify({
-      topic: topic.slice(0, 80),
-      modeDetected: generationProfile.modeDetected,
-      modeEffective: generationProfile.modeEffective,
-      modeSource: generationProfile.modeSource,
-      modeConfidence: generationProfile.modeConfidence,
-      flowTemplate: generationProfile.flowTemplate,
-      ctaType: generationProfile.ctaType,
-      firstSlideRepairs: generationProfile.firstSlideRepairs,
-      toneViolations: generationProfile.toneViolations,
-      model: generationProfile.model,
-      creditsCharged,
-      durationMs: Date.now() - startTime
-    }));
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[generation-profile]", JSON.stringify({
+        topic: topic.slice(0, 80),
+        modeDetected: generationProfile.modeDetected,
+        modeEffective: generationProfile.modeEffective,
+        modeSource: generationProfile.modeSource,
+        modeConfidence: generationProfile.modeConfidence,
+        flowTemplate: generationProfile.flowTemplate,
+        ctaType: generationProfile.ctaType,
+        firstSlideRepairs: generationProfile.firstSlideRepairs,
+        toneViolations: generationProfile.toneViolations,
+        model: generationProfile.model,
+        creditsCharged,
+        durationMs: Date.now() - startTime
+      }));
+    }
 
     return {
       slides: slides.map((slide) => ({
@@ -620,6 +646,16 @@ async function withTimeout<T>(
   });
 }
 
+function isTimeoutError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /\btimeout\b|timed out|time out|deadline|abort/i.test(
+    `${error.name} ${error.message}`
+  );
+}
+
 function resolveImageModelResolveTimeoutMs(qaBypass = false) {
   const raw = Number(
     qaBypass
@@ -648,7 +684,7 @@ function resolveImageGenerateTimeoutMs(qaBypass = false) {
     return fallback;
   }
 
-  return Math.max(60_000, Math.min(120_000, Math.round(raw)));
+  return Math.max(60_000, Math.min(95_000, Math.round(raw)));
 }
 
 function resolveGenerateTimeoutMs(
@@ -705,6 +741,13 @@ function resolveGenerateTimeoutMs(
   return Math.max(10000, Math.min(180000, Math.round(raw)));
 }
 
+function resolveTextRequestTimeoutMs(routeTimeoutMs: number, withImages: boolean) {
+  const availableMs = Math.max(8_000, Math.round(routeTimeoutMs - 4_000));
+  const capMs = withImages ? 20_000 : 56_000;
+
+  return Math.min(capMs, availableMs);
+}
+
 let openAiClient: OpenAI | null = null;
 
 function getOpenAiClient() {
@@ -732,6 +775,25 @@ async function resolveImageModel(client: OpenAI): Promise<(typeof IMAGE_MODEL_CA
   return IMAGE_MODEL_CANDIDATES[0];
 }
 
+async function resolveImageModelWithFallback(client: OpenAI, qaBypass: boolean) {
+  try {
+    return await withTimeout(
+      resolveImageModel(client),
+      resolveImageModelResolveTimeoutMs(qaBypass),
+      {
+        errorName: "ImageModelResolveTimeoutError",
+        errorMessage: "Image model resolution timed out."
+      }
+    );
+  } catch (error) {
+    console.warn(
+      "[WARN] Image model resolution failed; using default image model.",
+      error
+    );
+    return IMAGE_MODEL_CANDIDATES[0];
+  }
+}
+
 function resolveImageTargets(slides: CarouselOutlineSlide[]) {
   const rolePriority: ImageSlideRole[] = ["hook", "mistake", "example"];
 
@@ -754,8 +816,9 @@ async function generateSlideImage(options: {
   topic: string;
   niche: string;
   mode: ContentMode;
+  timeoutMs: number;
 }) {
-  const { client, model, slide, role, topic, niche, mode } = options;
+  const { client, model, slide, role, topic, niche, mode, timeoutMs } = options;
   const slideTitle = getOutlineSlideTitle(slide);
   const slideBody = getOutlineSlideBody(slide);
   const imagePrompt = buildImagePrompt({
@@ -767,15 +830,20 @@ async function generateSlideImage(options: {
     mode
   });
 
-  const result = await client.images.generate({
-    model,
-    prompt: imagePrompt,
-    size: "1024x1024",
-    quality: "medium",
-    output_format: "jpeg",
-    output_compression: 70,
-    n: 1
-  });
+  const result = await client.images.generate(
+    {
+      model,
+      prompt: imagePrompt,
+      size: "1024x1024",
+      quality: "medium",
+      output_format: "jpeg",
+      output_compression: 70,
+      n: 1
+    },
+    {
+      timeout: timeoutMs
+    }
+  );
 
   const imageBase64 = result.data?.[0]?.b64_json;
   if (!isText(imageBase64, 16)) {
@@ -1090,15 +1158,15 @@ async function createGenerateRouteClients(): Promise<GenerateRouteClients | null
   }
 
   const cookieStore = await cookies();
-  const cookieAccessor: any = () => cookieStore;
-  const sessionClient = createRouteHandlerClient(
+  const cookieAccessor = (() => cookieStore) as unknown as () => ReturnType<typeof cookies>;
+  const sessionClient = createRouteHandlerClient<AppDatabase>(
     { cookies: cookieAccessor },
     {
       supabaseUrl: config.supabaseUrl,
       supabaseKey: config.supabaseKey
     }
   );
-  const serviceClient = createClient(config.supabaseUrl, serviceRoleKey, {
+  const serviceClient = createClient<AppDatabase>(config.supabaseUrl, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false

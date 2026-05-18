@@ -102,6 +102,8 @@ type CarouselGenerationResult = {
   fallbackReason?: CarouselFallbackReason;
 };
 
+const DEFAULT_OPENAI_REQUEST_TIMEOUT_MS = 82_000;
+
 function resolveModelCandidates(mode: ContentMode = "expert") {
   const uniqueCandidates = [
     ...DEFAULT_MODEL_CANDIDATES,
@@ -158,40 +160,55 @@ async function requestCarouselCompletion(
   model: string,
   systemPrompt: string,
   userMessage: string,
-  slidesCount: number
+  slidesCount: number,
+  requestTimeoutMs?: number
 ) {
-  return await openai.responses.create({
-    model,
-    max_output_tokens: 4000,
-    input: [
-      {
-        role: "system",
-        content: [
-          {
-            type: "input_text",
-            text: systemPrompt
-          }
-        ]
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: userMessage
-          }
-        ]
+  return await openai.responses.create(
+    {
+      model,
+      max_output_tokens: 4000,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text: systemPrompt
+            }
+          ]
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: userMessage
+            }
+          ]
+        }
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "carousel_text_structure_v2",
+          strict: true,
+          schema: buildResponseSchema(slidesCount)
+        }
       }
-    ],
-    text: {
-      format: {
-        type: "json_schema",
-        name: "carousel_text_structure_v2",
-        strict: true,
-        schema: buildResponseSchema(slidesCount)
-      }
+    },
+    {
+      timeout: resolveOpenAIRequestTimeoutMs(requestTimeoutMs)
     }
-  });
+  );
+}
+
+function resolveOpenAIRequestTimeoutMs(requestTimeoutMs?: number) {
+  const raw = Number(requestTimeoutMs ?? process.env.OPENAI_REQUEST_TIMEOUT_MS);
+  if (!Number.isFinite(raw)) {
+    return DEFAULT_OPENAI_REQUEST_TIMEOUT_MS;
+  }
+
+  return Math.max(10_000, Math.min(120_000, Math.round(raw)));
 }
 
 function readTotalTokens(response: { usage?: { total_tokens?: number | null } | null }) {
@@ -2476,7 +2493,8 @@ export async function generateCarouselFromTopic(
             model,
             systemPrompt,
             userMessage,
-            expectedFlow.length
+            expectedFlow.length,
+            effectiveOptions.requestTimeoutMs
           );
           tokensUsed += readTotalTokens(response);
           let parsedResponse = parseCarouselModelResponse(response);
@@ -2495,7 +2513,8 @@ export async function generateCarouselFromTopic(
               model,
               systemPrompt,
               retryUserMessage,
-              expectedFlow.length
+              expectedFlow.length,
+              effectiveOptions.requestTimeoutMs
             );
             tokensUsed += readTotalTokens(retryResponse);
             parsedResponse = parseCarouselModelResponse(retryResponse);
@@ -2761,52 +2780,76 @@ export async function generateCarouselFromTopic(
     throw lastError ?? new Error("OpenAI generation failed for all model candidates.");
   } catch (error) {
     console.error("AI generation failed. Falling back to deterministic slides:", error);
-
-    const fallbackSlides = buildFallbackSlides(cleanedTopic, expectedFlow, effectiveOptions);
-    const firstSlideFallbackApplied = enforceFirstSlidePolicy(
-      fallbackSlides,
-      expectedFlow,
-      cleanedTopic,
-      modeDecision.modeEffective
-    );
-    const finalizedFallback = finalizeSlidesForOutput(
-      firstSlideFallbackApplied.slides,
-      modeDecision.modeEffective,
-      cleanedTopic,
-      effectiveOptions
-    );
-
-    return {
-      slides: finalizedFallback.slides,
-      caption: "",
-      promptVariant,
-      generationSource: "fallback",
-      generationMeta: {
-        model: "fallback",
-        tokensUsed: 0,
-        validationErrors: dedupeErrors(
-          [
-            ...(error instanceof Error && error.message.trim()
-              ? [error.message.trim()]
-              : ["fallback activated"]),
-            ...finalizedFallback.modeValidationErrors.map((reasonCode) => `mode:${reasonCode}`)
-          ].filter(Boolean)
-        ),
-        retried: false
-      },
-      generationProfile: {
-        ...buildGenerationProfile({
-          modeDecision,
-          goal: options?.goal,
-          firstSlideRepairs: firstSlideFallbackApplied.repairs,
-          toneViolations: finalizedFallback.toneViolations,
-          modeValidationErrors: finalizedFallback.modeValidationErrors,
-          fallbackUsed: true
-        })
-      },
-      fallbackReason: resolveFallbackReason(error)
-    };
+    return generateFallbackCarouselFromTopic(topic, requestedSlidesCount, options, error);
   }
+}
+
+export function generateFallbackCarouselFromTopic(
+  topic: string,
+  requestedSlidesCount?: number,
+  options?: GenerationOptions,
+  cause?: unknown
+): CarouselGenerationResult {
+  const cleanedTopic = normalizeText(topic, 800) || "Новая карусель";
+  const modeDecision = detectContentMode({
+    topic: cleanedTopic,
+    niche: options?.niche,
+    audience: options?.audience,
+    goal: options?.goal,
+    rawPrompt: cleanedTopic,
+    modeOverride: options?.contentMode
+  });
+  const effectiveOptions: GenerationOptions = {
+    ...options,
+    contentMode: modeDecision.modeEffective
+  };
+  const slidesCount = resolveSlidesCount(requestedSlidesCount);
+  const expectedFlow = resolveExpectedFlowByMode(modeDecision.modeEffective, slidesCount);
+  const promptVariant = resolvePromptVariant(options?.promptVariant);
+  const fallbackSlides = buildFallbackSlides(cleanedTopic, expectedFlow, effectiveOptions);
+  const firstSlideFallbackApplied = enforceFirstSlidePolicy(
+    fallbackSlides,
+    expectedFlow,
+    cleanedTopic,
+    modeDecision.modeEffective
+  );
+  const finalizedFallback = finalizeSlidesForOutput(
+    firstSlideFallbackApplied.slides,
+    modeDecision.modeEffective,
+    cleanedTopic,
+    effectiveOptions
+  );
+
+  return {
+    slides: finalizedFallback.slides,
+    caption: "",
+    promptVariant,
+    generationSource: "fallback",
+    generationMeta: {
+      model: "fallback",
+      tokensUsed: 0,
+      validationErrors: dedupeErrors(
+        [
+          ...(cause instanceof Error && cause.message.trim()
+            ? [cause.message.trim()]
+            : ["fallback activated"]),
+          ...finalizedFallback.modeValidationErrors.map((reasonCode) => `mode:${reasonCode}`)
+        ].filter(Boolean)
+      ),
+      retried: false
+    },
+    generationProfile: {
+      ...buildGenerationProfile({
+        modeDecision,
+        goal: options?.goal,
+        firstSlideRepairs: firstSlideFallbackApplied.repairs,
+        toneViolations: finalizedFallback.toneViolations,
+        modeValidationErrors: finalizedFallback.modeValidationErrors,
+        fallbackUsed: true
+      })
+    },
+    fallbackReason: resolveFallbackReason(cause)
+  };
 }
 
 export async function generateCaptionFromCarousel(

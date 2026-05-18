@@ -22,6 +22,7 @@ export type GenerationOptions = {
   goal?: string;
   promptVariant?: PromptVariant;
   contentMode?: import("@/types/editor").ContentModeInput;
+  requestTimeoutMs?: number;
 };
 
 export type CarouselGenerationMeta = {
