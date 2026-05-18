@@ -2,7 +2,6 @@ import { CAROUSEL_TEMPLATE_IDS } from "@/types/editor";
 import type {
   CanvasElement,
   CarouselProject,
-  CarouselProjectSummary,
   CarouselTemplateId,
   Slide,
   SlidePhotoSettings
@@ -370,15 +369,6 @@ function writeAllProjects(projects: StoredProject[]) {
   }
 }
 
-export function listLocalProjects() {
-  return readAllProjects().map((project) => ({
-    id: project.id,
-    title: project.title,
-    topic: project.topic,
-    updatedAt: project.updatedAt
-  })) satisfies CarouselProjectSummary[];
-}
-
 export function getLocalProject(projectId: string) {
   if (!projectId.trim()) {
     return null;
@@ -415,10 +405,4 @@ export function saveLocalProject(project: CarouselProject) {
     ...nextProject,
     slides: cloneSlides(nextProject.slides)
   } satisfies CarouselProject;
-}
-
-export function deleteLocalProject(projectId: string) {
-  const current = readAllProjects();
-  const next = current.filter((project) => project.id !== projectId);
-  writeAllProjects(next);
 }

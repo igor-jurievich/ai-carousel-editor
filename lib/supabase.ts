@@ -42,10 +42,6 @@ export function getSupabasePublicConfig() {
   };
 }
 
-export function isSupabaseConfigured() {
-  return Boolean(getSupabasePublicConfig());
-}
-
 export function getSupabaseBrowserClient() {
   const config = getSupabasePublicConfig();
   if (!config || typeof window === "undefined") {
@@ -60,17 +56,6 @@ export function getSupabaseBrowserClient() {
   }
 
   return browserClient;
-}
-
-export function createSupabaseClientComponentClient() {
-  const config = getSupabasePublicConfig();
-  if (!config) {
-    return null;
-  }
-  return createClientComponentClient({
-    supabaseUrl: config.supabaseUrl,
-    supabaseKey: config.supabaseKey
-  }) as DatabaseClient;
 }
 
 export async function createSupabaseServerComponentClient() {
