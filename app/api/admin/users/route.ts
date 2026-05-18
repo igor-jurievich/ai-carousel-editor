@@ -3,6 +3,11 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { getSupabasePublicConfig } from "@/lib/supabase";
+import type {
+  AppDatabase,
+  AppRouteSupabaseClient,
+  AppServiceSupabaseClient
+} from "@/types/supabase";
 
 export const runtime = "nodejs";
 
@@ -27,7 +32,7 @@ export async function GET() {
 
   if (!sessionClient || !serviceClient) {
     return NextResponse.json(
-      { error: "Admin API недоступен: проверь NEXT_PUBLIC_SUPABASE_* и SUPABASE_SERVICE_ROLE_KEY." },
+      { error: "Сервис администрирования временно недоступен." },
       { status: 500 }
     );
   }
@@ -68,7 +73,7 @@ export async function PATCH(request: Request) {
 
   if (!sessionClient || !serviceClient) {
     return NextResponse.json(
-      { error: "Admin API недоступен: проверь NEXT_PUBLIC_SUPABASE_* и SUPABASE_SERVICE_ROLE_KEY." },
+      { error: "Сервис администрирования временно недоступен." },
       { status: 500 }
     );
   }
@@ -165,9 +170,9 @@ async function createSessionClient() {
   }
 
   const cookieStore = await cookies();
-  const cookieAccessor: any = () => cookieStore;
+  const cookieAccessor = (() => cookieStore) as unknown as () => ReturnType<typeof cookies>;
 
-  return createRouteHandlerClient(
+  return createRouteHandlerClient<AppDatabase>(
     { cookies: cookieAccessor },
     {
       supabaseUrl: config.supabaseUrl,
@@ -184,7 +189,7 @@ function createServiceRoleClient() {
     return null;
   }
 
-  return createClient(config.supabaseUrl, serviceRoleKey, {
+  return createClient<AppDatabase>(config.supabaseUrl, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
@@ -192,7 +197,10 @@ function createServiceRoleClient() {
   });
 }
 
-async function requireAdmin(sessionClient: any, serviceClient: any) {
+async function requireAdmin(
+  sessionClient: AppRouteSupabaseClient,
+  serviceClient: AppServiceSupabaseClient
+) {
   const {
     data: { user },
     error: userError

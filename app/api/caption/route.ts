@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 import { generateCaptionFromCarousel } from "@/lib/openai";
+import { getSupabasePublicConfig } from "@/lib/supabase";
 import type { CarouselOutlineSlide, ContentModeInput } from "@/types/editor";
+import type { AppDatabase } from "@/types/supabase";
 
 export const runtime = "nodejs";
 
@@ -17,6 +21,23 @@ const CONTENT_MODE_SET = new Set<ContentModeInput>([
 ]);
 
 export async function POST(request: Request) {
+  const sessionClient = await createCaptionRouteClient();
+  if (!sessionClient) {
+    return NextResponse.json(
+      { error: "Сервис подписей временно недоступен." },
+      { status: 500 }
+    );
+  }
+
+  const {
+    data: { user },
+    error: userError
+  } = await sessionClient.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json({ error: "Требуется авторизация." }, { status: 401 });
+  }
+
   let body: {
     topic?: unknown;
     slides?: unknown;
@@ -178,4 +199,22 @@ function toTextArray(value: unknown, maxItems: number) {
     .map((item) => toText(item, 140))
     .filter(Boolean)
     .slice(0, maxItems);
+}
+
+async function createCaptionRouteClient() {
+  const config = getSupabasePublicConfig();
+  if (!config) {
+    return null;
+  }
+
+  const cookieStore = await cookies();
+  const cookieAccessor = (() => cookieStore) as unknown as () => ReturnType<typeof cookies>;
+
+  return createRouteHandlerClient<AppDatabase>(
+    { cookies: cookieAccessor },
+    {
+      supabaseUrl: config.supabaseUrl,
+      supabaseKey: config.supabaseKey
+    }
+  );
 }

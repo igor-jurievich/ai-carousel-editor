@@ -30,7 +30,9 @@ export async function POST(request: Request) {
 
     const payloadString = JSON.stringify(payload).slice(0, MAX_PAYLOAD_CHARS);
 
-    console.info("[telemetry]", name, { pathname, timestamp, payload: payloadString });
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[telemetry]", name, { pathname, timestamp, payload: payloadString });
+    }
 
     return NextResponse.json({ ok: true });
   } catch {
