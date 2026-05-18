@@ -250,22 +250,18 @@ export default function OnboardingPage() {
 
       if (data.user?.id) {
         await wait(200);
-        const { error: profileError } = await supabase.from("profiles").upsert(
-          {
-            id: data.user.id,
+        await fetch("/api/onboarding/profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
             name: finalDraft.name,
             role: finalDraft.role,
             topic: finalDraft.topic,
             login: finalDraft.login
-          },
-          {
-            onConflict: "id"
-          }
-        );
-
-        if (profileError) {
-          console.error("Onboarding profile upsert error:", profileError);
-        }
+          })
+        });
       }
 
       stopLoadingMessage();
