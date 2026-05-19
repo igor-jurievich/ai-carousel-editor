@@ -27,7 +27,7 @@ import {
   MAX_TOPIC_CHARS,
   SLIDES_COUNT_OPTIONS
 } from "@/lib/slides";
-import { saveLocalProject } from "@/lib/projects";
+import { migrateLegacyProjectsToSupabase, saveProject } from "@/lib/projects";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { trackEvent } from "@/lib/telemetry";
 import type {
@@ -525,6 +525,12 @@ export default function GeneratePage() {
   }, []);
 
   useEffect(() => {
+    void migrateLegacyProjectsToSupabase().catch((migrationError) => {
+      console.warn("Failed to migrate legacy local projects:", migrationError);
+    });
+  }, []);
+
+  useEffect(() => {
     if (!isAccountMenuOpen) {
       return;
     }
@@ -796,7 +802,7 @@ export default function GeneratePage() {
     }
   };
 
-  const handleOpenInEditor = (tool?: "post") => {
+  const handleOpenInEditor = async (tool?: "post") => {
     if (!previewSlides?.length) {
       return;
     }
@@ -811,7 +817,7 @@ export default function GeneratePage() {
         previewSlides.length
       );
 
-      const saved = saveLocalProject({
+      const saved = await saveProject({
         title: generatedProjectMeta?.title || projectTitleFromTopic(normalizedTopic),
         topic: generatedProjectMeta?.topic || normalizedTopic,
         slides,
@@ -852,7 +858,7 @@ export default function GeneratePage() {
       const message =
         openEditorError instanceof Error
           ? openEditorError.message
-          : "Не удалось открыть редактор. Проверьте хранилище браузера и попробуйте снова.";
+          : "Не удалось открыть редактор. Проверьте соединение и попробуйте снова.";
       setError(message);
       trackEvent({
         name: "editor_open_failed",

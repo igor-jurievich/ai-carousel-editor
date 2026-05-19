@@ -67,7 +67,7 @@ import {
   SLIDES_COUNT_OPTIONS
 } from "@/lib/slides";
 import { resolveContentModeInput } from "@/lib/content-mode";
-import { getLocalProject, saveLocalProject } from "@/lib/projects";
+import { fetchProject, migrateLegacyProjectsToSupabase, saveProject } from "@/lib/projects";
 import { trackEvent } from "@/lib/telemetry";
 import type {
   CanvasElement,
@@ -1257,48 +1257,81 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   }, [generationLocked]);
 
   useEffect(() => {
-    if (!initialProjectId) {
-      setIsProjectHydrated(true);
-      return;
-    }
+    let isCancelled = false;
 
-    const existing = getLocalProject(initialProjectId);
-    if (!existing) {
-      setStatus("Проект не найден. Открыта стартовая серия.");
-      setProjectId(null);
-      setIsGeneratePanelVisible(true);
-      setIsProjectHydrated(true);
-      return;
-    }
+    const hydrateProject = async () => {
+      try {
+        await migrateLegacyProjectsToSupabase();
 
-    skipAutosaveRef.current = true;
-    setProjectId(existing.id ?? initialProjectId);
-    setSlides(
-      existing.slides?.length ? normalizeSlidesForEditor(existing.slides) : createStarterSlides("light", "1:1")
-    );
-    setTopic(existing.topic ?? "");
-    setPromptVariant(existing.promptVariant === "A" ? "A" : "B");
-    setContentMode(resolveContentModeInput(existing.contentMode));
-    setSlidesCount(clampSlidesCount(existing.slides?.length ?? DEFAULT_SLIDES_COUNT));
-    setNiche(existing.niche ?? "");
-    setAudience(existing.audience ?? "");
-    setTone(existing.tone ?? "balanced");
-    setGoal(existing.goal ?? "engagement");
-    setSlideFormat(existing.format ?? "1:1");
-    setActiveSlideId(existing.slides?.[0]?.id ?? null);
-    setCaptionResult(existing.caption ?? null);
-    setSelectedElementId(null);
-    setEditingTextElementId(null);
-    editingTextElementIdRef.current = null;
-    editingDirtyRef.current = false;
-    editingValueRef.current = "";
-    setStatus(DEFAULT_STATUS);
-    toast.success("Проект загружен", {
-      duration: 2500,
-      icon: <Check size={16} />
-    });
-    setIsGeneratePanelVisible(false);
-    setIsProjectHydrated(true);
+        if (!initialProjectId) {
+          if (!isCancelled) {
+            setIsProjectHydrated(true);
+          }
+          return;
+        }
+
+        const existing = await fetchProject(initialProjectId);
+        if (isCancelled) {
+          return;
+        }
+
+        if (!existing) {
+          setStatus("Проект не найден. Открыта стартовая серия.");
+          setProjectId(null);
+          setIsGeneratePanelVisible(true);
+          setIsProjectHydrated(true);
+          return;
+        }
+
+        skipAutosaveRef.current = true;
+        setProjectId(existing.id ?? initialProjectId);
+        setSlides(
+          existing.slides?.length ? normalizeSlidesForEditor(existing.slides) : createStarterSlides("light", "1:1")
+        );
+        setTopic(existing.topic ?? "");
+        setPromptVariant(existing.promptVariant === "A" ? "A" : "B");
+        setContentMode(resolveContentModeInput(existing.contentMode));
+        setSlidesCount(clampSlidesCount(existing.slides?.length ?? DEFAULT_SLIDES_COUNT));
+        setNiche(existing.niche ?? "");
+        setAudience(existing.audience ?? "");
+        setTone(existing.tone ?? "balanced");
+        setGoal(existing.goal ?? "engagement");
+        setSlideFormat(existing.format ?? "1:1");
+        setActiveSlideId(existing.slides?.[0]?.id ?? null);
+        setCaptionResult(existing.caption ?? null);
+        setSelectedElementId(null);
+        setEditingTextElementId(null);
+        editingTextElementIdRef.current = null;
+        editingDirtyRef.current = false;
+        editingValueRef.current = "";
+        setStatus(DEFAULT_STATUS);
+        toast.success("Проект загружен", {
+          duration: 2500,
+          icon: <Check size={16} />
+        });
+        setIsGeneratePanelVisible(false);
+        setIsProjectHydrated(true);
+      } catch (projectLoadError) {
+        if (isCancelled) {
+          return;
+        }
+
+        setStatus(
+          projectLoadError instanceof Error
+            ? projectLoadError.message
+            : "Не удалось загрузить проект из Supabase."
+        );
+        setProjectId(null);
+        setIsGeneratePanelVisible(true);
+        setIsProjectHydrated(true);
+      }
+    };
+
+    void hydrateProject();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [initialProjectId]);
 
   useEffect(() => {
@@ -1316,8 +1349,9 @@ export function Editor({ initialProjectId = null }: EditorProps) {
     }
 
     autosaveTimerRef.current = window.setTimeout(() => {
+      void (async () => {
       try {
-        const saved = saveLocalProject({
+        const saved = await saveProject({
           id: projectId ?? undefined,
           title: projectTitleFromTopic(topic),
           topic,
@@ -1354,6 +1388,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
           );
         }
       }
+      })();
     }, AUTOSAVE_DEBOUNCE_MS);
 
     return () => {

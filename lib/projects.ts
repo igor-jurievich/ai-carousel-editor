@@ -384,24 +384,88 @@ export function getLocalProject(projectId: string) {
   } satisfies CarouselProject;
 }
 
-export function saveLocalProject(project: CarouselProject) {
-  const now = new Date().toISOString();
-  const current = readAllProjects();
-  const projectId = (project.id && project.id.trim()) || crypto.randomUUID();
-  const existing = current.find((item) => item.id === projectId);
+async function readProjectResponse(response: Response) {
+  let payload: { project?: CarouselProject; error?: string } | null = null;
+  try {
+    payload = (await response.json()) as { project?: CarouselProject; error?: string };
+  } catch {
+    payload = null;
+  }
 
-  const nextProject = normalizeStoredProject({
-    ...project,
-    id: projectId,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now
+  if (!response.ok || !payload?.project) {
+    throw new Error(payload?.error || "Не удалось сохранить проект в Supabase.");
+  }
+
+  const now = new Date().toISOString();
+  return normalizeStoredProject({
+    ...payload.project,
+    id: payload.project.id ?? crypto.randomUUID(),
+    createdAt: payload.project.createdAt ?? now,
+    updatedAt: payload.project.updatedAt ?? now
+  } as StoredProject);
+}
+
+async function postProject(project: CarouselProject) {
+  const response = await fetch("/api/projects", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ project })
   });
 
-  const next = [nextProject, ...current.filter((item) => item.id !== projectId)];
-  writeAllProjects(next);
+  return readProjectResponse(response);
+}
 
-  return {
-    ...nextProject,
-    slides: cloneSlides(nextProject.slides)
-  } satisfies CarouselProject;
+export async function fetchProject(projectId: string) {
+  const id = projectId.trim();
+  if (!id) {
+    return null;
+  }
+
+  const response = await fetch(`/api/projects/${encodeURIComponent(id)}`);
+  if (response.status === 404) {
+    return null;
+  }
+
+  return readProjectResponse(response);
+}
+
+export async function saveProject(project: CarouselProject) {
+  if (!project.id) {
+    return postProject(project);
+  }
+
+  const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ project })
+  });
+
+  return readProjectResponse(response);
+}
+
+export async function migrateLegacyProjectsToSupabase() {
+  if (!canUseStorage()) {
+    return 0;
+  }
+
+  const legacyProjects = readAllProjects();
+  if (!legacyProjects.length) {
+    return 0;
+  }
+
+  let migrated = 0;
+  for (const project of legacyProjects) {
+    const existing = await fetchProject(project.id);
+    if (!existing) {
+      await postProject(project);
+    }
+    migrated += 1;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEY);
+  return migrated;
 }
