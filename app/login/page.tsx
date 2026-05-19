@@ -41,19 +41,7 @@ export default function LoginPage() {
       });
 
       if (loginError) {
-        const fallbackEmail = resolveFallbackEmail(login);
-        if (!fallbackEmail) {
-          throw loginError;
-        }
-
-        const { error: fallbackError } = await supabase.auth.signInWithPassword({
-          email: fallbackEmail,
-          password
-        });
-
-        if (fallbackError) {
-          throw fallbackError;
-        }
+        throw loginError;
       }
 
       router.replace("/generate");
@@ -133,23 +121,18 @@ export default function LoginPage() {
 
 function resolveAuthEmailFromLogin(value: string) {
   const trimmed = value.trim().toLowerCase();
-  const localPart = trimmed.split("@")[0] ?? "";
-  const normalized = localPart
-    .replace(/\s+/gu, "")
-    .replace(/[^a-z0-9._-]/giu, "");
 
-  if (!normalized) {
+  if (trimmed.includes("@")) {
+    return isValidEmail(trimmed) ? trimmed : null;
+  }
+
+  if (!/^[a-z0-9._-]{3,64}$/u.test(trimmed)) {
     return null;
   }
 
-  return `${normalized}@pastello.io`;
+  return `${trimmed}@pastello.io`;
 }
 
-function resolveFallbackEmail(value: string) {
-  const candidate = value.trim().toLowerCase();
-  if (!candidate.includes("@")) {
-    return null;
-  }
-
-  return candidate;
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
 }

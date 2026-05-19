@@ -371,6 +371,20 @@ const ROLE_FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
   ]
 };
 
+function isCarouselSlideRole(value: unknown): value is CarouselSlideRole {
+  return (
+    value === "hook" ||
+    value === "problem" ||
+    value === "amplify" ||
+    value === "mistake" ||
+    value === "consequence" ||
+    value === "shift" ||
+    value === "solution" ||
+    value === "example" ||
+    value === "cta"
+  );
+}
+
 const ROLE_TO_SLIDE_TYPE: Record<CarouselSlideRole, CanvasSlideType> = {
   hook: "image_text",
   problem: "list",
@@ -1704,17 +1718,7 @@ function resolveOutlineRole(
   index: number,
   totalSlides: number
 ): CarouselSlideRole {
-  if (
-    outline.type === "hook" ||
-    outline.type === "problem" ||
-    outline.type === "amplify" ||
-    outline.type === "mistake" ||
-    outline.type === "consequence" ||
-    outline.type === "shift" ||
-    outline.type === "solution" ||
-    outline.type === "example" ||
-    outline.type === "cta"
-  ) {
+  if (isCarouselSlideRole(outline.type)) {
     return outline.type;
   }
 
@@ -3128,14 +3132,15 @@ export function createSlidesFromOutline(
   requestedCount?: number
 ): Slide[] {
   const targetCount = clampSlidesCount(requestedCount ?? outline.length ?? DEFAULT_SLIDES_COUNT);
-  const flow = resolveRoleFlow(targetCount);
+  const fallbackFlow = resolveRoleFlow(targetCount);
   const topicHint = deriveTopicHintFromOutlines(outline);
 
-  return flow.map((role, index) => {
+  return Array.from({ length: targetCount }, (_, index) => {
     const fromInput = outline[index];
+    const role = fromInput ? resolveOutlineRole(fromInput, index, targetCount) : fallbackFlow[index] ?? "solution";
     const fallback = resolveFallbackOutline(role, topicHint);
     const item = fromInput ? { ...fallback, ...fromInput, type: role } : fallback;
-    return createSlideFromOutline(item, index, templateId, format, flow.length, undefined, topicHint);
+    return createSlideFromOutline(item, index, templateId, format, targetCount, undefined, topicHint);
   });
 }
 

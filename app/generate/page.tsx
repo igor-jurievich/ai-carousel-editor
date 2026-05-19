@@ -804,7 +804,7 @@ export default function GeneratePage() {
         previewSlides,
         resolvedTheme,
         resolvedFormat,
-        clampSlidesCount(slidesCount)
+        previewSlides.length
       );
 
       const saved = saveLocalProject({
