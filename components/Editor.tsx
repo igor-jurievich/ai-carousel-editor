@@ -6035,7 +6035,7 @@ async function fileToOptimizedDataUrl(file: File) {
     }
   }
 
-  // Hard cap for browser localStorage friendliness (roughly 350-400KB base64 payload).
+  // Hard cap for autosaved Supabase payloads with embedded base64 images.
   if (best.length > 520_000) {
     try {
       const forced = await downscaleDataUrl(best, 900, "jpeg", 0.68);

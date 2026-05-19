@@ -8,7 +8,6 @@ import type {
 } from "@/types/editor";
 
 const STORAGE_KEY = "ai-carousel.projects.v1";
-const MAX_PERSISTED_DATA_URL_LENGTH = 420_000;
 const TEMPLATE_ID_SET = new Set<CarouselTemplateId>(CAROUSEL_TEMPLATE_IDS);
 
 type StoredProject = CarouselProject & {
@@ -271,117 +270,6 @@ function readAllProjects() {
   } catch {
     return [] as StoredProject[];
   }
-}
-
-function isLargeImageDataUrl(value: unknown) {
-  return (
-    typeof value === "string" &&
-    value.startsWith("data:image/") &&
-    value.length > MAX_PERSISTED_DATA_URL_LENGTH
-  );
-}
-
-function compactSlideForStorage(slide: Slide) {
-  let changed = false;
-
-  const backgroundImage =
-    isLargeImageDataUrl(slide.backgroundImage) || slide.backgroundImage === undefined
-      ? null
-      : slide.backgroundImage ?? null;
-  if (backgroundImage !== (slide.backgroundImage ?? null)) {
-    changed = true;
-  }
-
-  const elements = slide.elements.filter((element) => {
-    if (element.type !== "image" && element.type !== "image_element") {
-      return true;
-    }
-
-    if (isLargeImageDataUrl(element.src)) {
-      changed = true;
-      return false;
-    }
-
-    return true;
-  });
-
-  return {
-    slide: changed
-      ? {
-          ...slide,
-          backgroundImage,
-          elements
-        }
-      : slide,
-    changed
-  };
-}
-
-function compactProjectForStorage(project: StoredProject) {
-  let changed = false;
-  const slides = project.slides.map((slide) => {
-    const compacted = compactSlideForStorage(slide);
-    if (compacted.changed) {
-      changed = true;
-    }
-    return compacted.slide;
-  });
-
-  return {
-    project: changed
-      ? normalizeStoredProject({
-          ...project,
-          slides
-        })
-      : project,
-    changed
-  };
-}
-
-function writeAllProjects(projects: StoredProject[]) {
-  if (!canUseStorage()) {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-    return;
-  } catch {
-    const compactedProjects = projects.map((project) => compactProjectForStorage(project));
-    const hasCompacted = compactedProjects.some((item) => item.changed);
-
-    if (hasCompacted) {
-      try {
-        window.localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(compactedProjects.map((item) => item.project))
-        );
-        return;
-      } catch {
-        // no-op, throw below
-      }
-    }
-
-    throw new Error(
-      "Не удалось сохранить проект в браузере. Освободите место в хранилище или удалите часть старых проектов."
-    );
-  }
-}
-
-export function getLocalProject(projectId: string) {
-  if (!projectId.trim()) {
-    return null;
-  }
-
-  const found = readAllProjects().find((project) => project.id === projectId);
-  if (!found) {
-    return null;
-  }
-
-  return {
-    ...found,
-    slides: cloneSlides(found.slides)
-  } satisfies CarouselProject;
 }
 
 async function readProjectResponse(response: Response) {
