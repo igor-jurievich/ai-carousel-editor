@@ -616,6 +616,7 @@ export function sanitizeTopic(topic: string) {
     .replace(/\bпочему\b/giu, "")
     .replace(/\bчто\s*бы\b/giu, "")
     .replace(/личном\s+бренде/giu, "личный бренд")
+    .replace(/\bпродажах\b/giu, "продажи")
     .replace(/маркетинге/giu, "маркетинг")
     .replace(/\s+(?:в|на|для|про|о|об|под|с|без|и)\s*$/iu, "")
     .replace(/\s+/gu, " ")

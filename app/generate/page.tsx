@@ -24,7 +24,6 @@ import { toast } from "sonner";
 import { createSlidesFromOutline, projectTitleFromTopic } from "@/lib/carousel";
 import {
   clampSlidesCount,
-  DEFAULT_SLIDES_COUNT,
   MAX_TOPIC_CHARS,
   SLIDES_COUNT_OPTIONS
 } from "@/lib/slides";
@@ -99,6 +98,7 @@ type SelectOption = {
   value: string;
   label: string;
 };
+type SlidesCountSelection = "auto" | number;
 type GenerationStatus = "idle" | "loading" | "success" | "error";
 
 const STATUS_ROTATION_MS = 2500;
@@ -311,7 +311,7 @@ function GenerateSelectField({
 export default function GeneratePage() {
   const router = useRouter();
   const [topic, setTopic] = useState("");
-  const [slidesCount, setSlidesCount] = useState(DEFAULT_SLIDES_COUNT);
+  const [slidesCount, setSlidesCount] = useState<SlidesCountSelection>("auto");
   const [format, setFormat] = useState<SlideFormat>("1:1");
   const [theme, setTheme] = useState<CarouselTemplateId>("light");
   const [withImages, setWithImages] = useState(false);
@@ -347,12 +347,16 @@ export default function GeneratePage() {
   const generationAbortRef = useRef<AbortController | null>(null);
 
   const slidesCountOptions = useMemo<SelectOption[]>(
-    () => SLIDES_COUNT_OPTIONS.map((count) => ({ value: String(count), label: String(count) })),
+    () => [
+      { value: "auto", label: "Авто" },
+      ...SLIDES_COUNT_OPTIONS.map((count) => ({ value: String(count), label: String(count) }))
+    ],
     []
   );
 
   const normalizedTopic = topic.trim();
-  const canGenerate = normalizedTopic.length >= 3 && !isGenerating;
+  const requestedSlidesCount = slidesCount === "auto" ? null : clampSlidesCount(slidesCount);
+  const canGenerate = normalizedTopic.length >= 1 && !isGenerating;
   const requiredCredits = withImages ? 5 : 1;
   const statusMessages = useMemo(() => {
     const base = STATUS_MESSAGES_BY_MODE[contentMode] ?? STATUS_MESSAGES_BY_MODE.auto;
@@ -616,7 +620,7 @@ export default function GeneratePage() {
         payload: {
           source: "generate_page",
           format,
-          slidesCount: clampSlidesCount(slidesCount),
+          slidesCount: requestedSlidesCount ?? "auto",
           theme,
           contentMode,
           withImages,
@@ -635,7 +639,7 @@ export default function GeneratePage() {
         },
         body: JSON.stringify({
           topic: normalizedTopic,
-          slidesCount: clampSlidesCount(slidesCount),
+          slidesCount: requestedSlidesCount ?? "auto",
           niche,
           audience,
           tone,
@@ -1138,11 +1142,13 @@ export default function GeneratePage() {
                   id="slides-count"
                   isOpen={openSelectId === "slides-count"}
                   label="Количество карточек"
-                  onChange={(nextValue) => setSlidesCount(clampSlidesCount(Number(nextValue)))}
+                  onChange={(nextValue) =>
+                    setSlidesCount(nextValue === "auto" ? "auto" : clampSlidesCount(Number(nextValue)))
+                  }
                   onClose={() => setOpenSelectId(null)}
                   onToggle={(fieldId) => setOpenSelectId((current) => (current === fieldId ? null : fieldId))}
                   options={slidesCountOptions}
-                  value={String(slidesCount)}
+                  value={slidesCount === "auto" ? "auto" : String(slidesCount)}
                 />
               </div>
             </section>

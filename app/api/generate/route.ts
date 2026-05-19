@@ -35,7 +35,7 @@ import type {
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const MIN_TOPIC_CHARS = 3;
+const MIN_TOPIC_CHARS = 1;
 const DEFAULT_GENERATE_TIMEOUT_MS = 90_000;
 const DEFAULT_GENERATE_AUTO_TIMEOUT_MS = 90_000;
 const DEFAULT_GENERATE_NON_SALES_TIMEOUT_MS = 90_000;
@@ -216,11 +216,7 @@ export async function POST(request: Request) {
   }
 
   const topic = typeof body.topic === "string" ? body.topic.trim() : "";
-  const slidesCount = clampSlidesCount(
-    typeof body.slidesCount === "number"
-      ? body.slidesCount
-      : Number(body.slidesCount ?? body.slides)
-  );
+  const requestedSlidesCount = resolveRequestedSlidesCount(body.slidesCount ?? body.slides);
   const niche = typeof body.niche === "string" ? body.niche.trim().slice(0, 120) : "";
   const audience = typeof body.audience === "string" ? body.audience.trim().slice(0, 160) : "";
   const tone = typeof body.tone === "string" ? body.tone.trim().slice(0, 40) : "";
@@ -303,7 +299,7 @@ export async function POST(request: Request) {
 
         try {
           generationResult = await withTimeout(
-            generateCarouselFromTopic(topic, slidesCount, generationOptions),
+            generateCarouselFromTopic(topic, requestedSlidesCount, generationOptions),
             timeoutMs,
             {
               errorName: "GenerateTimeoutError",
@@ -321,7 +317,7 @@ export async function POST(request: Request) {
           );
           generationResult = generateFallbackCarouselFromTopic(
             topic,
-            slidesCount,
+            requestedSlidesCount,
             generationOptions,
             generationError
           );
@@ -990,7 +986,7 @@ function isModelUnavailableError(error: unknown) {
 }
 
 function isValidSlidesPayload(slides: unknown): slides is CarouselOutlineSlide[] {
-  if (!Array.isArray(slides) || slides.length < 8 || slides.length > 10) {
+  if (!Array.isArray(slides) || slides.length < 6 || slides.length > 10) {
     return false;
   }
 
@@ -1034,7 +1030,7 @@ function diagnoseSlidesPayload(slides: unknown) {
     return "slides is not an array";
   }
 
-  if (slides.length < 8 || slides.length > 10) {
+  if (slides.length < 6 || slides.length > 10) {
     return `slides length is ${slides.length}`;
   }
 
@@ -1113,6 +1109,19 @@ function resolvePromptVariant(value: unknown): PromptVariant {
   }
 
   return "B";
+}
+
+function resolveRequestedSlidesCount(value: unknown) {
+  if (value === undefined || value === null || value === "" || value === "auto") {
+    return undefined;
+  }
+
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return undefined;
+  }
+
+  return clampSlidesCount(numeric);
 }
 
 function resolveContentModeInput(value: unknown): ContentModeInput {
