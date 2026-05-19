@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
 
@@ -12,6 +12,13 @@ const EXT_BY_MODE = {
   png: ".png",
   jpg: ".jpg",
   pdf: ".pdf"
+};
+
+const SIGNATURE_BY_EXT = {
+  ".zip": "504b",
+  ".png": "89504e47",
+  ".jpg": "ffd8ff",
+  ".pdf": "25504446"
 };
 
 function parseList(raw, fallback) {
@@ -116,6 +123,11 @@ async function runCase(page, downloadsDir, format, mode) {
       : [expectedExt];
   const targetPath = path.join(downloadsDir, `${format.replace(":", "x")}-${mode}-${suggestedFilename}`);
   await download.saveAs(targetPath);
+  const fileStats = await stat(targetPath);
+  const header = await readFile(targetPath, { encoding: null });
+  const actualExt = acceptableExt.find((ext) => normalizedFilename.endsWith(ext)) || expectedExt;
+  const expectedSignature = SIGNATURE_BY_EXT[actualExt] || "";
+  const actualSignature = header.subarray(0, 4).toString("hex").toLowerCase();
   await modal.waitFor({ state: "hidden", timeout: EXPORT_TIMEOUT_MS });
   await waitExportReady(page);
 
@@ -125,7 +137,9 @@ async function runCase(page, downloadsDir, format, mode) {
     suggestedFilename,
     filePath: targetPath,
     expectedExt,
-    matchesExt: acceptableExt.some((ext) => normalizedFilename.endsWith(ext))
+    matchesExt: acceptableExt.some((ext) => normalizedFilename.endsWith(ext)),
+    bytes: fileStats.size,
+    signatureOk: expectedSignature ? actualSignature.startsWith(expectedSignature) : fileStats.size > 0
   };
 }
 
@@ -165,6 +179,16 @@ async function main() {
           assert(
             result.matchesExt,
             `unexpected extension for ${format}/${mode}: ${result.suggestedFilename}`,
+            failures
+          );
+          assert(
+            result.bytes > 128,
+            `download too small for ${format}/${mode}: ${result.bytes} bytes`,
+            failures
+          );
+          assert(
+            result.signatureOk,
+            `invalid file signature for ${format}/${mode}: ${result.suggestedFilename}`,
             failures
           );
         } catch (error) {
