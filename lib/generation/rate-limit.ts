@@ -12,10 +12,19 @@ export const RATE_LIMIT_SWEEP_THRESHOLD = 5000;
 export const IMAGE_GENERATION_LOCK_SWEEP_THRESHOLD = 4000;
 export const DEFAULT_IMAGE_GENERATION_LOCK_TTL_MS = 60_000;
 export function getClientIp(request: Request) {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) {
+  const directIp =
+    request.headers.get("x-real-ip")?.trim() ||
+    request.headers.get("cf-connecting-ip")?.trim() ||
+    request.headers.get("x-vercel-forwarded-for")?.trim();
+
+  if (directIp) {
+    return directIp;
+  }
+
+  if (process.env.TRUST_UNVERIFIED_X_FORWARDED_FOR === "true") {
+    const forwardedFor = request.headers.get("x-forwarded-for");
     const first = forwardedFor
-      .split(",")
+      ?.split(",")
       .map((value) => value.trim())
       .find(Boolean);
 
@@ -24,7 +33,7 @@ export function getClientIp(request: Request) {
     }
   }
 
-  return request.headers.get("x-real-ip")?.trim() || "unknown";
+  return "unknown";
 }
 
 export function consumeGenerateSlot(ip: string, now: number) {

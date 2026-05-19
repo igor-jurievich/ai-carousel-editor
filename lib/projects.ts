@@ -342,30 +342,29 @@ function writeAllProjects(projects: StoredProject[]) {
   if (!canUseStorage()) {
     return;
   }
-  let next = [...projects];
 
-  while (next.length > 0) {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      return;
-    } catch {
-      if (next.length === 1) {
-        const compacted = compactProjectForStorage(next[0]);
-        if (compacted.changed) {
-          try {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify([compacted.project]));
-            return;
-          } catch {
-            // no-op, throw below
-          }
-        }
-        throw new Error(
-          "Не удалось сохранить проект в браузере. Освободите место в хранилище или удалите часть старых проектов."
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    return;
+  } catch {
+    const compactedProjects = projects.map((project) => compactProjectForStorage(project));
+    const hasCompacted = compactedProjects.some((item) => item.changed);
+
+    if (hasCompacted) {
+      try {
+        window.localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(compactedProjects.map((item) => item.project))
         );
+        return;
+      } catch {
+        // no-op, throw below
       }
-      // Drop the oldest project and retry if storage quota is exceeded.
-      next = next.slice(0, -1);
     }
+
+    throw new Error(
+      "Не удалось сохранить проект в браузере. Освободите место в хранилище или удалите часть старых проектов."
+    );
   }
 }
 

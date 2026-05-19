@@ -243,15 +243,6 @@ export async function saveProject(project: CarouselProject) {
     projectId = data.id as string;
   }
 
-  const { error: deleteError } = await supabase
-    .from("project_slides")
-    .delete()
-    .eq("project_id", projectId);
-
-  if (deleteError) {
-    throw deleteError;
-  }
-
   const slideRows = project.slides.map((slide, index) => ({
     project_id: projectId,
     position: index,
@@ -260,12 +251,53 @@ export async function saveProject(project: CarouselProject) {
     elements: slide.elements
   }));
 
-  const { error: insertError } = await supabase
+  if (!slideRows.length) {
+    const { error: deleteError } = await supabase
+      .from("project_slides")
+      .delete()
+      .eq("project_id", projectId);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    return projectId;
+  }
+
+  const { data: insertedSlides, error: insertError } = await supabase
     .from("project_slides")
-    .insert(slideRows);
+    .insert(slideRows)
+    .select("id");
 
   if (insertError) {
     throw insertError;
+  }
+
+  const insertedIds = (insertedSlides ?? [])
+    .map((item) => (typeof item.id === "string" ? item.id : ""))
+    .filter(Boolean);
+
+  if (insertedIds.length !== slideRows.length) {
+    throw new Error("Не удалось подтвердить сохранение всех слайдов проекта.");
+  }
+
+  const { error: deleteError } = await supabase
+    .from("project_slides")
+    .delete()
+    .eq("project_id", projectId)
+    .not("id", "in", `(${insertedIds.join(",")})`);
+
+  if (deleteError) {
+    const { error: rollbackError } = await supabase
+      .from("project_slides")
+      .delete()
+      .in("id", insertedIds);
+
+    if (rollbackError) {
+      console.error("Failed to rollback inserted slides after old slide cleanup failed:", rollbackError);
+    }
+
+    throw deleteError;
   }
 
   return projectId;
