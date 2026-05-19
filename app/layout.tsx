@@ -18,18 +18,47 @@ const playfairDisplay = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Помощник эксперта",
-  description: "Приложение Vorobev Studio для генерации и редактирования каруселей для соцсетей.",
+  metadataBase: new URL("https://pastello.io"),
+  title: {
+    default: "pastello.io — AI генератор Instagram каруселей",
+    template: "%s · pastello.io"
+  },
+  description: "AI генератор Instagram каруселей: структура, текст, редактор и экспорт PNG из одного промпта.",
+  openGraph: {
+    title: "pastello.io — AI генератор Instagram каруселей",
+    description: "Один промпт превращается в готовую структуру, текст и карточки для экспертного контента.",
+    url: "/",
+    siteName: "pastello.io",
+    locale: "ru_RU",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1800,
+        height: 942,
+        alt: "pastello.io — AI генератор Instagram каруселей"
+      }
+    ]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "pastello.io — AI генератор Instagram каруселей",
+    description: "Один промпт превращается в готовую структуру, текст и карточки.",
+    images: ["/og-image.png"]
+  },
   icons: {
-    icon: "/favicon.svg"
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" }
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]
   }
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
   interactiveWidget: "resizes-content"
 };
