@@ -26,11 +26,11 @@ export async function middleware(request: NextRequest) {
   const isRootRoute = pathname === "/";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
   const isProtectedRoute = pathname === "/generate" || pathname.startsWith("/editor");
-  const isAuthRoute = pathname === "/login" || pathname === "/onboarding";
+  const isAuthRoute = pathname === "/login" || pathname === "/onboarding" || pathname === "/signup";
 
-  if (isRootRoute) {
+  if (isRootRoute && session) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = session ? "/generate" : "/onboarding";
+    redirectUrl.pathname = "/generate";
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
   }
@@ -127,6 +127,7 @@ export const config = {
     "/admin",
     "/admin/:path*",
     "/login",
+    "/signup",
     "/onboarding"
   ]
 };
