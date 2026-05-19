@@ -1,6 +1,14 @@
 import type { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import type { createClient } from "@supabase/supabase-js";
 
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
 export type ProfileRow = {
   id: string;
   name: string | null;
@@ -26,6 +34,27 @@ export type ConsumeGenerationCreditsRow = {
   message: string | null;
 };
 
+export type ProjectRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  topic: string;
+  slides: Json | null;
+  settings: Json | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ProjectSlideRow = {
+  id: string;
+  project_id: string;
+  position: number;
+  name: string;
+  background: string;
+  elements: Json;
+  created_at: string | null;
+};
+
 export type AppDatabase = {
   public: {
     Tables: {
@@ -39,6 +68,18 @@ export type AppDatabase = {
         Row: CreditsLogRow;
         Insert: Pick<CreditsLogRow, "user_id" | "amount" | "reason"> & Partial<CreditsLogRow>;
         Update: Partial<CreditsLogRow>;
+        Relationships: [];
+      };
+      projects: {
+        Row: ProjectRow;
+        Insert: Partial<ProjectRow> & { user_id: string };
+        Update: Partial<ProjectRow>;
+        Relationships: [];
+      };
+      project_slides: {
+        Row: ProjectSlideRow;
+        Insert: Partial<ProjectSlideRow> & Pick<ProjectSlideRow, "project_id" | "position" | "name" | "background" | "elements">;
+        Update: Partial<ProjectSlideRow>;
         Relationships: [];
       };
     };
