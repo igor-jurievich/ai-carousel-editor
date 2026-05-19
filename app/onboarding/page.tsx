@@ -40,10 +40,9 @@ function createMessageId(prefix: string) {
 
 function normalizeLogin(value: string) {
   const trimmed = value.trim().toLowerCase();
-  const localPart = trimmed.split("@")[0] ?? "";
-  return localPart
-    .replace(/\s+/gu, "")
-    .replace(/[^a-z0-9._-]/giu, "");
+  const localPart = trimmed.includes("@") ? trimmed.split("@")[0] ?? "" : trimmed;
+  const normalized = localPart.replace(/\s+/gu, "");
+  return /^[a-z0-9._-]{3,64}$/u.test(normalized) ? normalized : "";
 }
 
 function resolveAuthEmailFromLogin(value: string) {
@@ -63,6 +62,9 @@ function getErrorMessage(error: unknown) {
   const message = error.message.toLowerCase();
   if (message.includes("fetch failed") || message.includes("network")) {
     return "Не удаётся подключиться к серверу авторизации. Проверь настройки Supabase и попробуй ещё раз";
+  }
+  if (message.includes("email_not_confirmed") || message.includes("email not confirmed")) {
+    return "Аккаунт создан, но email нужно подтвердить перед входом. Проверь почту и затем войди через форму входа";
   }
   if (
     message.includes("already registered") ||
@@ -213,25 +215,31 @@ export default function OnboardingPage() {
 
       if (!data.session) {
         let signInError: Error | null = null;
+        let hasSignedInSession = false;
 
         for (let attempt = 1; attempt <= 3; attempt += 1) {
           if (attempt > 1) {
             await wait(250 * attempt);
           }
 
-          const { error: currentSignInError } = await supabase.auth.signInWithPassword({
+          const { data: signInData, error: currentSignInError } = await supabase.auth.signInWithPassword({
             email: authEmail,
             password: finalDraft.password
           });
 
-          if (!currentSignInError) {
+          if (!currentSignInError && signInData.session) {
             signInError = null;
+            hasSignedInSession = true;
             break;
           }
 
-          const errorText = currentSignInError.message.toLowerCase();
+          const errorText = currentSignInError?.message.toLowerCase() ?? "";
           if (errorText.includes("email not confirmed")) {
-            signInError = null;
+            throw new Error("email_not_confirmed");
+          }
+
+          if (!currentSignInError) {
+            signInError = new Error("email_not_confirmed");
             break;
           }
 
@@ -246,11 +254,15 @@ export default function OnboardingPage() {
         if (signInError) {
           throw signInError;
         }
+
+        if (!hasSignedInSession) {
+          throw new Error("email_not_confirmed");
+        }
       }
 
       if (data.user?.id) {
         await wait(200);
-        await fetch("/api/onboarding/profile", {
+        const profileResponse = await fetch("/api/onboarding/profile", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -262,6 +274,11 @@ export default function OnboardingPage() {
             login: finalDraft.login
           })
         });
+
+        if (!profileResponse.ok) {
+          const payload = (await profileResponse.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error || "Не удалось сохранить профиль. Попробуй ещё раз");
+        }
       }
 
       stopLoadingMessage();

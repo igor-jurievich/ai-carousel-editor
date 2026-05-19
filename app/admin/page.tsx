@@ -30,7 +30,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pendingActionKey, setPendingActionKey] = useState<string | null>(null);
+  const [pendingActionKeys, setPendingActionKeys] = useState<Set<string>>(() => new Set());
   const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<string | null>(null);
   const toastTimeoutRef = useRef<number | null>(null);
@@ -86,7 +86,8 @@ export default function AdminPage() {
 
   const applyCreditsAction = async (userId: string, action: "add" | "reset", amount?: number) => {
     const actionKey = `${userId}:${action}:${amount ?? "none"}`;
-    setPendingActionKey(actionKey);
+    setPendingActionKeys((current) => new Set(current).add(actionKey));
+    setError(null);
 
     try {
       const response = await fetch("/api/admin/users", {
@@ -118,12 +119,18 @@ export default function AdminPage() {
       );
 
       showToast(action === "reset" ? "Баллы сброшены ✓" : "Баллы добавлены ✓");
+      return true;
     } catch (updateError) {
       setError(
         updateError instanceof Error ? updateError.message : "Не удалось обновить баллы."
       );
+      return false;
     } finally {
-      setPendingActionKey(null);
+      setPendingActionKeys((current) => {
+        const next = new Set(current);
+        next.delete(actionKey);
+        return next;
+      });
     }
   };
 
@@ -148,11 +155,13 @@ export default function AdminPage() {
       return;
     }
 
-    await applyCreditsAction(userId, "add", parsedValue);
-    setCustomAmounts((current) => ({
-      ...current,
-      [userId]: ""
-    }));
+    const didUpdate = await applyCreditsAction(userId, "add", parsedValue);
+    if (didUpdate) {
+      setCustomAmounts((current) => ({
+        ...current,
+        [userId]: ""
+      }));
+    }
   };
 
   const handleSignOut = async () => {
@@ -218,7 +227,9 @@ export default function AdminPage() {
                     const resetActionKey = `${user.id}:reset:none`;
                     const customValue = customAmounts[user.id] ?? "";
                     const customActionKey = `${user.id}:add:${Number(customValue)}`;
-                    const isRowPending = Boolean(pendingActionKey?.startsWith(`${user.id}:`));
+                    const isRowPending = Array.from(pendingActionKeys).some((key) =>
+                      key.startsWith(`${user.id}:`)
+                    );
 
                     return (
                       <tr key={user.id}>
@@ -237,7 +248,7 @@ export default function AdminPage() {
                               disabled={isRowPending}
                               onClick={() => void applyCreditsAction(user.id, "add", 10)}
                             >
-                              {pendingActionKey === plusTenActionKey ? "..." : "+10"}
+                              {pendingActionKeys.has(plusTenActionKey) ? "..." : "+10"}
                             </button>
                             <div className={styles.customAction}>
                               <input
@@ -259,7 +270,7 @@ export default function AdminPage() {
                                 disabled={isRowPending}
                                 onClick={() => void handleCustomTopUp(user.id)}
                               >
-                                {pendingActionKey === customActionKey ? "Добавляем..." : "Добавить"}
+                                {pendingActionKeys.has(customActionKey) ? "Добавляем..." : "Добавить"}
                               </button>
                             </div>
                             <button
@@ -268,7 +279,7 @@ export default function AdminPage() {
                               disabled={isRowPending}
                               onClick={() => void applyCreditsAction(user.id, "reset")}
                             >
-                              {pendingActionKey === resetActionKey ? "..." : "Сбросить"}
+                              {pendingActionKeys.has(resetActionKey) ? "..." : "Сбросить"}
                             </button>
                           </div>
 
@@ -278,7 +289,7 @@ export default function AdminPage() {
                             disabled={isRowPending}
                             onClick={() => void applyCreditsAction(user.id, "add", 10)}
                           >
-                            {pendingActionKey === plusTenActionKey ? "..." : "+10"}
+                            {pendingActionKeys.has(plusTenActionKey) ? "..." : "+10"}
                           </button>
                         </td>
                       </tr>
