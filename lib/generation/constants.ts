@@ -55,6 +55,8 @@ export const CANONICAL_FLOW: CarouselSlideRole[] = [
 ];
 
 export const FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
+  6: ["hook", "problem", "shift", "solution", "example", "cta"],
+  7: ["hook", "problem", "mistake", "shift", "solution", "example", "cta"],
   8: ["hook", "problem", "mistake", "consequence", "shift", "solution", "example", "cta"],
   9: [...CANONICAL_FLOW],
   10: [
@@ -74,6 +76,74 @@ export const FLOW_BY_COUNT: Record<number, CarouselSlideRole[]> = {
 export type ModeSlidePlanStep = {
   role: CarouselSlideRole;
   intent: string;
+};
+
+export type ModeSlideCountRange = {
+  min: number;
+  max: number;
+  defaultCount: number;
+};
+
+export const MODE_SLIDE_COUNT_RANGES: Record<ContentMode, ModeSlideCountRange> = {
+  sales: { min: 8, max: 9, defaultCount: 9 },
+  expert: { min: 7, max: 8, defaultCount: 8 },
+  instruction: { min: 7, max: 10, defaultCount: 8 },
+  diagnostic: { min: 8, max: 9, defaultCount: 9 },
+  case: { min: 8, max: 8, defaultCount: 8 },
+  social: { min: 6, max: 8, defaultCount: 7 }
+};
+
+export const MODE_ROLE_PLANS_BY_COUNT: Record<
+  ContentMode,
+  Partial<Record<number, CarouselSlideRole[]>>
+> = {
+  sales: {
+    8: ["hook", "problem", "mistake", "consequence", "shift", "solution", "example", "cta"],
+    9: [...CANONICAL_FLOW]
+  },
+  expert: {
+    7: ["hook", "problem", "mistake", "shift", "solution", "example", "cta"],
+    8: ["hook", "problem", "mistake", "shift", "solution", "example", "consequence", "cta"]
+  },
+  instruction: {
+    7: ["hook", "shift", "solution", "mistake", "amplify", "example", "cta"],
+    8: ["hook", "problem", "shift", "solution", "mistake", "amplify", "example", "cta"],
+    9: ["hook", "problem", "shift", "solution", "mistake", "amplify", "example", "consequence", "cta"],
+    10: [
+      "hook",
+      "problem",
+      "shift",
+      "solution",
+      "solution",
+      "mistake",
+      "amplify",
+      "example",
+      "consequence",
+      "cta"
+    ]
+  },
+  diagnostic: {
+    8: ["hook", "problem", "mistake", "consequence", "shift", "solution", "example", "cta"],
+    9: [
+      "hook",
+      "problem",
+      "mistake",
+      "consequence",
+      "amplify",
+      "shift",
+      "solution",
+      "example",
+      "cta"
+    ]
+  },
+  case: {
+    8: ["hook", "problem", "example", "amplify", "shift", "solution", "consequence", "cta"]
+  },
+  social: {
+    6: ["hook", "problem", "mistake", "shift", "solution", "cta"],
+    7: ["hook", "problem", "mistake", "shift", "solution", "example", "cta"],
+    8: ["hook", "problem", "amplify", "mistake", "shift", "solution", "example", "cta"]
+  }
 };
 
 export const MODE_SLIDE_PLANS: Record<ContentMode, ModeSlidePlanStep[]> = {

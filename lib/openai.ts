@@ -38,6 +38,8 @@ import {
   CONTENT_MODE_LIST,
   CANONICAL_FLOW,
   FLOW_BY_COUNT,
+  MODE_ROLE_PLANS_BY_COUNT,
+  MODE_SLIDE_COUNT_RANGES,
   MODE_SLIDE_PLANS,
   FALLBACK_TITLES,
   TOPIC_STOP_WORDS
@@ -2637,7 +2639,7 @@ export async function generateCarouselFromTopic(
     ...options,
     contentMode: modeDecision.modeEffective
   };
-  const slidesCount = resolveSlidesCount(requestedSlidesCount);
+  const slidesCount = resolveSlidesCountForMode(modeDecision.modeEffective, requestedSlidesCount);
   const systemPrompt = buildSystemPrompt(modeDecision.modeEffective, cleanedTopic, effectiveOptions);
   const expectedFlow = resolveExpectedFlowByMode(modeDecision.modeEffective, slidesCount);
   const promptVariant = resolvePromptVariant(options?.promptVariant);
@@ -2988,7 +2990,7 @@ export function generateFallbackCarouselFromTopic(
     ...options,
     contentMode: modeDecision.modeEffective
   };
-  const slidesCount = resolveSlidesCount(requestedSlidesCount);
+  const slidesCount = resolveSlidesCountForMode(modeDecision.modeEffective, requestedSlidesCount);
   const expectedFlow = resolveExpectedFlowByMode(modeDecision.modeEffective, slidesCount);
   const promptVariant = resolvePromptVariant(options?.promptVariant);
   const fallbackSlides = buildFallbackSlides(cleanedTopic, expectedFlow, effectiveOptions);
@@ -3166,9 +3168,12 @@ export async function generateCaptionFromCarousel(
   }
 }
 
-function resolveSlidesCount(value?: number | null) {
-  const normalized = clampSlidesCount(value);
-  return Math.max(8, Math.min(10, normalized));
+function resolveSlidesCountForMode(mode: ContentMode, value?: number | null) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return clampSlidesCount(value);
+  }
+
+  return MODE_SLIDE_COUNT_RANGES[mode]?.defaultCount ?? 8;
 }
 
 function resolveExpectedFlow(targetCount: number) {
@@ -3181,12 +3186,13 @@ function resolveExpectedFlow(targetCount: number) {
 }
 
 function buildSlidePlan(mode: ContentMode, targetCount: number): CarouselSlideRole[] {
-  if (targetCount !== 9) {
-    return resolveExpectedFlow(targetCount);
+  const countPlan = MODE_ROLE_PLANS_BY_COUNT[mode]?.[targetCount];
+  if (Array.isArray(countPlan) && countPlan.length === targetCount) {
+    return countPlan;
   }
 
   const plannedFlow = MODE_SLIDE_PLANS[mode]?.map((step) => step.role);
-  if (Array.isArray(plannedFlow) && plannedFlow.length === 9) {
+  if (Array.isArray(plannedFlow) && plannedFlow.length === targetCount) {
     return plannedFlow;
   }
 
@@ -5420,6 +5426,7 @@ function sanitizeTopic(topic: string): string {
     .replace(/\bпочему\b/giu, "")
     .replace(/\bчто\s*бы\b/giu, "")
     .replace(/личном\s+бренде/giu, "личный бренд")
+    .replace(/\bпродажах\b/giu, "продажи")
     .replace(/маркетинге/giu, "маркетинг")
     .replace(/\s+(?:в|на|для|про|о|об|под|с|без|и)\s*$/iu, "")
     .replace(/\s+/gu, " ")
