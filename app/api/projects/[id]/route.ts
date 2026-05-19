@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
+import { getSupabasePublicConfig } from "@/lib/supabase";
 import { CAROUSEL_TEMPLATE_IDS } from "@/types/editor";
 import type {
   CarouselProject,
@@ -38,7 +39,20 @@ async function getProjectId(context: RouteContext) {
 }
 
 async function getAuthedClient() {
-  const supabase = createRouteHandlerClient<AppDatabase>({ cookies });
+  const config = getSupabasePublicConfig();
+  if (!config) {
+    return { supabase: null, user: null };
+  }
+
+  const cookieStore = await cookies();
+  const cookieAccessor = (() => cookieStore) as unknown as () => ReturnType<typeof cookies>;
+  const supabase = createRouteHandlerClient<AppDatabase>(
+    { cookies: cookieAccessor },
+    {
+      supabaseUrl: config.supabaseUrl,
+      supabaseKey: config.supabaseKey
+    }
+  );
   const {
     data: { user },
     error
@@ -284,6 +298,9 @@ async function patchLegacyProject(
 export async function GET(_request: Request, context: RouteContext) {
   const projectId = await getProjectId(context);
   const { supabase, user } = await getAuthedClient();
+  if (!supabase) {
+    return jsonResponse({ error: "Сервис недоступен: не настроен Supabase." }, 500);
+  }
   if (!user) {
     return jsonResponse({ error: "Требуется авторизация." }, 401);
   }
@@ -312,6 +329,9 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function PATCH(request: Request, context: RouteContext) {
   const projectId = await getProjectId(context);
   const { supabase, user } = await getAuthedClient();
+  if (!supabase) {
+    return jsonResponse({ error: "Сервис недоступен: не настроен Supabase." }, 500);
+  }
   if (!user) {
     return jsonResponse({ error: "Требуется авторизация." }, 401);
   }
@@ -355,6 +375,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 export async function DELETE(_request: Request, context: RouteContext) {
   const projectId = await getProjectId(context);
   const { supabase, user } = await getAuthedClient();
+  if (!supabase) {
+    return jsonResponse({ error: "Сервис недоступен: не настроен Supabase." }, 500);
+  }
   if (!user) {
     return jsonResponse({ error: "Требуется авторизация." }, 401);
   }
