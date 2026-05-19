@@ -14,12 +14,26 @@ const OUTPUT_PATH = path.resolve(
   process.env.QUALITY_DIFF_OUTPUT_PATH || "test-results/quality-baseline-diff-latest.json"
 );
 
-const ALLOWED_FAILURE_DELTA = Number(process.env.QUALITY_ALLOWED_FAILURE_DELTA || 0);
-const ALLOWED_FAILURE_RATE_DELTA = Number(process.env.QUALITY_ALLOWED_FAILURE_RATE_DELTA || 0);
-const ALLOWED_CATEGORY_DELTA = Number(process.env.QUALITY_ALLOWED_CATEGORY_DELTA || 0);
+const ALLOWED_FAILURE_DELTA = readNonNegativeNumberEnv("QUALITY_ALLOWED_FAILURE_DELTA", 0);
+const ALLOWED_FAILURE_RATE_DELTA = readNonNegativeNumberEnv("QUALITY_ALLOWED_FAILURE_RATE_DELTA", 0);
+const ALLOWED_CATEGORY_DELTA = readNonNegativeNumberEnv("QUALITY_ALLOWED_CATEGORY_DELTA", 0);
 
 function asNumber(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
+function readNonNegativeNumberEnv(name, fallback) {
+  const raw = process.env[name];
+  if (!raw) {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a finite non-negative number`);
+  }
+
+  return parsed;
 }
 
 async function readJson(filePath) {

@@ -1,5 +1,6 @@
 const BASE_URL = process.env.SMOKE_BASE_URL || "http://localhost:3000";
-const RUNS = Number(process.env.SMOKE_RUNS || 2);
+const RUNS = readPositiveIntegerEnv("SMOKE_RUNS", 2);
+const REQUEST_TIMEOUT_MS = readPositiveIntegerEnv("SMOKE_TIMEOUT_MS", 120000);
 const QA_BYPASS_KEY =
   process.env.SMOKE_QA_BYPASS_KEY ||
   process.env.QUALITY_QA_BYPASS_KEY ||
@@ -62,12 +63,27 @@ function slideText(slide) {
   return [
     normalize(slide?.title),
     normalize(slide?.subtitle),
+    normalize(slide?.body),
     ...(Array.isArray(slide?.bullets) ? slide.bullets.map((item) => normalize(item)) : []),
     normalize(slide?.before),
     normalize(slide?.after)
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function readPositiveIntegerEnv(name, fallback) {
+  const raw = process.env[name];
+  if (!raw) {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1 || !Number.isInteger(parsed)) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+
+  return parsed;
 }
 
 function hasBrokenTail(value) {
@@ -187,7 +203,7 @@ function validateSlides(slides, mode, generationProfile) {
 
   if (mode === "expert") {
     const shift = slides.find((slide) => slide?.type === "shift");
-    if (!MECHANISM_CUE_RE.test(normalize(shift?.body))) {
+    if (!MECHANISM_CUE_RE.test(slideText(shift))) {
       errors.push("expert shift missing mechanism cue");
     }
   }
@@ -208,18 +224,26 @@ async function runCase({ topic, format, theme, mode, runIndex }) {
     headers["x-qa-generate-key"] = QA_BYPASS_KEY;
   }
 
-  const response = await fetch(`${BASE_URL}/api/generate`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      topic,
-      slidesCount: 9,
-      format,
-      theme,
-      promptVariant: "B",
-      contentMode: mode
-    })
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(`${BASE_URL}/api/generate`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        topic,
+        slidesCount: 9,
+        format,
+        theme,
+        promptVariant: "B",
+        contentMode: mode
+      }),
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   let payload;
   try {

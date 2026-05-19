@@ -2,8 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const BASE_URL = process.env.QUALITY_BASE_URL || process.env.SMOKE_BASE_URL || "http://localhost:3000";
-const RUNS = Number(process.env.QUALITY_RUNS || 1);
-const REQUEST_TIMEOUT_MS = Number(process.env.QUALITY_TIMEOUT_MS || 80000);
+const RUNS = readPositiveIntegerEnv("QUALITY_RUNS", 1);
+const REQUEST_TIMEOUT_MS = readPositiveIntegerEnv("QUALITY_TIMEOUT_MS", 80000);
 const QA_BYPASS_KEY =
   process.env.QUALITY_QA_BYPASS_KEY ||
   process.env.SMOKE_QA_BYPASS_KEY ||
@@ -25,8 +25,8 @@ const TOPICS = [
 
 const FORMATS = ["1:1", "4:5", "9:16"];
 const THEMES = ["light", "dark", "color"];
-const TOPIC_LIMIT = Number(process.env.QUALITY_TOPICS_LIMIT || TOPICS.length);
-const ACTIVE_TOPICS = TOPICS.slice(0, Math.max(1, Math.min(TOPICS.length, Number.isFinite(TOPIC_LIMIT) ? TOPIC_LIMIT : TOPICS.length)));
+const TOPIC_LIMIT = readPositiveIntegerEnv("QUALITY_TOPICS_LIMIT", TOPICS.length);
+const ACTIVE_TOPICS = TOPICS.slice(0, Math.max(1, Math.min(TOPICS.length, TOPIC_LIMIT)));
 const ACTIVE_FORMATS = parseCsvSubset(process.env.QUALITY_FORMATS, FORMATS);
 const ACTIVE_THEMES = parseCsvSubset(process.env.QUALITY_THEMES, THEMES);
 const CONTENT_MODES = parseCsvSubset(
@@ -133,6 +133,20 @@ function parseCsvSubset(raw, allowed) {
   return picked.length ? picked : allowed;
 }
 
+function readPositiveIntegerEnv(name, fallback) {
+  const raw = process.env[name];
+  if (!raw) {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1 || !Number.isInteger(parsed)) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+
+  return parsed;
+}
+
 function classifyFailure(error) {
   const normalized = normalize(error).toLowerCase();
 
@@ -223,6 +237,7 @@ function slideText(slide) {
   return [
     normalize(slide?.title),
     normalize(slide?.subtitle),
+    normalize(slide?.body),
     ...(Array.isArray(slide?.bullets) ? slide.bullets.map((item) => normalize(item)) : []),
     normalize(slide?.before),
     normalize(slide?.after)
@@ -383,8 +398,7 @@ function validateSlides(slides, topic, mode, generationProfile) {
 
   if (mode === "expert") {
     const shift = slides.find((slide) => slide?.type === "shift");
-    const shiftBody = normalize(shift?.body);
-    if (!MECHANISM_CUE_RE.test(shiftBody)) {
+    if (!MECHANISM_CUE_RE.test(slideText(shift))) {
       errors.push("expert_shift_missing_mechanism_cue");
     }
   }
