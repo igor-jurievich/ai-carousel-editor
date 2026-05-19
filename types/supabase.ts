@@ -19,6 +19,13 @@ export type CreditsLogRow = {
   created_at: string | null;
 };
 
+export type ConsumeGenerationCreditsRow = {
+  ok: boolean;
+  code: "ok" | "no_credits" | "failed";
+  current_credits: number | null;
+  message: string | null;
+};
+
 export type AppDatabase = {
   public: {
     Tables: {
@@ -36,7 +43,16 @@ export type AppDatabase = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      consume_generation_credits: {
+        Args: {
+          p_user_id: string;
+          p_amount: number;
+          p_reason: string;
+        };
+        Returns: ConsumeGenerationCreditsRow[];
+      };
+    };
   };
 };
 

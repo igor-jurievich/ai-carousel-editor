@@ -70,6 +70,54 @@ create table if not exists public.credits_log (
   created_at timestamptz not null default now()
 );
 
+create or replace function public.consume_generation_credits(
+  p_user_id uuid,
+  p_amount integer,
+  p_reason text
+)
+returns table (
+  ok boolean,
+  code text,
+  current_credits integer,
+  message text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_amount integer := greatest(1, p_amount);
+  v_next_credits integer;
+  v_current_credits integer;
+begin
+  update public.profiles
+  set credits = credits - v_amount
+  where id = p_user_id
+    and credits >= v_amount
+  returning credits into v_next_credits;
+
+  if found then
+    insert into public.credits_log (user_id, amount, reason)
+    values (p_user_id, -v_amount, p_reason);
+
+    return query select true, 'ok', v_next_credits, null::text;
+    return;
+  end if;
+
+  select credits
+  into v_current_credits
+  from public.profiles
+  where id = p_user_id;
+
+  if v_current_credits is null then
+    return query select false, 'failed', 0, 'Профиль пользователя не найден.';
+    return;
+  end if;
+
+  return query select false, 'no_credits', greatest(0, v_current_credits), null::text;
+end;
+$$;
+
 drop trigger if exists trg_profiles_set_updated_at on public.profiles;
 
 create trigger trg_profiles_set_updated_at
