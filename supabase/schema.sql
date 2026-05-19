@@ -3,11 +3,20 @@ create extension if not exists pgcrypto;
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  title text not null,
+  title text not null default 'Без названия',
   topic text not null,
+  slides jsonb not null default '[]'::jsonb,
+  settings jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.projects
+  add column if not exists slides jsonb not null default '[]'::jsonb,
+  add column if not exists settings jsonb not null default '{}'::jsonb,
+  alter column title set default 'Без названия';
+
+create index if not exists projects_user_id_idx on public.projects(user_id);
 
 create table if not exists public.project_slides (
   id uuid primary key default gen_random_uuid(),
@@ -201,6 +210,13 @@ create policy "Users can delete own projects"
 on public.projects
 for delete
 using (auth.uid() = user_id);
+
+drop policy if exists "Users see own projects" on public.projects;
+create policy "Users see own projects"
+on public.projects
+for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
 
 drop policy if exists "Users can view own slides" on public.project_slides;
 create policy "Users can view own slides"
