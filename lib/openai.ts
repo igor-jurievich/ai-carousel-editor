@@ -1610,6 +1610,11 @@ function repairModeSpecificOutput(
         solution.bullets = solutionFallback.bullets;
       }
 
+      solution.bullets = solution.bullets
+        .map((item, index) => normalizeInstructionStepCueBullet(item, index))
+        .filter(Boolean)
+        .slice(0, MAX_BULLETS_PER_SLIDE);
+
       const solutionCopy = solution.bullets.join(" ");
       const hasStepCue =
         /(?:^|[^\p{L}])(шаг|сначала|потом|затем|проверьте|сделайте|1|2|3)(?=$|[^\p{L}])/iu.test(
@@ -1618,7 +1623,7 @@ function repairModeSpecificOutput(
       if (!hasStepCue && solution.bullets.length > 0) {
         const [first, ...rest] = solution.bullets;
         const normalizedFirst = sanitizeCopyText(normalizeText(first, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX);
-        solution.bullets = [`Сначала: ${normalizedFirst || "выполни первый шаг из плана"}`, ...rest]
+        solution.bullets = [`Шаг 1: ${normalizedFirst || "сделай первый шаг из плана"}`, ...rest]
           .map((item) => sanitizeCopyText(normalizeText(item, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX))
           .filter(Boolean)
           .slice(0, MAX_BULLETS_PER_SLIDE);
@@ -4525,6 +4530,17 @@ function hasSolutionRoleMismatch(bullets: string[]) {
   ).length;
 
   return negativeCount >= 2 && actionCount === 0;
+}
+
+function normalizeInstructionStepCueBullet(value: string, index: number) {
+  const text = sanitizeCopyText(normalizeText(value, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX);
+  const withoutSequenceCue = text.replace(/^(?:сначала|потом|затем)\s*[:.)—-]\s*/iu, "").trim();
+
+  if (!withoutSequenceCue || withoutSequenceCue === text) {
+    return text;
+  }
+
+  return sanitizeCopyText(`Шаг ${index + 1}: ${withoutSequenceCue}`, BULLET_OUTPUT_MAX);
 }
 
 function hasNearDuplicateSlideTitles(slides: CarouselOutlineSlide[]) {
