@@ -47,6 +47,7 @@ const GENERATE_KEEP_ALIVE_INTERVAL_MS = 15_000;
 const DEFAULT_IMAGE_MODEL_RESOLVE_TIMEOUT_MS = 6_000;
 const DEFAULT_IMAGE_GENERATE_TIMEOUT_MS = 72_000;
 const DEFAULT_IMAGE_GENERATE_QA_TIMEOUT_MS = 80_000;
+const DEFAULT_IMAGE_MODEL_CACHE_TTL_MS = 60 * 60 * 1000;
 const GENERATE_QA_BYPASS_HEADER = "x-qa-generate-key";
 const GENERATE_QA_BYPASS_HEADER_LEGACY = "x-generate-qa-key";
 const IMAGE_MODEL_CANDIDATES = ["gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini"] as const;
@@ -61,7 +62,8 @@ const CONTENT_MODE_SET = new Set<ContentModeInput>([
   "social"
 ]);
 
-type ImageSlideRole = "hook" | "mistake" | "example";
+type ImageSlideRole = CarouselOutlineSlide["type"];
+type ImageTargetKind = "cover" | "middle" | "final";
 type CarouselOutlineSlideWithImage = CarouselOutlineSlide & {
   image?: string | null;
   hasImage?: boolean;
@@ -371,7 +373,7 @@ export async function POST(request: Request) {
 
           const imageTargets = resolveImageTargets(slides);
           const imageTimeoutMs = resolveImageGenerateTimeoutMs(qaBypass);
-          const imageTasks = imageTargets.map(async ({ index, role }) => {
+          const imageTasks = imageTargets.map(async ({ index, role, kind }) => {
             try {
               const image = await withTimeout(
                 generateSlideImage({
@@ -379,6 +381,7 @@ export async function POST(request: Request) {
                   model: resolvedImageModel,
                   slide: slides[index],
                   role,
+                  targetKind: kind,
                   topic,
                   niche,
                   mode: generationResult.generationProfile.modeEffective,
@@ -771,9 +774,32 @@ async function resolveImageModel(client: OpenAI): Promise<(typeof IMAGE_MODEL_CA
   return IMAGE_MODEL_CANDIDATES[0];
 }
 
+let cachedImageModel: {
+  model: (typeof IMAGE_MODEL_CANDIDATES)[number];
+  expiresAt: number;
+} | null = null;
+
+function resolveImageModelCacheTtlMs(qaBypass: boolean) {
+  if (qaBypass) {
+    return 5 * 60 * 1000;
+  }
+
+  const raw = Number(process.env.GENERATE_IMAGE_MODEL_CACHE_TTL_MS);
+  if (!Number.isFinite(raw)) {
+    return DEFAULT_IMAGE_MODEL_CACHE_TTL_MS;
+  }
+
+  return Math.max(60_000, Math.min(24 * 60 * 60 * 1000, Math.round(raw)));
+}
+
 async function resolveImageModelWithFallback(client: OpenAI, qaBypass: boolean) {
+  const now = Date.now();
+  if (cachedImageModel && cachedImageModel.expiresAt > now) {
+    return cachedImageModel.model;
+  }
+
   try {
-    return await withTimeout(
+    const model = await withTimeout(
       resolveImageModel(client),
       resolveImageModelResolveTimeoutMs(qaBypass),
       {
@@ -781,27 +807,47 @@ async function resolveImageModelWithFallback(client: OpenAI, qaBypass: boolean) 
         errorMessage: "Image model resolution timed out."
       }
     );
+    cachedImageModel = {
+      model,
+      expiresAt: now + resolveImageModelCacheTtlMs(qaBypass)
+    };
+    return model;
   } catch (error) {
     console.warn(
       "[WARN] Image model resolution failed; using default image model.",
       error
     );
-    return IMAGE_MODEL_CANDIDATES[0];
+    const fallbackModel = IMAGE_MODEL_CANDIDATES[0];
+    cachedImageModel = {
+      model: fallbackModel,
+      expiresAt: now + Math.min(resolveImageModelCacheTtlMs(qaBypass), 10 * 60 * 1000)
+    };
+    return fallbackModel;
   }
 }
 
 function resolveImageTargets(slides: CarouselOutlineSlide[]) {
-  const rolePriority: ImageSlideRole[] = ["hook", "mistake", "example"];
+  const middleIndex = Math.floor((slides.length - 1) / 2);
+  const candidates: Array<{ kind: ImageTargetKind; index: number }> = [
+    { kind: "cover", index: 0 },
+    { kind: "middle", index: middleIndex },
+    { kind: "final", index: slides.length - 1 }
+  ];
+  const seen = new Set<number>();
 
-  return rolePriority
-    .map((role) => ({
-      role,
-      index: slides.findIndex((slide) => slide.type === role)
-    }))
-    .filter(
-      (target): target is { role: ImageSlideRole; index: number } =>
-        Number.isInteger(target.index) && target.index >= 0
-    );
+  return candidates
+    .filter((target) => Number.isInteger(target.index) && target.index >= 0 && target.index < slides.length)
+    .filter((target) => {
+      if (seen.has(target.index)) {
+        return false;
+      }
+      seen.add(target.index);
+      return true;
+    })
+    .map((target) => ({
+      ...target,
+      role: slides[target.index].type
+    }));
 }
 
 async function generateSlideImage(options: {
@@ -809,18 +855,20 @@ async function generateSlideImage(options: {
   model: (typeof IMAGE_MODEL_CANDIDATES)[number];
   slide: CarouselOutlineSlide;
   role: ImageSlideRole;
+  targetKind: ImageTargetKind;
   topic: string;
   niche: string;
   mode: ContentMode;
   timeoutMs: number;
 }) {
-  const { client, model, slide, role, topic, niche, mode, timeoutMs } = options;
+  const { client, model, slide, role, targetKind, topic, niche, mode, timeoutMs } = options;
   const slideTitle = getOutlineSlideTitle(slide);
   const slideBody = getOutlineSlideBody(slide);
   const imagePrompt = buildImagePrompt({
     slideTitle,
     slideBody,
     slideRole: role,
+    targetKind,
     topic,
     niche: niche || undefined,
     mode
@@ -853,11 +901,12 @@ function buildImagePrompt(input: {
   slideTitle: string;
   slideBody: string;
   slideRole: ImageSlideRole;
+  targetKind: ImageTargetKind;
   topic: string;
   niche?: string;
   mode: ContentMode;
 }) {
-  const { slideTitle, slideBody, slideRole, topic, niche, mode } = input;
+  const { slideTitle, slideBody, slideRole, targetKind, topic, niche, mode } = input;
   const nicheContext = niche ? `Ниша: ${niche}.` : "";
   const bodyContext = slideBody ? `Текст слайда: "${slideBody}".` : "";
   const modeContext =
@@ -865,66 +914,70 @@ function buildImagePrompt(input: {
       ? "Режим: sales. Можно больше напряжения, контраста и коммерческого контекста."
       : "Режим: non-sales. Фото спокойное, экспертное, без давления, страха и чрезмерной драматизации.";
 
-  const styleByRole: Record<ImageSlideRole, string> = {
-    hook: `
-Создай привлекательное фото для обложки Instagram-карусели.
+  const styleByKind: Record<ImageTargetKind, string> = {
+    cover: `
+Создай фото для обложки Instagram-карусели.
 Тема: "${topic}". ${nicheContext}
 ${modeContext}
+Роль слайда: ${slideRole}.
 Заголовок слайда: "${slideTitle}".
 ${bodyContext}
 
 Требования:
 - Стиль: профессиональная фотография, уровень бизнес-журнала
-- Ракурс: портрет или средний план
+- Сюжет: понятная сцена из темы, а не абстрактный фон
+- Ракурс: портрет, средний план или рабочая сцена
 - Освещение: мягкое, естественное, теплое
-- Фон: нейтральный или в тему ниши, можно легкое боке
+- Фон: нейтральный или в тему ниши
 - Человек: уверенный профессионал, экспертный образ
 - Одежда: деловой casual
 - Настроение: доверие, компетентность
 - Без текста на изображении
 - Без логотипов и водяных знаков
 - Квадратный формат, Instagram-ready
-- Оставь больше свободного места сверху и снизу под текст
+- Оставь свободное место сверху и снизу под текст
 `,
-    mistake: `
-Создай фото для слайда про типичную ошибку в Instagram-карусели.
+    middle: `
+Создай фото для смыслового среднего слайда Instagram-карусели.
 Тема: "${topic}". ${nicheContext}
 ${modeContext}
+Роль слайда: ${slideRole}.
 Заголовок слайда: "${slideTitle}".
 ${bodyContext}
 
 Требования:
-- Стиль: эмоциональный кадр с эффектом "это про меня"
-- Сцена: рабочая обстановка, человек задумчивый или слегка фрустрированный
-- Без агрессии и негатива, акцент на упущенной возможности
-- Освещение: контрастное, немного драматичное
-- Фон: офис, рабочее место или нейтральная среда
+- Стиль: реалистичная профессиональная фотография
+- Сцена: визуально объясни идею слайда через действие, объект или рабочий процесс
+- Эмоция: спокойное узнавание проблемы или момента решения, без агрессии
+- Освещение: мягкое, с достаточным контрастом
+- Фон: место, связанное с нишей или темой
 - Без текста на изображении
 - Без логотипов и водяных знаков
 - Квадратный формат
 - Оставь свободную зону для текста поверх фото
 `,
-    example: `
-Создай фото для слайда с кейсом/примером в Instagram-карусели.
+    final: `
+Создай фото для финального слайда Instagram-карусели.
 Тема: "${topic}". ${nicheContext}
 ${modeContext}
+Роль слайда: ${slideRole}.
 Заголовок слайда: "${slideTitle}".
 ${bodyContext}
 
 Требования:
-- Стиль: позитивный, про результат и рост
-- Сцена: показать итог или процесс получения результата
-- Человек: довольный, демонстрирует результат или рабочий процесс
+- Стиль: позитивный и чистый, про вывод, результат или следующий шаг
+- Сцена: показать итог, ясное решение или спокойное действие после прочтения
+- Человек: уверенный, собранный, в рабочем контексте
 - Освещение: светлое, позитивное
 - Фон: рабочая обстановка в тему ниши
 - Без текста на изображении
 - Без логотипов и водяных знаков
 - Квадратный формат
-- Оставь место под подпись "До/После"
+- Оставь чистую зону под CTA или короткий вывод
 `
   };
 
-  return styleByRole[slideRole];
+  return styleByKind[targetKind];
 }
 
 function getOutlineSlideTitle(slide: CarouselOutlineSlide) {
@@ -986,46 +1039,14 @@ function isModelUnavailableError(error: unknown) {
 }
 
 function isValidSlidesPayload(slides: unknown): slides is CarouselOutlineSlide[] {
-  if (!Array.isArray(slides) || slides.length < 6 || slides.length > 10) {
-    return false;
-  }
-
-  return slides.every((slide) => {
-    if (!slide || typeof slide !== "object") {
-      return false;
-    }
-
-    const current = slide as Record<string, unknown>;
-    const type = current.type;
-
-    if (type === "hook" || type === "cta") {
-      return isText(current.title, 4) && isText(current.subtitle, 8);
-    }
-
-    if (type === "problem" || type === "amplify") {
-      return isText(current.title, 4) && isStringArray(current.bullets, 1);
-    }
-
-    if (type === "mistake" || type === "shift") {
-      return (
-        isText(current.title, 4) &&
-        (isText(current.body, 8) || isText(current.text, 8) || isStringArray(current.bullets, 1))
-      );
-    }
-
-    if (type === "consequence" || type === "solution") {
-      return isStringArray(current.bullets, 1);
-    }
-
-    if (type === "example") {
-      return isText(current.before, 4) && isText(current.after, 4);
-    }
-
-    return false;
-  });
+  return getSlidesPayloadIssue(slides) === null;
 }
 
 function diagnoseSlidesPayload(slides: unknown) {
+  return getSlidesPayloadIssue(slides) ?? "valid slides payload";
+}
+
+function getSlidesPayloadIssue(slides: unknown) {
   if (!Array.isArray(slides)) {
     return "slides is not an array";
   }
@@ -1090,7 +1111,7 @@ function diagnoseSlidesPayload(slides: unknown) {
     return `slide ${index + 1}: unknown type "${String(type)}"`;
   }
 
-  return "unknown validation failure";
+  return null;
 }
 
 function resolveFormat(value: unknown): SlideFormat {
