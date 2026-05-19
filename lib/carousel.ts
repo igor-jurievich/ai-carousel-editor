@@ -569,7 +569,7 @@ function normalizeExampleAfter(value: string) {
   return normalized;
 }
 
-function sanitizeTopic(topic: string) {
+export function sanitizeTopic(topic: string) {
   const normalized = normalizeMultilineText(topic)
     .replace(/[?!]+/gu, " ")
     .replace(/[«»"'`]+/gu, " ")
@@ -581,27 +581,37 @@ function sanitizeTopic(topic: string) {
 
   const cleaned = normalized
     .replace(
-      /^(?:сделай|создай|сгенерируй|напиши|подготовь|собери)\s+(?:карусель|пост|текст|контент|сер(?:ию|ию\s+слайдов)|слайды?)\s*(?:для|про|о|об|на\s+тему)?\s*/iu,
+      /^(?:сделай|создай|сгенерируй|напиши|подготовь|собери|разработай|придумай)\s+(?:мне\s+)?(?:(?:карусел[ьи]|пост(?:ы|а)?|текст|контент|публикаци[юя]|сер(?:ию|ия)\s+слайдов|слайды?)\s*)?(?:(?:для|под|про|о|об|на\s+тему)\s*)?(?:(?:instagram|инстаграм(?:а|е)?|инсты)\s*)?(?:(?:для|под|про|о|об|на\s+тему)\s*)?/iu,
       ""
     )
+    .replace(/^(?:про|о|об|для|под|на\s+тему)\s+/iu, "")
+    .replace(/^что\s+делать\s+(?:с|если|когда)\s+/iu, "")
     .replace(/^(как\s+правильн[а-яё]*\s+)/iu, "")
     .replace(/^(почему\s+)/iu, "")
     .replace(/^(что\s*бы\s+)/iu, "")
     .replace(/^(чтобы\s+)/iu, "")
     .replace(/^(как\s+)/iu, "")
-    .replace(/^(что\s+делать\s+(?:с|если|когда)\s+)/iu, "")
-    .replace(/\b(?:instagram|инстаграм|инстаграме|инсты|карусел[ьи]|пост)\b/giu, " ")
+    .replace(/^(вести\s+)/iu, "")
+    .replace(/(?:instagram|инстаграм(?:а|е)?|инсты)/giu, " ")
+    .replace(/(?:карусел[ьи]|слайды?|свайп(?:ы|нуть|ните|ни)?)/giu, " ")
+    .replace(/перв(?:ый|ого|ом)\s+пост(?:ы|а|е|ом)?/giu, "первую публикацию")
+    .replace(/\bпост(?:ы|а|е|ом)?\b/giu, "публикация")
+    .replace(/перв(?:ый|ого|ом)\s+публикаци[яю]/giu, "первую публикацию")
+    .replace(/написать\s+перв(?:ый|ую)\s+публикаци[яю]/giu, "написать первую публикацию")
     .replace(/\bкак\s+правильн[а-яё]*\b/giu, "")
     .replace(/\bпочему\b/giu, "")
     .replace(/\bчто\s*бы\b/giu, "")
+    .replace(/личном\s+бренде/giu, "личный бренд")
+    .replace(/маркетинге/giu, "маркетинг")
+    .replace(/\s+(?:в|на|для|про|о|об|под|с|без|и)\s*$/iu, "")
     .replace(/\s+/gu, " ")
     .replace(/^[\s,.:;—–-]+|[\s,.:;—–-]+$/gu, "")
     .trim();
 
-  const compact = compactTextLength(cleaned || normalized, 40)
-    .replace(/[\s,.:;—–-]+$/u, "")
+  const compact = compactTextLength(cleaned, 48)
+    .replace(/(?:\s+(?:в|на|для|про|о|об|под|с|без|и))?[\s,.:;—–-]+$/iu, "")
     .trim();
-  return compact || "вашей теме";
+  return compact.length >= 3 ? compact : "вашей теме";
 }
 
 function splitBodyToBullets(value: string, maxItems = 3) {
@@ -3018,11 +3028,13 @@ function resolveRoleFlow(targetCount: number) {
 }
 
 function resolveFallbackOutline(role: CarouselSlideRole, topicHint = "вашей теме"): CarouselOutlineSlide {
+  const safeTopic = sanitizeTopic(topicHint);
+
   if (role === "hook") {
     return {
       type: "hook",
-      title: "Точка роста, которую чаще всего пропускают",
-      subtitle: "Коротко покажу, как собрать сильную карусель без воды"
+      title: `Почему ${safeTopic} не срабатывает сразу`,
+      subtitle: "Покажи один конкретный пример, чтобы читатель понял следующий шаг"
     };
   }
 
@@ -3031,9 +3043,9 @@ function resolveFallbackOutline(role: CarouselSlideRole, topicHint = "вашей
       type: "problem",
       title: "Где теряется внимание",
       bullets: [
-        "Главная мысль тонет в общих словах",
-        "Человек не понимает, что забрать себе",
-        "Слайды читают, но не двигаются дальше"
+        "Сравни текущую формулировку с реальным запросом читателя",
+        "Проверь, где мысль звучит слишком общо",
+        "Убери все, после чего непонятно что делать"
       ]
     };
   }
@@ -3042,31 +3054,35 @@ function resolveFallbackOutline(role: CarouselSlideRole, topicHint = "вашей
     return {
       type: "amplify",
       title: "Почему это усиливается",
-      bullets: ["Отклик падает на первых экранах", "Публикации не удерживают внимание", "Растет усталость от контента"]
+      bullets: [
+        "Замерь, где внимание падает в первые секунды",
+        "Проверь, какой пример доказывает главный тезис",
+        "Сократи повтор, который не двигает мысль дальше"
+      ]
     };
   }
 
   if (role === "mistake") {
     return {
       type: "mistake",
-      title: "Ключевой миф: больше текста не равно больше пользы"
+      title: "Ошибка: объяснять без примера",
+      body: "Покажи ситуацию до и после. Так мысль перестает быть советом в воздухе и становится рабочим ориентиром."
     };
   }
 
   if (role === "consequence") {
-    const safeTopic = sanitizeTopic(topicHint);
     return {
       type: "consequence",
+      title: "Что теряется без структуры",
       bullets: [
-        `Если «${safeTopic}» держится на случайности, результат скачет от раза к разу`,
-        "Каждая задержка усиливает цену ошибки и съедает доверие",
-        "Без повторяемой схемы приходится начинать заново каждый раз"
+        `Теряешь фокус, когда «${safeTopic}» объясняется слишком широко`,
+        "Получаешь отклик ниже, потому что читатель не видит своего шага",
+        "Начинаешь заново каждый раз вместо повторяемой системы"
       ]
     };
   }
 
   if (role === "shift") {
-    const safeTopic = sanitizeTopic(topicHint);
     return {
       type: "shift",
       title: "Сдвиг: система вместо рывков",
@@ -3081,27 +3097,27 @@ function resolveFallbackOutline(role: CarouselSlideRole, topicHint = "вашей
   if (role === "solution") {
     return {
       type: "solution",
+      title: "План на сегодня",
       bullets: [
-        "Выбери одно конкретное действие и начни с него сегодня",
-        "Результат приходит от системы, а не от разового усилия",
-        "Маленький стабильный шаг работает лучше большого но редкого"
+        `Выбери один факт по теме «${safeTopic}»`,
+        "Добавь пример из практики на 1-2 строки",
+        "Проверь, какое действие читатель сделает сегодня"
       ]
     };
   }
 
   if (role === "example") {
-    const safeTopic = sanitizeTopic(topicHint);
     return {
       type: "example",
       before: `До: «${safeTopic} — объясняли общо, читатель не понимал что делать»`,
-      after: "После: «Сменили подход — и результат стал стабильным»"
+      after: `После: «${safeTopic} — показали пример и один следующий шаг»`
     };
   }
 
   return {
     type: "cta",
     title: "Сохраните структуру под свою тему",
-    subtitle: "Выберите один шаг и адаптируйте его под ближайшую задачу"
+    subtitle: "Примените один шаг к ближайшей задаче и сравните отклик"
   };
 }
 

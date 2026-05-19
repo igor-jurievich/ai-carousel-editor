@@ -103,6 +103,19 @@ type CarouselGenerationResult = {
 };
 
 const DEFAULT_OPENAI_REQUEST_TIMEOUT_MS = 82_000;
+const FORBIDDEN_FIRST_SLIDE_STARTS = [
+  "в этой карусели",
+  "сегодня",
+  "я расскажу",
+  "поговорим",
+  "в данном",
+  "в этом посте",
+  "привет"
+] as const;
+const FORBIDDEN_SLIDE_CONTENT_PATTERNS: RegExp[] = [
+  /(?:^|[^\p{L}])(instagram|инстаграм|инстаграме|инсты)(?=$|[^\p{L}])/iu,
+  /(?:^|[^\p{L}])(карусел[ьи]|слайд[а-яё]*|свайп[а-яё]*|пост[а-яё]*|пользовател[ьяеий]+)(?=$|[^\p{L}])/iu
+];
 
 function resolveModelCandidates(mode: ContentMode = "expert") {
   const uniqueCandidates = [
@@ -125,7 +138,7 @@ function resolveModelCandidates(mode: ContentMode = "expert") {
 function resolveModelAttemptsPerCandidate() {
   const raw = Number(process.env.OPENAI_MODEL_ATTEMPTS);
   if (!Number.isFinite(raw)) {
-    return DEFAULT_MODEL_ATTEMPTS;
+    return Math.max(2, DEFAULT_MODEL_ATTEMPTS);
   }
 
   return Math.max(1, Math.min(3, Math.round(raw)));
@@ -272,11 +285,32 @@ function validateCarouselResponse(
     const role = normalizeText(record.role, 24).toLowerCase();
     const title = normalizeText(record.title, 180);
     const body = normalizeText(record.body, 1200);
+    const ctaText = normalizeText(record.cta_text, 220);
+    const before = normalizeText(record.before, 220);
+    const after = normalizeText(record.after, 220);
+    const bullets = Array.isArray(record.bullets)
+      ? record.bullets.map((item) => normalizeText(item, 140)).filter(Boolean)
+      : [];
+    const combinedCopy = [title, body, ctaText, before, after, ...bullets].filter(Boolean).join(" ");
 
-    if (!title) {
+    if (role !== "example" && !title) {
       errors.push(`Слайд ${i + 1}: нет заголовка`);
     }
-    if (!body && role !== "hook") {
+    if (role === "example") {
+      if (!before || !after) {
+        errors.push(`Слайд ${i + 1} (example): нет before/after`);
+      }
+    } else if (role === "cta") {
+      if (!body && !ctaText) {
+        errors.push(`Слайд ${i + 1} (cta): нет cta_text`);
+      }
+    } else if (
+      (role === "problem" || role === "amplify" || role === "consequence" || role === "solution") &&
+      bullets.length < 2 &&
+      !body
+    ) {
+      errors.push(`Слайд ${i + 1} (${role || "unknown"}): нет bullets`);
+    } else if (!body && role !== "hook") {
       errors.push(`Слайд ${i + 1} (${role || "unknown"}): нет описания`);
     }
     if (title && title.split(/\s+/u).length > 6) {
@@ -284,6 +318,12 @@ function validateCarouselResponse(
     }
     if (expectedFlow[i] && role !== expectedFlow[i]) {
       errors.push(`Слайд ${i + 1}: роль "${role}", ожидалась "${expectedFlow[i]}"`);
+    }
+    if (i === 0 && startsWithForbiddenOpening(title)) {
+      errors.push("Слайд 1: запрещённое начало hook");
+    }
+    if (hasForbiddenSlideContent(combinedCopy)) {
+      errors.push(`Слайд ${i + 1}: промпт-артефакт или служебное слово в тексте`);
     }
   });
 
@@ -300,8 +340,13 @@ function mapModelSlidesToLegacyShape(
   return expectedFlow.map((role, index) => {
     const record = toRecord(source[index]);
     const title = normalizeText(record.title, 180);
-    const body = normalizeBodyText(record.body, 1200);
-    const bullets = extractBodyBullets(body);
+    const rawSchemaBullets = Array.isArray(record.bullets)
+      ? record.bullets
+          .map((item) => sanitizeCopyText(normalizeText(item, BULLET_INPUT_MAX), BULLET_OUTPUT_MAX))
+          .filter(Boolean)
+      : [];
+    const body = normalizeBodyText(record.body, 1200) || formatBulletsBody(rawSchemaBullets);
+    const bullets = rawSchemaBullets.length ? rawSchemaBullets : extractBodyBullets(body);
 
     if (role === "hook") {
       return {
@@ -357,15 +402,17 @@ function mapModelSlidesToLegacyShape(
       const parsedExample = parseExampleBody(body);
       return {
         type: "example",
-        before: parsedExample.before,
-        after: parsedExample.after
+        before: sanitizeCopyText(normalizeText(record.before, 140), 122) || parsedExample.before,
+        after: sanitizeCopyText(normalizeText(record.after, 140), 122) || parsedExample.after
       };
     }
 
+    const ctaText = sanitizeCopyText(normalizeText(record.cta_text, CTA_SUBTITLE_INPUT_MAX), CTA_SUBTITLE_OUTPUT_MAX);
     return {
       type: "cta",
       title,
       subtitle:
+        ctaText ||
         sanitizeCopyText(normalizeText(body, CTA_SUBTITLE_INPUT_MAX), CTA_SUBTITLE_OUTPUT_MAX) ||
         buildGoalAwareCta(undefined)
     };
@@ -466,6 +513,48 @@ function parseExampleBody(body: string) {
     before: beforeMatch?.[1]?.trim() ?? "",
     after: afterMatch?.[1]?.trim() ?? ""
   };
+}
+
+function startsWithForbiddenOpening(value: string) {
+  const normalized = normalizeText(value, 220).toLowerCase();
+  return FORBIDDEN_FIRST_SLIDE_STARTS.some((item) => normalized.startsWith(item));
+}
+
+function hasForbiddenSlideContent(value: string) {
+  const normalized = normalizeText(value, 1200).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return FORBIDDEN_SLIDE_CONTENT_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function sanitizeSlideSurfaceText(value: string, maxLength: number) {
+  let next = normalizeText(value, maxLength)
+    .replace(/\bпотке\b/giu, "потоке")
+    .replace(/перв(?:ый|ого|ом)\s+пост[а-яё]*/giu, "первую публикацию")
+    .replace(/перв(?:ый|ого|ом)\s+публикаци[яю]/giu, "первую публикацию")
+    .replace(/в\s+ближайшем\s+пост[а-яё]*/giu, "в ближайшей публикации")
+    .replace(/в\s+этом\s+пост[а-яё]*/giu, "в этой публикации")
+    .replace(/контент-план/giu, "план публикаций")
+    .replace(/контента/giu, "материала")
+    .replace(/контентом/giu, "материалом")
+    .replace(/контенте/giu, "материале")
+    .replace(/контент/giu, "материал")
+    .replace(/(?:^|[^\p{L}])(instagram|инстаграм|инстаграме|инсты)(?=$|[^\p{L}])/giu, " профиль ")
+    .replace(/(?:^|[^\p{L}])карусел[ьи](?=$|[^\p{L}])/giu, " материал ")
+    .replace(/(?:^|[^\p{L}])слайд[а-яё]*(?=$|[^\p{L}])/giu, " блок ")
+    .replace(/(?:^|[^\p{L}])свайп[а-яё]*(?=$|[^\p{L}])/giu, " следующий шаг ")
+    .replace(/(?:^|[^\p{L}])пост[а-яё]*(?=$|[^\p{L}])/giu, " публикацию ")
+    .replace(/(?:^|[^\p{L}])пользовател[ьяеий]+(?=$|[^\p{L}])/giu, " читатель ");
+
+  next = normalizeText(next, maxLength)
+    .replace(/\s+/gu, " ")
+    .replace(/\s+([,.!?;:])/gu, "$1")
+    .replace(/^материал\b/u, "Материал")
+    .trim();
+
+  return next;
 }
 
 function normalizeGeneratedCaption(value: unknown) {
@@ -652,6 +741,10 @@ function buildFirstSlideTitleForMode(topic: string, mode: ContentMode) {
   }
 
   if (mode === "case") {
+    if (containsStem(topic.toLowerCase(), ["подписчик", "подписч", "10к", "блог"])) {
+      return "10к подписчиков без хаотичных рывков";
+    }
+
     return limitTitleWords(`Кейс: ${focus} до и после`);
   }
 
@@ -661,7 +754,11 @@ function buildFirstSlideTitleForMode(topic: string, mode: ContentMode) {
       return directSocialTitle;
     }
 
-    return limitTitleWords(capitalizedFocus);
+    if (containsStem(topic.toLowerCase(), ["блог", "блогер", "автор", "подписчик", "подписч"])) {
+      return "Блогерство выглядит легче снаружи";
+    }
+
+    return "За кадром видно больше";
   }
 
   const directExpertTitle = buildDirectExpertFirstSlideTitle(topic);
@@ -669,7 +766,11 @@ function buildFirstSlideTitleForMode(topic: string, mode: ContentMode) {
     return directExpertTitle;
   }
 
-  return limitTitleWords(`Почему ${focus}`);
+  if (containsStem(focus.toLowerCase(), ["личн", "бренд", "дизайн"])) {
+    return "Клиент выбирает дизайнера до портфолио";
+  }
+
+  return "Где теряется главный сигнал";
 }
 
 function buildFirstSlideSubtitleForMode(topic: string, mode: ContentMode) {
@@ -694,17 +795,23 @@ function buildFirstSlideSubtitleForMode(topic: string, mode: ContentMode) {
   }
 
   const topicFocus = buildCompactTopicFocus(sanitizeTopic(topic), 42);
-  return `Один конкретный признак в теме «${topicFocus}» покажет, где искать настоящую причину.`;
+  return `Один конкретный признак про «${topicFocus}» покажет, где искать настоящую причину.`;
 }
 
 function buildInstructionFirstSlideTitle(topic: string, focus: string) {
-  const directTopic = sanitizeTitleValue(normalizeText(topic, 90), 84);
-  if (/^как\b/iu.test(directTopic)) {
-    return limitTitleWords(directTopic.replace(/\s+пошагово$/iu, "").trim());
+  const normalizedTopic = normalizeText(topic, 160).toLowerCase();
+  if (isApartmentWeekendPrepTopic(topic)) {
+    return "Квартира готова за выходные";
   }
 
+  const directTopic = sanitizeTitleValue(normalizeText(topic, 90), 84);
   const actionFocus = normalizeInstructionActionFocus(focus);
-  return limitTitleWords(`Как ${actionFocus}`);
+  const actionTitle = limitTitleWords(`План: ${actionFocus} без хаоса`);
+  if (/^как\b/iu.test(directTopic) && countWords(actionTitle) >= 4) {
+    return actionTitle;
+  }
+
+  return actionTitle || "План действий без хаоса";
 }
 
 function buildDirectExpertFirstSlideTitle(topic: string) {
@@ -779,7 +886,10 @@ function isInstructionFirstSlideTitle(title: string) {
     return false;
   }
 
-  return /^(как|план|шаги)\b/iu.test(normalized) || /\b(пошаг|по\s+шагам)\b/iu.test(normalized);
+  return (
+    /^(как|план|шаги)\b/iu.test(normalized) ||
+    /\b(пошаг|по\s+шагам|готов[а-яё]*\s+за\s+выходные|без\s+хаоса)\b/iu.test(normalized)
+  );
 }
 
 function enforceFirstSlidePolicy(
@@ -831,11 +941,13 @@ function enforceFirstSlidePolicy(
   const lacksTopicAnchor =
     !hasPrimaryTopicAnchor(combinedCopy, topic) && !isCopyTopicAligned(combinedCopy, topic);
   const hasMetaHook = containsMetaHookLanguage(combinedCopy);
+  const echoesRawTopic = isHookEchoingTopic(title, topic);
   const weakTitle =
     !title ||
     countWords(title) < 3 ||
     hasDanglingTail(title) ||
     startsWithGenericMistakeLead(title) ||
+    echoesRawTopic ||
     hasNonSalesGrammarRisk(title) ||
     hasAwkwardHookTitle(title) ||
     (mode === "instruction" && hasInstructionHookGrammarRisk(title)) ||
@@ -1594,6 +1706,7 @@ function finalizeSlidesForOutput(
   nextSlides = applyNonSalesOpeningStyleGuardrails(nextSlides, mode, topic, options);
   nextSlides = stripBodyArrowsForNonSales(nextSlides, mode, topic);
   nextSlides = applyNonSalesFinalGuardrails(nextSlides, mode, topic, options);
+  nextSlides = sanitizeFinalSlideContent(nextSlides);
 
   nextSlides = nextSlides.map((slide) => {
     if ((slide.type === "mistake" || slide.type === "shift") && countWords(slide.title) < 4) {
@@ -1619,6 +1732,51 @@ function finalizeSlidesForOutput(
     toneViolations,
     modeValidationErrors: finalValidation.ok ? [] : finalValidation.reasons
   };
+}
+
+function sanitizeFinalSlideContent(slides: CarouselOutlineSlide[]) {
+  return slides.map((slide) => {
+    if (slide.type === "hook" || slide.type === "cta") {
+      return {
+        ...slide,
+        title: sanitizeTitleValue(sanitizeSlideSurfaceText(slide.title, 84), 84),
+        subtitle: sanitizeCopyText(
+          sanitizeSlideSurfaceText(slide.subtitle, slide.type === "hook" ? HOOK_SUBTITLE_OUTPUT_MAX : CTA_SUBTITLE_OUTPUT_MAX),
+          slide.type === "hook" ? HOOK_SUBTITLE_OUTPUT_MAX : CTA_SUBTITLE_OUTPUT_MAX
+        )
+      };
+    }
+
+    if (slide.type === "problem" || slide.type === "amplify") {
+      return {
+        ...slide,
+        title: sanitizeTitleValue(sanitizeSlideSurfaceText(slide.title, 84), 84),
+        bullets: slide.bullets.map((item) => sanitizeCopyText(sanitizeSlideSurfaceText(item, BULLET_OUTPUT_MAX), BULLET_OUTPUT_MAX))
+      };
+    }
+
+    if (slide.type === "consequence" || slide.type === "solution") {
+      return {
+        ...slide,
+        title: typeof slide.title === "string" ? sanitizeTitleValue(sanitizeSlideSurfaceText(slide.title, 84), 84) : slide.title,
+        bullets: slide.bullets.map((item) => sanitizeCopyText(sanitizeSlideSurfaceText(item, BULLET_OUTPUT_MAX), BULLET_OUTPUT_MAX))
+      };
+    }
+
+    if (slide.type === "mistake" || slide.type === "shift") {
+      return {
+        ...slide,
+        title: sanitizeTitleValue(sanitizeSlideSurfaceText(slide.title, 92), 92),
+        body: sanitizeCopyText(sanitizeSlideSurfaceText(slide.body ?? "", BODY_BLOCK_OUTPUT_MAX), BODY_BLOCK_OUTPUT_MAX)
+      };
+    }
+
+    return {
+      ...slide,
+      before: sanitizeCopyText(sanitizeSlideSurfaceText(slide.before, 122), 122),
+      after: sanitizeCopyText(sanitizeSlideSurfaceText(slide.after, 122), 122)
+    };
+  });
 }
 
 function stripBodyArrowsForNonSales(
@@ -2106,9 +2264,31 @@ function repairPetToiletSlides(
 function isApartmentWeekendPrepTopic(topic: string) {
   const normalizedTopic = normalizeText(topic, 180).toLowerCase();
   return (
-    containsStem(normalizedTopic, ["подготов", "квартир", "продаж"]) &&
+    isRealEstatePrepTopic(topic) &&
     containsStem(normalizedTopic, ["выходн", "дня", "суббот", "воскрес"])
   );
+}
+
+function isRealEstatePrepTopic(topic: string) {
+  const normalizedTopic = normalizeText(topic, 180).toLowerCase();
+  const hasRealEstateObject = containsStem(normalizedTopic, [
+    "квартир",
+    "риелтор",
+    "недвижим",
+    "объект",
+    "показ",
+    "циан",
+    "авито"
+  ]);
+  const hasPrepOrSaleContext = containsStem(normalizedTopic, [
+    "подготов",
+    "продаж",
+    "выходн",
+    "фото",
+    "показ"
+  ]);
+
+  return hasRealEstateObject && hasPrepOrSaleContext;
 }
 
 function repairApartmentWeekendPrepSlides(slides: CarouselOutlineSlide[]): CarouselOutlineSlide[] {
@@ -2473,9 +2653,10 @@ export async function generateCarouselFromTopic(
     let lastError: unknown = null;
 
     for (const model of models) {
+      let qualityRetryInstruction = "";
       for (let attempt = 1; attempt <= modelAttempts; attempt += 1) {
         try {
-          const userMessage = buildUserPrompt(
+          const baseUserMessage = buildUserPrompt(
             cleanedTopic,
             options?.niche,
             options?.audience,
@@ -2484,6 +2665,9 @@ export async function generateCarouselFromTopic(
             modeDecision.modeEffective,
             expectedFlow
           );
+          const userMessage = qualityRetryInstruction
+            ? `${baseUserMessage}\n\nПОВТОРНАЯ ПОПЫТКА QUALITY GATE:\n${qualityRetryInstruction}`
+            : baseUserMessage;
           const validationErrors: string[] = [];
           let wasRetried = false;
           let tokensUsed = 0;
@@ -2657,6 +2841,7 @@ export async function generateCarouselFromTopic(
 
             const reason = quality.reasons.join("; ") || "low narrative quality";
             if (attempt < modelAttempts) {
+              qualityRetryInstruction = buildQualityRetryInstruction(quality.reasons, modeDecision.modeEffective);
               console.warn(
                 `Model "${model}" attempt ${attempt} returned weak copy (${reason}). Retrying.`
               );
@@ -3231,7 +3416,21 @@ function resolveTopicDomain(topic: string, options?: GenerationOptions): TopicDo
   );
   const hasExplicitCreatorContext =
     hasPersonalBrandPhrase ||
-    containsStem(source, ["сторис", "stories", "блог", "контент", "instagram", "telegram", "соцсет", "автор"]);
+    containsStem(source, [
+      "сторис",
+      "stories",
+      "блог",
+      "блогер",
+      "контент",
+      "instagram",
+      "инстаграм",
+      "telegram",
+      "соцсет",
+      "автор",
+      "подписчик",
+      "подписч",
+      "охват"
+    ]);
 
   if (hasExplicitCreatorContext) {
     return "creator";
@@ -3288,7 +3487,22 @@ function resolveTopicDomain(topic: string, options?: GenerationOptions): TopicDo
 
   if (
     hasPersonalBrandPhrase ||
-    containsStem(source, ["эксперт", "блог", "контент", "instagram", "telegram", "соцсет", "автор", "сторис", "stories"])
+    containsStem(source, [
+      "эксперт",
+      "блог",
+      "блогер",
+      "контент",
+      "instagram",
+      "инстаграм",
+      "telegram",
+      "соцсет",
+      "автор",
+      "сторис",
+      "stories",
+      "подписчик",
+      "подписч",
+      "охват"
+    ])
   ) {
     return "creator";
   }
@@ -3436,15 +3650,57 @@ function buildResponseSchema(slidesCount: number) {
           properties: {
             role: {
               type: "string",
-              enum: ["hook", "problem", "amplify", "mistake", "consequence", "shift", "solution", "example", "cta"]
+              enum: ["hook", "problem", "amplify", "mistake", "consequence", "shift", "solution", "example", "cta"],
+              description: "Роль слайда строго по плану. Не меняй порядок ролей."
             },
-            title: { type: "string", maxLength: 120 },
-            body: { type: "string", maxLength: 1200 }
+            title: {
+              type: "string",
+              maxLength: 80,
+              description:
+                "Заголовок до 60 символов и максимум 6 слов. Для example верни пустую строку. Не используй Instagram, карусель, пост, слайд."
+            },
+            body: {
+              type: "string",
+              maxLength: 900,
+              description:
+                "Тело слайда 80-160 символов или пункты через перенос строки. Для example верни пустую строку. Конкретика, глаголы, без служебных слов."
+            },
+            bullets: {
+              type: "array",
+              minItems: 0,
+              maxItems: 4,
+              description:
+                "Для problem/amplify/consequence/solution верни 2-4 пункта по 30-80 символов. Каждый пункт начинается с глагола или наблюдаемого действия.",
+              items: {
+                type: "string",
+                maxLength: 100
+              }
+            },
+            before: {
+              type: "string",
+              maxLength: 140,
+              description: "Только для example: ситуация ДО с цифрой или фактом. Для остальных ролей пустая строка."
+            },
+            after: {
+              type: "string",
+              maxLength: 140,
+              description: "Только для example: ситуация ПОСЛЕ с цифрой или фактом. Для остальных ролей пустая строка."
+            },
+            cta_text: {
+              type: "string",
+              maxLength: 100,
+              description:
+                "Только для cta: одно конкретное действие 40-80 символов. Для остальных ролей пустая строка."
+            }
           },
-          required: ["role", "title", "body"]
+          required: ["role", "title", "body", "bullets", "before", "after", "cta_text"]
         }
       },
-      caption: { type: "string", maxLength: 2400 }
+      caption: {
+        type: "string",
+        maxLength: 2400,
+        description: "Подпись к публикации без хештегов внутри текста."
+      }
     },
     required: ["slides", "caption"]
   };
@@ -4199,6 +4455,26 @@ function evaluateSlideQuality(
   };
 }
 
+function buildQualityRetryInstruction(reasons: string[], mode: ContentMode) {
+  const reasonText = dedupeErrors(reasons).join("; ") || "слабая структура";
+  const ctaInstruction =
+    mode === "sales"
+      ? "CTA: одно действие с ключевым словом для сообщения и конкретной пользой в ответ."
+      : mode === "social"
+        ? "CTA: один живой вопрос или просьба отметить человека, без директ-продажи."
+        : "CTA: один мягкий шаг: сохранить, проверить у себя или применить один пункт.";
+
+  return [
+    `Исправь причины провала: ${reasonText}.`,
+    "Hook: не оглавление; дай боль, факт, цифру, результат или open loop в 4-6 словах. Не повторяй тему как «Как/Почему + тема».",
+    "Слайд 2: автономный симптом, который понятен без обложки.",
+    "Bullets: начинай с глагола или наблюдаемого действия, без абстракций.",
+    "Убери слова Instagram, инстаграм, карусель, пост, слайд, свайп, пользователь из текста слайдов.",
+    ctaInstruction,
+    "Верни тот же JSON-контракт, без пояснений."
+  ].join("\n");
+}
+
 function countWords(value: string) {
   return normalizeWordTokens(value).length;
 }
@@ -4456,7 +4732,7 @@ function shouldPreferDomainFallbackBullets(
     return !/(cpl|клик|заяв|форма|скорост|3[–-]5|бюджет|связк)/iu.test(copy);
   }
 
-  if (containsStem(normalizedTopic, ["подготов", "квартир", "продаж", "выходн"]) && role === "solution") {
+  if (isRealEstatePrepTopic(topic) && role === "solution") {
     return !/(день\s*1|день\s*2|лампоч|запах|фото|уборк|личн)/iu.test(copy);
   }
 
@@ -4978,7 +5254,7 @@ function buildExampleFallback(
     };
   }
 
-  if (containsStem(normalizedTopic, ["квартир", "риелтор", "недвижим", "продаж", "объект"])) {
+  if (containsStem(normalizedTopic, ["квартир", "риелтор", "недвижим", "объект", "показ", "циан", "авито"])) {
     if (mode === "instruction" && containsStem(normalizedTopic, ["подготов", "выходн", "продаж"])) {
       return {
         type: "example",
@@ -5122,26 +5398,40 @@ function sanitizeTopic(topic: string): string {
   }
 
   const cleaned = normalized
+    .replace(
+      /^(?:сделай|создай|сгенерируй|напиши|подготовь|собери|разработай|придумай)\s+(?:мне\s+)?(?:(?:карусел[ьи]|пост(?:ы|а)?|текст|контент|публикаци[юя]|сер(?:ию|ия)\s+слайдов|слайды?)\s*)?(?:(?:для|под|про|о|об|на\s+тему)\s*)?(?:(?:instagram|инстаграм(?:а|е)?|инсты)\s*)?(?:(?:для|под|про|о|об|на\s+тему)\s*)?/iu,
+      ""
+    )
+    .replace(/^(?:про|о|об|для|под|на\s+тему)\s+/iu, "")
+    .replace(/^что\s+делать\s+(?:с|если|когда)\s+/iu, "")
     .replace(/^(как\s+правильн[а-яё]*\s+)/iu, "")
     .replace(/^(почему\s+)/iu, "")
     .replace(/^(что\s*бы\s+)/iu, "")
     .replace(/^(чтобы\s+)/iu, "")
     .replace(/^(как\s+)/iu, "")
-    .replace(/^(что\s+делать\s+(?:с|если|когда)\s+)/iu, "")
+    .replace(/^(вести\s+)/iu, "")
+    .replace(/(?:instagram|инстаграм(?:а|е)?|инсты)/giu, " ")
+    .replace(/(?:карусел[ьи]|слайды?|свайп(?:ы|нуть|ните|ни)?)/giu, " ")
+    .replace(/перв(?:ый|ого|ом)\s+пост(?:ы|а|е|ом)?/giu, "первую публикацию")
+    .replace(/\bпост(?:ы|а|е|ом)?\b/giu, "публикация")
+    .replace(/перв(?:ый|ого|ом)\s+публикаци[яю]/giu, "первую публикацию")
+    .replace(/написать\s+перв(?:ый|ую)\s+публикаци[яю]/giu, "написать первую публикацию")
     .replace(/\bкак\s+правильн[а-яё]*\b/giu, "")
     .replace(/\bпочему\b/giu, "")
     .replace(/\bчто\s*бы\b/giu, "")
+    .replace(/личном\s+бренде/giu, "личный бренд")
+    .replace(/маркетинге/giu, "маркетинг")
+    .replace(/\s+(?:в|на|для|про|о|об|под|с|без|и)\s*$/iu, "")
     .replace(/\s+/gu, " ")
     .replace(/^[\s,.:;—–-]+|[\s,.:;—–-]+$/gu, "")
     .trim();
 
-  const compact = removeDanglingTail(trimToWordBoundary(cleaned, 40));
-  if (compact.length >= 4) {
+  const compact = removeDanglingTail(trimToWordBoundary(cleaned, 48));
+  if (compact.length >= 3) {
     return compact;
   }
 
-  const fallback = removeDanglingTail(trimToWordBoundary(normalized, 40));
-  return fallback || "вашей теме";
+  return "вашей теме";
 }
 
 function buildSolutionTitleFallback(topic: string) {
@@ -5150,7 +5440,7 @@ function buildSolutionTitleFallback(topic: string) {
     return "План на 10 дней";
   }
 
-  if (containsStem(normalizedTopic, ["подготов", "квартир", "продаж", "выходн"])) {
+  if (isRealEstatePrepTopic(topic)) {
     return "План на два дня";
   }
 
@@ -5186,7 +5476,7 @@ function buildDeterministicSolutionFallback(
     };
   }
 
-  if (containsStem(normalizedTopic, ["подготов", "квартир", "продаж", "выходн"])) {
+  if (isRealEstatePrepTopic(topic)) {
     return {
       type: "solution",
       title,
@@ -5377,7 +5667,7 @@ function buildRoleTitleFallback(
     }
   }
 
-  if (mode === "instruction" && containsStem(normalizedTopic, ["подготов", "квартир", "продаж", "выходн"])) {
+  if (mode === "instruction" && isRealEstatePrepTopic(topic)) {
     const instructionTitles: Partial<Record<CarouselSlideRole, string>> = {
       problem: "Что проверить перед стартом",
       amplify: "Что не успеет окупиться",
@@ -5564,20 +5854,20 @@ function buildDomainRoleTitleVariants(domain: TopicDomain, focus: string) {
   if (domain === "creator") {
     return {
       problem: [
-        `${focus}: где контент становится «как у всех»`,
-        `${focus}: почему подписчик уходит на втором слайде`
+        `${focus}: где теряется живой голос`,
+        `${focus}: почему внимание падает рано`
       ],
       amplify: [
-        `${focus}: как слабый ритм режет досмотры`,
-        `${focus}: почему полезность не превращается в диалоги`
+        `${focus}: как слабый ритм режет интерес`,
+        `${focus}: почему польза не становится диалогом`
       ],
       mistake: [
         `${focus}: где экспертность звучит сухо`,
         `${focus}: ошибка подачи, которая убивает интерес`
       ],
       shift: [
-        `${focus}: как вернуть живой темп карусели`,
-        `${focus}: разворот к тексту, который сохраняют`
+        `${focus}: как вернуть живой темп`,
+        `${focus}: разворот к ясной позиции`
       ]
     };
   }
@@ -5640,7 +5930,7 @@ function buildRoleBulletsFallback(
     }
   }
 
-  if (containsStem(normalizedTopic, ["подготов", "квартир", "продаж", "выходн"])) {
+  if (isRealEstatePrepTopic(topic)) {
     if (role === "problem") {
       return [
         "Покупатель видит темные фото и не открывает объявление второй раз.",
@@ -5844,26 +6134,26 @@ function buildRoleBulletsFallback(
     if (role === "problem") {
       return [
         "Сильная экспертиза звучит ровно, но без крючка на первом экране.",
-        "Мысль растягивается, и читатель теряет нить уже на втором слайде.",
+        "Мысль растягивается, и читатель теряет нить уже к середине.",
         "Нет конкретного действия, ради которого человек дочитывает."
       ];
     }
     if (role === "amplify") {
       return [
-        "Низкий досмотр сигнализирует алгоритму, что контент «средний».",
+        "Низкий досмотр сигнализирует алгоритму, что материал слабый.",
         "Полезность есть, но она не превращается в сохранения и диалоги.",
-        "Каждый следующий пост сложнее раскачать на старте."
+        "Каждая следующая публикация сложнее раскачать на старте."
       ];
     }
     if (role === "consequence") {
       return [
         "Охваты нестабильны, даже при регулярной публикации.",
         "Аудитория запоминает формат, но не запоминает вашу позицию.",
-        "Контент-план есть, а воронка доверия не собирается."
+        "План публикаций есть, а воронка доверия не собирается."
       ];
     }
     return [
-      "Делайте один слайд = одна мысль с четким микровыводом.",
+      "Делайте один блок = одна мысль с четким микровыводом.",
       "Добавляйте контраст «до/после» или конкретный пример из практики.",
       "Закрывайте блок действием: сохранить, ответить, написать код-слово."
     ];
@@ -6103,7 +6393,7 @@ function hasBrokenCopyTail(value: string) {
     return true;
   }
 
-  if (/\b(первых|следующих|ближайших|пробные|тестовые|конкретные|основные|целевые)\s*$/iu.test(normalized)) {
+  if (/\b(первых|следующих|ближайших|пробные|тестовые|конкретные|основные|целевые|каждый|каждую|каждое|них|структуре)\s*$/iu.test(normalized)) {
     return true;
   }
 
@@ -6125,7 +6415,7 @@ function hasBrokenCopyTail(value: string) {
 function removeBrokenCopyTail(value: string) {
   return value
     .replace(/\b(?:за|через|до|на)\s+\d+\s*$/iu, "")
-    .replace(/\b(первых|следующих|ближайших|пробные|тестовые|конкретные|основные|целевые)\s*$/iu, "")
+    .replace(/\b(первых|следующих|ближайших|пробные|тестовые|конкретные|основные|целевые|каждый|каждую|каждое|них|структуре)\s*$/iu, "")
     .replace(/\bне\s+(?:заменяет|работает|решает|закрывает|снимает)\s*$/iu, "")
     .replace(/(?:^|[\s:])(?:где\s+возникает|как\s+закрепляется|где\s+хозяин|хотя\s+бюджет)\s*$/iu, "")
     .replace(/:\s*шаг\s*$/iu, "")
@@ -6263,6 +6553,7 @@ function hasAwkwardHookTitle(value: string) {
   return (
     /^[\p{L}-]+(?:у|ю)\s+[\p{L}-]{4,}ть\s*:/iu.test(normalized) ||
     /^[\p{L}-]+\s+[\p{L}-]{4,}ть:\s+как\b/iu.test(normalized) ||
+    /набрал\s+\d+(?:\s|\u00a0)*(?:к|k|000)\s+людей/iu.test(normalized) ||
     /«[^»]*\b(и|а|но|или|к|по|на|для|без|от)\s*»/iu.test(normalized)
   );
 }
@@ -6444,8 +6735,9 @@ function hasTopicStemMatch(copy: string, topicStems: Set<string>) {
     return true;
   }
 
+  const minTokenLength = Array.from(topicStems).some((stem) => stem.length <= 3) ? 3 : 4;
   const copyTokens = normalizeWordTokens(copy).filter(
-    (token) => token.length >= 4 && !TOPIC_STOP_WORDS.has(token)
+    (token) => token.length >= minTokenLength && !TOPIC_STOP_WORDS.has(token)
   );
   if (copyTokens.length === 0) {
     return false;
@@ -6728,8 +7020,8 @@ function buildCtaVariants(goal?: string, topic?: string, mode: ContentMode = "ex
 
   const soft = isFollowersGoal(normalizedGoal)
     ? pickVariantByTopic(seed, [
-        "Сохраните пост, чтобы вернуться к схеме перед следующей публикацией.",
-        "Сохраните карусель для спокойной сверки подхода."
+        "Сохраните схему, чтобы вернуться к ней перед следующей публикацией.",
+        "Сохраните план для спокойной сверки подхода."
       ])
     : buildDomainSoftCta(domain, focus, sanitizedTopic);
 
@@ -6882,7 +7174,7 @@ function buildDomainSoftCta(domain: TopicDomain, focus: string, topicSeed?: stri
       "Сохраните план, чтобы сверяться с режимом щенка."
     ],
     education: [
-      "Сохраните карусель для подготовки ближайшего урока.",
+      "Сохраните план для подготовки ближайшего урока.",
       "Выберите один шаг для следующего занятия."
     ],
     psychology: [
@@ -6906,11 +7198,11 @@ function buildDomainSoftCta(domain: TopicDomain, focus: string, topicSeed?: stri
       "Выберите один шаг, который снизит тревогу в финансах."
     ],
     creator: [
-      "Выберите пункт, который внедрите в ближайшем посте.",
-      "Сохраните карусель для следующей публикации."
+      "Выберите пункт, который внедрите в ближайшей публикации.",
+      "Сохраните план для следующей публикации."
     ],
     sales: [
-      "Сохраните карусель для первого рабочего шага сегодня.",
+      "Сохраните план для первого рабочего шага сегодня.",
       "Выберите один пункт для воронки на этой неделе."
     ],
     general: [
