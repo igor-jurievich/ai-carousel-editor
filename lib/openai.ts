@@ -6013,7 +6013,7 @@ function normalizeFocusLead(value: string) {
   // Remove awkward "кому + (описание) + инфинитив" lead-ins:
   // "психологу объяснять ...", "репетитору английского удерживать ..."
   if (hasDativeLead) {
-    const tail = words.slice(infinitiveIndex + 1).join(" ").trim();
+    const tail = words.slice(infinitiveIndex).join(" ").trim();
     if (tail) {
       return tail;
     }

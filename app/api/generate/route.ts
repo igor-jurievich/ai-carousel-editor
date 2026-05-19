@@ -36,12 +36,12 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const MIN_TOPIC_CHARS = 3;
-const DEFAULT_GENERATE_TIMEOUT_MS = 60_000;
-const DEFAULT_GENERATE_AUTO_TIMEOUT_MS = 60_000;
-const DEFAULT_GENERATE_NON_SALES_TIMEOUT_MS = 60_000;
-const DEFAULT_GENERATE_WITH_IMAGES_TIMEOUT_MS = 24_000;
-const DEFAULT_GENERATE_WITH_IMAGES_AUTO_TIMEOUT_MS = 24_000;
-const DEFAULT_GENERATE_WITH_IMAGES_NON_SALES_TIMEOUT_MS = 24_000;
+const DEFAULT_GENERATE_TIMEOUT_MS = 90_000;
+const DEFAULT_GENERATE_AUTO_TIMEOUT_MS = 90_000;
+const DEFAULT_GENERATE_NON_SALES_TIMEOUT_MS = 90_000;
+const DEFAULT_GENERATE_WITH_IMAGES_TIMEOUT_MS = 32_000;
+const DEFAULT_GENERATE_WITH_IMAGES_AUTO_TIMEOUT_MS = 32_000;
+const DEFAULT_GENERATE_WITH_IMAGES_NON_SALES_TIMEOUT_MS = 32_000;
 const DEFAULT_GENERATE_QA_TIMEOUT_MS = 120_000;
 const GENERATE_KEEP_ALIVE_INTERVAL_MS = 15_000;
 const DEFAULT_IMAGE_MODEL_RESOLVE_TIMEOUT_MS = 6_000;
@@ -743,7 +743,7 @@ function resolveGenerateTimeoutMs(
 
 function resolveTextRequestTimeoutMs(routeTimeoutMs: number, withImages: boolean) {
   const availableMs = Math.max(8_000, Math.round(routeTimeoutMs - 4_000));
-  const capMs = withImages ? 20_000 : 56_000;
+  const capMs = withImages ? 28_000 : 82_000;
 
   return Math.min(capMs, availableMs);
 }
