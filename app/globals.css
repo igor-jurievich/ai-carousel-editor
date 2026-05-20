@@ -61,9 +61,19 @@ body {
   min-height: 100%;
   margin: 0;
   padding: 0;
+  scroll-behavior: smooth;
   overflow-x: clip;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 body {
