@@ -1,3 +1,4 @@
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { CAROUSEL_TEMPLATE_IDS } from "@/types/editor";
 import type {
   CanvasElement,
@@ -293,8 +294,33 @@ async function readProjectResponse(response: Response) {
   } as StoredProject);
 }
 
+async function fetchProjectApi(input: RequestInfo | URL, init?: RequestInit) {
+  const response = await fetch(input, init);
+  if (response.status !== 401 || typeof window === "undefined") {
+    return response;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return response;
+  }
+
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    const { error } = await supabase.auth.refreshSession();
+    if (error) {
+      return response;
+    }
+  }
+
+  return fetch(input, init);
+}
+
 async function postProject(project: CarouselProject) {
-  const response = await fetch("/api/projects", {
+  const response = await fetchProjectApi("/api/projects", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -311,7 +337,7 @@ export async function fetchProject(projectId: string) {
     return null;
   }
 
-  const response = await fetch(`/api/projects/${encodeURIComponent(id)}`);
+  const response = await fetchProjectApi(`/api/projects/${encodeURIComponent(id)}`);
   if (response.status === 404) {
     return null;
   }
@@ -324,7 +350,7 @@ export async function saveProject(project: CarouselProject) {
     return postProject(project);
   }
 
-  const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
+  const response = await fetchProjectApi(`/api/projects/${encodeURIComponent(project.id)}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json"
