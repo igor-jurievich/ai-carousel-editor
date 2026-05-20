@@ -1,5 +1,19 @@
+"use client";
+
 import Link from "next/link";
+import type { ReactNode } from "react";
+import { useInView } from "@/app/hooks/useInView";
 import styles from "./page.module.css";
+
+type ExampleSlide = {
+  type: string;
+  badge: string;
+  title: string;
+  body?: string;
+  bullets?: string[];
+  accent?: boolean;
+  ctaStyle?: boolean;
+};
 
 function ArrowIcon() {
   return (
@@ -62,7 +76,56 @@ function LogoMark() {
   );
 }
 
+function AnimatedSection({ children, className = "" }: { children: ReactNode; className?: string }) {
+  const { ref, inView } = useInView();
+
+  return (
+    <div
+      ref={ref}
+      className={`${styles.animatedSection} ${inView ? styles.animatedSectionVisible : ""} ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ExampleSlideCard({ slide }: { slide: ExampleSlide }) {
+  return (
+    <div className={styles.exampleSlide}>
+      <div className={`${styles.exampleSlideCard} ${slide.ctaStyle ? styles.exampleSlideCta : ""}`}>
+        {slide.accent ? (
+          <div className={styles.exampleSlideAccentHeader}>
+            <span>{slide.badge}</span>
+            <p>{slide.title}</p>
+          </div>
+        ) : (
+          <div className={styles.exampleSlideHeader}>
+            <span>{slide.badge}</span>
+            <p>{slide.title}</p>
+          </div>
+        )}
+
+        <div className={styles.exampleSlideBody}>
+          {slide.body ? <p className={styles.exampleSlideText}>{slide.body}</p> : null}
+          {slide.bullets?.length ? (
+            <div className={styles.exampleBullets}>
+              {slide.bullets.map((bullet) => (
+                <div key={bullet} className={styles.exampleBullet}>
+                  <span />
+                  <p>{bullet}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <p className={styles.exampleSlideType}>{slide.type}</p>
+    </div>
+  );
+}
+
 const modeLabels = ["Продажи", "Экспертиза", "Инструкция", "Диагностика", "Кейс", "Провокация"];
+const filePreviewClasses = [styles.fileCardIndigo, styles.fileCardViolet, styles.fileCardBlue];
 const featureCards = [
   {
     icon: <SparkIcon />,
@@ -88,6 +151,35 @@ const featureCards = [
 
 const freeFeatures = ["Все шаблоны", "Экспорт PNG", "6 режимов контента"];
 const proFeatures = ["Больше кредитов", "AI фото без лимитов", "Пакетный экспорт"];
+const exampleSlides: ExampleSlide[] = [
+  {
+    type: "hook",
+    badge: "01",
+    title: "73% экспертов теряют клиентов на первом слайде",
+    bullets: ["Слабый заголовок", "Нет конкретики", "Нет причины свайпать"],
+    accent: true
+  },
+  {
+    type: "problem",
+    badge: "02",
+    title: "Ты публикуешь — но покупают у других",
+    body: "Контент есть, охваты есть, а заявок нет. Знакомо?",
+    bullets: ["Подписчики смотрят, но не пишут", "Конкуренты берут дороже и в очереди"]
+  },
+  {
+    type: "solution",
+    badge: "03",
+    title: "Три элемента которые меняют всё",
+    bullets: ["Конкретный результат в заголовке", "Боль аудитории во втором слайде", "CTA с одним действием"]
+  },
+  {
+    type: "cta",
+    badge: "04",
+    title: "Сохрани — пригодится",
+    body: "Напиши «РАЗБОР» в директ — покажу как это работает на твоей теме",
+    ctaStyle: true
+  }
+];
 
 export default function HomePage() {
   return (
@@ -112,11 +204,14 @@ export default function HomePage() {
       <section className={styles.hero}>
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <p className={styles.eyebrow}>AI генератор каруселей</p>
+            <div className={styles.heroLabel}>
+              <span />
+              AI Генератор каруселей
+            </div>
             <h1>
               Один промпт.
               <br />
-              Готовая карусель.
+              <span className={styles.gradientTitle}>Готовая карусель.</span>
             </h1>
             <p className={styles.lead}>
               Опиши тему — AI выберет структуру, напишет текст и соберёт слайды.
@@ -166,122 +261,162 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className={styles.steps}>
-        <div className={styles.sectionHeading}>
-          <p className={styles.eyebrow}>Как работает</p>
-          <h2>Как это работает</h2>
-        </div>
-        <div className={styles.stepsGrid}>
-          <article className={styles.stepCard}>
-            <div className={styles.stepIllustration}>
-              <div className={styles.inputDemo}>
-                <span>Почему мой продукт не покупают...</span>
-                <div><ArrowIcon /></div>
-              </div>
-            </div>
-            <div className={styles.stepTitleRow}><span>1</span><h3>Напиши тему</h3></div>
-            <p>Одной фразы достаточно, чтобы начать структуру будущей карусели.</p>
-          </article>
-          <article className={styles.stepCard}>
-            <div className={styles.stepIllustration}>
-              <div className={styles.modeGrid}>
-                {modeLabels.map((label, index) => (
-                  <span key={label} className={index === 0 ? styles.modeActive : ""}>{label}</span>
-                ))}
-              </div>
-            </div>
-            <div className={styles.stepTitleRow}><span>2</span><h3>AI выберет режим</h3></div>
-            <p>Продажи, экспертиза, инструкция, диагностика, кейс или social.</p>
-          </article>
-          <article className={styles.stepCard}>
-            <div className={styles.stepIllustration}>
-              <div className={styles.exportDemo}>
-                <div className={styles.exportButton}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M12 5v14M5 12l7 7 7-7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  Экспорт PNG
+      <AnimatedSection>
+        <section className={styles.steps}>
+          <div className={styles.sectionHeading}>
+            <p className={styles.eyebrow}>За три действия</p>
+            <h2>Тема → структура → карточки</h2>
+            <p>Не нужно думать о формате. Просто опиши о чём хочешь рассказать.</p>
+          </div>
+          <div className={styles.stepsGrid}>
+            <article className={styles.stepCard}>
+              <div className={styles.stepIllustration}>
+                <div className={styles.inputDemoWrap}>
+                  <div className={styles.inputDemo}>
+                    <span>Почему мой продукт не покупают</span>
+                    <i aria-hidden="true" />
+                    <div><ArrowIcon /></div>
+                  </div>
+                  <p>или голосом, или вставь идею</p>
                 </div>
-                <div className={styles.fileRow}>
-                  {[1, 2, 3].map((item) => (
-                    <div key={item} className={styles.fileCard}>
-                      <span />
-                      <p>PNG</p>
-                    </div>
+              </div>
+              <div className={styles.stepTitleRow}><span>1</span><h3>Напиши тему</h3></div>
+              <p>Одной фразы достаточно, чтобы начать структуру будущей карусели.</p>
+            </article>
+            <article className={styles.stepCard}>
+              <div className={styles.stepIllustration}>
+                <div className={styles.modeGrid}>
+                  {modeLabels.map((label, index) => (
+                    <span key={label} className={index === 0 ? styles.modeActive : ""}>
+                      {index === 0 ? `${label} ✓` : label}
+                    </span>
                   ))}
                 </div>
               </div>
-            </div>
-            <div className={styles.stepTitleRow}><span>3</span><h3>Экспортируй</h3></div>
-            <p>Открой результат в редакторе и скачай карточки для публикации.</p>
-          </article>
-        </div>
-      </section>
-
-      <section className={styles.features}>
-        <div className={styles.sectionHeading}>
-          <p className={styles.eyebrow}>Возможности</p>
-          <h2>Что внутри</h2>
-        </div>
-        <div className={styles.featuresGrid}>
-          {featureCards.map((feature) => (
-            <article key={feature.title} className={styles.featureCard}>
-              <div className={styles.featureIcon}>{feature.icon}</div>
-              <h3>{feature.title}</h3>
-              <p>{feature.text}</p>
+              <div className={styles.stepTitleRow}><span>2</span><h3>AI выберет режим</h3></div>
+              <p>Продажи, экспертиза, инструкция, диагностика, кейс или social.</p>
             </article>
-          ))}
-        </div>
-      </section>
+            <article className={styles.stepCard}>
+              <div className={styles.stepIllustration}>
+                <div className={styles.exportDemo}>
+                  <div className={styles.exportButton}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 5v14M5 12l7 7 7-7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Экспорт PNG
+                  </div>
+                  <div className={styles.fileRow}>
+                    {filePreviewClasses.map((previewClass) => (
+                      <div key={previewClass} className={`${styles.fileCard} ${previewClass}`}>
+                        <span />
+                        <p>PNG</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className={styles.stepTitleRow}><span>3</span><h3>Экспортируй</h3></div>
+              <p>Открой результат в редакторе и скачай карточки для публикации.</p>
+            </article>
+          </div>
+        </section>
+      </AnimatedSection>
 
-      <section className={styles.pricing}>
-        <div className={styles.sectionHeading}>
-          <p className={styles.eyebrow}>Цены</p>
-          <h2>Тарифы</h2>
-        </div>
-        <div className={styles.priceGrid}>
-          <article className={styles.freePlan}>
-            <p className={styles.planLabel}>Бесплатно</p>
-            <p className={styles.price}>0 ₽</p>
-            <p className={styles.planHint}>5 карточек при регистрации</p>
-            <div className={styles.planFeatures}>
-              {freeFeatures.map((feature) => (
-                <div key={feature}><span><CheckIcon /></span>{feature}</div>
-              ))}
-            </div>
-            <Link href="/signup" className={styles.planButton}>Начать бесплатно</Link>
-          </article>
-          <article className={styles.proPlan}>
-            <div className={styles.proTitleRow}>
-              <p className={styles.planLabelMuted}>Pro</p>
-              <span>скоро</span>
-            </div>
-            <p className={styles.price}>—</p>
-            <p className={styles.planHint}>Для регулярного контента</p>
-            <div className={styles.planFeatures}>
-              {proFeatures.map((feature) => (
-                <div key={feature}><span><CheckIcon /></span>{feature}</div>
-              ))}
-            </div>
-            <button className={styles.disabledButton} type="button" disabled>Скоро</button>
-          </article>
-        </div>
-        <p className={styles.noCard}>Кредитная карта не нужна</p>
-      </section>
+      <AnimatedSection>
+        <section className={styles.exampleSection}>
+          <div className={styles.sectionHeading}>
+            <p className={styles.eyebrow}>Пример</p>
+            <h2>Вот что получается</h2>
+            <p>Тема: «Почему эксперты не продают в Instagram»</p>
+          </div>
+          <div className={`${styles.exampleTrack} scrollbar-hide`} aria-label="Пример карусели">
+            {exampleSlides.map((slide) => (
+              <ExampleSlideCard key={slide.badge} slide={slide} />
+            ))}
+          </div>
+          <div className={styles.exampleDots} aria-hidden="true">
+            {exampleSlides.map((slide, index) => (
+              <span key={slide.badge} className={index === 0 ? styles.exampleDotActive : ""} />
+            ))}
+          </div>
+        </section>
+      </AnimatedSection>
 
-      <section className={styles.finalCta}>
-        <div>
-          <h2>Первая карусель — прямо сейчас</h2>
-          <p>5 карточек бесплатно. Без карты. Без объяснений.</p>
-          <Link href="/signup">Собрать карусель →</Link>
-        </div>
-      </section>
+      <AnimatedSection>
+        <section className={styles.features}>
+          <div className={styles.sectionHeading}>
+            <p className={styles.eyebrow}>Почему Pastello</p>
+            <h2>Не шаблон — думающий генератор</h2>
+          </div>
+          <div className={styles.featuresGrid}>
+            {featureCards.map((feature) => (
+              <article key={feature.title} className={styles.featureCard}>
+                <div className={styles.featureIcon}>{feature.icon}</div>
+                <h3>{feature.title}</h3>
+                <p>{feature.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      </AnimatedSection>
+
+      <AnimatedSection>
+        <section className={styles.pricing}>
+          <div className={styles.sectionHeading}>
+            <p className={styles.eyebrow}>Начни сегодня</p>
+            <h2>Бесплатно — навсегда</h2>
+            <p>Первые 5 карточек без регистрации карты.</p>
+          </div>
+          <div className={styles.priceGrid}>
+            <article className={styles.freePlan}>
+              <p className={styles.planLabel}>Бесплатно</p>
+              <p className={styles.price}>Бесплатно</p>
+              <p className={styles.planHint}>5 карточек при регистрации</p>
+              <div className={styles.planFeatures}>
+                {freeFeatures.map((feature) => (
+                  <div key={feature}><span><CheckIcon /></span>{feature}</div>
+                ))}
+              </div>
+              <Link href="/signup" className={styles.planButton}>Начать бесплатно</Link>
+            </article>
+            <article className={styles.proPlan}>
+              <div className={styles.proStripe} aria-hidden="true" />
+              <div className={styles.proTitleRow}>
+                <p className={styles.planLabelMuted}>Pro</p>
+                <span>Скоро</span>
+              </div>
+              <p className={styles.price}>—</p>
+              <p className={styles.planHint}>Для регулярного контента</p>
+              <div className={styles.planFeatures}>
+                {proFeatures.map((feature) => (
+                  <div key={feature}><span><CheckIcon /></span>{feature}</div>
+                ))}
+              </div>
+              <button className={styles.disabledButton} type="button" disabled>Скоро</button>
+            </article>
+          </div>
+          <p className={styles.noCard}>Кредитная карта не нужна</p>
+        </section>
+      </AnimatedSection>
+
+      <AnimatedSection>
+        <section className={styles.finalCta}>
+          <div>
+            <h2>Первая карусель — прямо сейчас</h2>
+            <p>5 карточек бесплатно. Без карты. Без объяснений.</p>
+            <Link href="/signup">Собрать карусель →</Link>
+          </div>
+        </section>
+      </AnimatedSection>
 
       <footer className={styles.footer}>
         <p>pastello.io © 2026</p>
         <div>
           <Link href="/login">Войти</Link>
           <Link href="/signup">Регистрация</Link>
+          <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+            ↑ Наверх
+          </button>
         </div>
       </footer>
     </main>

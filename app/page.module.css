@@ -124,7 +124,7 @@
 
 .hero {
   background: #fafafe;
-  padding: 96px 24px;
+  padding: 64px 24px 72px;
 }
 
 .heroInner,
@@ -151,6 +151,31 @@
   text-transform: uppercase;
 }
 
+.heroLabel {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  padding: 7px 12px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.heroLabel span {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #4f46e5;
+  animation: pulseDot 1.5s ease-in-out infinite;
+}
+
 .heroCopy h1 {
   margin: 0;
   color: #0f0f14;
@@ -158,6 +183,13 @@
   line-height: 0.98;
   font-weight: 950;
   letter-spacing: 0;
+}
+
+.gradientTitle {
+  background: linear-gradient(90deg, #4f46e5, #8b5cf6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .lead {
@@ -196,6 +228,8 @@
   height: 320px;
   width: 100%;
   min-width: 0;
+  overflow: hidden;
+  padding: 10px 12px;
   user-select: none;
 }
 
@@ -209,8 +243,8 @@
 }
 
 .heroCardLeft {
-  left: 0;
-  top: 58px;
+  left: 14px;
+  top: 68px;
   width: 192px;
   padding: 16px;
   transform: rotate(-6deg);
@@ -219,7 +253,7 @@
 
 .heroCardCenter {
   left: 50%;
-  top: 0;
+  top: 10px;
   z-index: 2;
   width: 216px;
   padding: 18px;
@@ -228,10 +262,10 @@
 }
 
 .heroCardRight {
-  right: 0;
-  top: 76px;
-  width: 176px;
-  min-height: 132px;
+  right: 12px;
+  top: 86px;
+  width: 158px;
+  min-height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -325,6 +359,7 @@
 }
 
 .steps,
+.exampleSection,
 .features,
 .pricing {
   padding: 88px 24px;
@@ -335,11 +370,13 @@
   background: #f8f8ff;
 }
 
-.steps {
+.steps,
+.exampleSection {
   width: 100%;
 }
 
 .steps > *,
+.exampleSection > *,
 .pricing > * {
   width: min(1120px, 100%);
   margin-left: auto;
@@ -349,6 +386,14 @@
 .sectionHeading {
   margin-bottom: 36px;
   text-align: center;
+}
+
+.sectionHeading > p:last-child:not(.eyebrow) {
+  max-width: 620px;
+  margin: 14px auto 0;
+  color: #6b7280;
+  font-size: 1rem;
+  line-height: 1.55;
 }
 
 .sectionHeading h2 {
@@ -389,13 +434,25 @@
 }
 
 .stepIllustration {
-  height: 112px;
+  min-height: 128px;
   display: flex;
   align-items: center;
+  justify-content: center;
   margin-bottom: 18px;
   border-radius: 14px;
   background: #f9fafb;
   padding: 16px;
+}
+
+.inputDemoWrap {
+  width: 100%;
+}
+
+.inputDemoWrap > p {
+  margin: 8px 0 0;
+  color: #9ca3af;
+  font-size: 0.72rem;
+  text-align: center;
 }
 
 .inputDemo {
@@ -419,6 +476,15 @@
   font-size: 0.86rem;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.inputDemo i {
+  width: 2px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #6366f1;
+  animation: cursorBlink 1s steps(2, start) infinite;
 }
 
 .inputDemo div {
@@ -457,6 +523,8 @@
   border-color: #6366f1;
   background: #6366f1;
   color: #ffffff;
+  box-shadow: 0 10px 20px rgba(99, 102, 241, 0.22);
+  transform: scale(1.04);
 }
 
 .exportDemo {
@@ -499,6 +567,18 @@
   margin: 5px 5px 0;
   border-radius: 7px 7px 4px 4px;
   background: #eef2ff;
+}
+
+.fileCardIndigo span {
+  background: #e0e7ff;
+}
+
+.fileCardViolet span {
+  background: #ede9fe;
+}
+
+.fileCardBlue span {
+  background: #eff6ff;
 }
 
 .fileCard p {
@@ -549,10 +629,11 @@
 .featureCard {
   border: 1px solid #f3f4f6;
   padding: 26px;
-  transition: box-shadow 180ms ease, transform 180ms ease;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
 }
 
 .featureCard:hover {
+  border-color: #c7d2fe;
   transform: translateY(-2px);
   box-shadow: 0 18px 44px rgba(15, 15, 20, 0.08);
 }
@@ -566,11 +647,157 @@
   border-radius: 13px;
   color: #6366f1;
   background: #eef2ff;
+  transition: background 200ms ease, transform 200ms ease;
+}
+
+.featureCard:hover .featureIcon {
+  background: #e0e7ff;
+  transform: translateY(-1px);
 }
 
 .featureCard h3 {
   margin-bottom: 8px;
   font-size: 1.08rem;
+}
+
+.exampleSection {
+  background: #ffffff;
+}
+
+.exampleTrack {
+  width: min(1120px, 100%);
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  margin: 0 auto;
+  padding: 4px 2px 16px;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+}
+
+.exampleSlide {
+  width: 256px;
+  flex: 0 0 256px;
+  scroll-snap-align: center;
+}
+
+.exampleSlideCard {
+  height: 320px;
+  overflow: hidden;
+  border: 1px solid #f3f4f6;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 18px 44px rgba(15, 15, 20, 0.08);
+}
+
+.exampleSlideCta {
+  background: #eef2ff;
+}
+
+.exampleSlideAccentHeader,
+.exampleSlideHeader {
+  padding: 16px;
+}
+
+.exampleSlideAccentHeader {
+  background: #6366f1;
+}
+
+.exampleSlideAccentHeader span,
+.exampleSlideHeader span {
+  font-family: var(--font-space-grotesk), monospace;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.exampleSlideAccentHeader span {
+  color: #c7d2fe;
+}
+
+.exampleSlideHeader span {
+  color: #c7cad1;
+}
+
+.exampleSlideAccentHeader p,
+.exampleSlideHeader p {
+  margin: 7px 0 0;
+  font-size: 0.92rem;
+  font-weight: 900;
+  line-height: 1.24;
+}
+
+.exampleSlideAccentHeader p {
+  color: #ffffff;
+}
+
+.exampleSlideHeader p {
+  color: #111827;
+}
+
+.exampleSlideBody {
+  padding: 14px 16px 18px;
+}
+
+.exampleSlideText {
+  margin: 0 0 14px;
+  color: #6b7280;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.exampleBullets {
+  display: grid;
+  gap: 10px;
+}
+
+.exampleBullet {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.exampleBullet span {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: #6366f1;
+}
+
+.exampleBullet p {
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.exampleSlideType {
+  margin: 9px 0 0;
+  color: #9ca3af;
+  font-size: 0.76rem;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.exampleDots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.exampleDots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  transition: width 200ms ease, background 200ms ease;
+}
+
+.exampleDots .exampleDotActive {
+  width: 18px;
+  background: #6366f1;
 }
 
 .pricing {
@@ -593,7 +820,9 @@
 }
 
 .proPlan {
-  opacity: 0.62;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f9fafb 0%, #ffffff 100%);
 }
 
 .planLabel,
@@ -615,13 +844,21 @@
 
 .proTitleRow {
   gap: 8px;
+  justify-content: space-between;
+}
+
+.proStripe {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #a78bfa, #6366f1);
 }
 
 .proTitleRow span {
   border-radius: 999px;
-  background: #f3f4f6;
-  color: #9ca3af;
-  padding: 3px 9px;
+  background: #ede9fe;
+  color: #7c3aed;
+  padding: 5px 10px;
   font-size: 0.7rem;
   font-weight: 800;
 }
@@ -629,7 +866,7 @@
 .price {
   margin: 0 0 4px;
   color: #111827;
-  font-size: 2rem;
+  font-size: 2.35rem;
   font-weight: 950;
 }
 
@@ -746,8 +983,55 @@
   text-decoration: none;
 }
 
-.footer a:hover {
+.footer button {
+  border: 0;
+  background: transparent;
+  color: #9ca3af;
+  padding: 0;
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.footer a:hover,
+.footer button:hover {
   color: #4b5563;
+}
+
+.animatedSection {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 700ms ease, transform 700ms ease;
+}
+
+.animatedSectionVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.42;
+    transform: scale(0.72);
+  }
+}
+
+@keyframes cursorBlink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+
+  46%,
+  100% {
+    opacity: 0;
+  }
 }
 
 @media (max-width: 900px) {
@@ -760,6 +1044,7 @@
   }
 
   .heroVisual {
+    height: 300px;
     max-width: 520px;
     margin: 0 auto;
   }
@@ -794,7 +1079,7 @@
   }
 
   .hero {
-    padding: 56px 18px;
+    padding: 48px 18px 54px;
   }
 
   .heroCopy h1 {
@@ -816,13 +1101,52 @@
   }
 
   .heroVisual {
-    height: 260px;
-    transform: scale(0.84);
-    transform-origin: top center;
-    margin-bottom: -42px;
+    height: 210px;
+    max-width: 360px;
+    margin-top: 30px;
+    margin-bottom: -6px;
+    padding: 8px;
+  }
+
+  .heroCardLeft {
+    left: 6px;
+    top: 56px;
+    width: 150px;
+    padding: 12px;
+  }
+
+  .heroCardCenter {
+    top: 8px;
+    width: 166px;
+    padding: 13px;
+  }
+
+  .heroCardRight {
+    right: 6px;
+    top: 66px;
+    width: 132px;
+    min-height: 96px;
+  }
+
+  .cardTop {
+    padding: 8px;
+  }
+
+  .cardTop p,
+  .point p {
+    font-size: 0.66rem;
+  }
+
+  .cardTitle {
+    font-size: 0.78rem;
+  }
+
+  .heroCardRight p {
+    font-size: 0.82rem;
   }
 
   .steps,
+  .exampleSection,
   .features,
   .pricing {
     padding: 64px 18px;
@@ -834,6 +1158,17 @@
 
   .featuresGrid {
     grid-template-columns: 1fr;
+  }
+
+  .exampleTrack {
+    width: calc(100% + 18px);
+    margin-right: -18px;
+    padding-right: 18px;
+  }
+
+  .exampleSlide {
+    width: 248px;
+    flex-basis: 248px;
   }
 
   .finalCta {
