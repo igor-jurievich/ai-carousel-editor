@@ -665,33 +665,36 @@ export default function GeneratePage() {
         return;
       }
 
-      if (!response.ok) {
-        if (response.status === 403 && data.error === "no_credits") {
-          const needed =
-            typeof data.requiredCredits === "number" && Number.isFinite(data.requiredCredits)
-              ? Math.max(1, Math.trunc(data.requiredCredits))
-              : requiredCredits;
-          const available =
-            typeof data.currentCredits === "number" && Number.isFinite(data.currentCredits)
-              ? Math.max(0, Math.trunc(data.currentCredits))
-              : typeof credits === "number"
-                ? Math.max(0, Math.trunc(credits))
-                : 0;
+      // `no_credits` can arrive either as a 403 (pre-generation balance check)
+      // or inside the keep-alive stream as HTTP 200 (balance changed mid-flight).
+      // Handle both so the user never sees the raw "no_credits" string.
+      if (data.error === "no_credits") {
+        const needed =
+          typeof data.requiredCredits === "number" && Number.isFinite(data.requiredCredits)
+            ? Math.max(1, Math.trunc(data.requiredCredits))
+            : requiredCredits;
+        const available =
+          typeof data.currentCredits === "number" && Number.isFinite(data.currentCredits)
+            ? Math.max(0, Math.trunc(data.currentCredits))
+            : typeof credits === "number"
+              ? Math.max(0, Math.trunc(credits))
+              : 0;
 
-          setCredits(available);
-          toast.error(`Недостаточно кредитов. Нужно ${needed}, у вас ${available}.`);
-          if (available <= 0) {
-            setIsNoCreditsNoticeOpen(true);
-          }
-          setError(null);
-          setGenerationStatus("idle");
-          setGenerationErrorMessage(null);
-          setIsProgressVisible(false);
-          setIsProgressFading(false);
-          setProgressWidth(0);
-          return;
+        setCredits(available);
+        toast.error(`Недостаточно кредитов. Нужно ${needed}, у вас ${available}.`);
+        if (available <= 0) {
+          setIsNoCreditsNoticeOpen(true);
         }
+        setError(null);
+        setGenerationStatus("idle");
+        setGenerationErrorMessage(null);
+        setIsProgressVisible(false);
+        setIsProgressFading(false);
+        setProgressWidth(0);
+        return;
+      }
 
+      if (!response.ok) {
         throw new Error(data.error || "Не удалось сгенерировать карусель.");
       }
 

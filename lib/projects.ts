@@ -10,6 +10,7 @@ import type {
 
 const STORAGE_KEY = "ai-carousel.projects.v1";
 const TEMPLATE_ID_SET = new Set<CarouselTemplateId>(CAROUSEL_TEMPLATE_IDS);
+let legacyMigrationPromise: Promise<number> | null = null;
 
 type StoredProject = CarouselProject & {
   id: string;
@@ -285,12 +286,20 @@ async function readProjectResponse(response: Response) {
     throw new Error(payload?.error || "Не удалось сохранить проект в Supabase.");
   }
 
+  const savedProject = payload.project;
+  // Без реального id из БД навигация ушла бы на несуществующий /editor/{id},
+  // и открылась бы не та (пустая) карусель. Лучше явно сообщить об ошибке,
+  // чем выдумывать случайный id на клиенте.
+  if (typeof savedProject.id !== "string" || !savedProject.id.trim()) {
+    throw new Error("Сервер не вернул идентификатор проекта. Попробуйте ещё раз.");
+  }
+
   const now = new Date().toISOString();
   return normalizeStoredProject({
-    ...payload.project,
-    id: payload.project.id ?? crypto.randomUUID(),
-    createdAt: payload.project.createdAt ?? now,
-    updatedAt: payload.project.updatedAt ?? now
+    ...savedProject,
+    id: savedProject.id,
+    createdAt: savedProject.createdAt ?? now,
+    updatedAt: savedProject.updatedAt ?? now
   } as StoredProject);
 }
 
@@ -305,15 +314,9 @@ async function fetchProjectApi(input: RequestInfo | URL, init?: RequestInit) {
     return response;
   }
 
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    const { error } = await supabase.auth.refreshSession();
-    if (error) {
-      return response;
-    }
+  const { error } = await supabase.auth.refreshSession();
+  if (error) {
+    return response;
   }
 
   return fetch(input, init);
@@ -361,7 +364,7 @@ export async function saveProject(project: CarouselProject) {
   return readProjectResponse(response);
 }
 
-export async function migrateLegacyProjectsToSupabase() {
+async function migrateLegacyProjectsToSupabaseOnce() {
   if (!canUseStorage()) {
     return 0;
   }
@@ -382,4 +385,15 @@ export async function migrateLegacyProjectsToSupabase() {
 
   window.localStorage.removeItem(STORAGE_KEY);
   return migrated;
+}
+
+export function migrateLegacyProjectsToSupabase() {
+  if (!legacyMigrationPromise) {
+    legacyMigrationPromise = migrateLegacyProjectsToSupabaseOnce().catch((error) => {
+      legacyMigrationPromise = null;
+      throw error;
+    });
+  }
+
+  return legacyMigrationPromise;
 }

@@ -717,6 +717,7 @@ export function Editor({ initialProjectId = null }: EditorProps) {
   const skipAutosaveRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveSaveErrorNotifiedRef = useRef(false);
+  const autosaveInFlightRef = useRef(false);
   const editorOpenedTrackedRef = useRef(false);
   const initialMobileToolAppliedRef = useRef(false);
   const initialCanvasFormatAppliedRef = useRef(false);
@@ -1348,48 +1349,61 @@ export function Editor({ initialProjectId = null }: EditorProps) {
       window.clearTimeout(autosaveTimerRef.current);
     }
 
-    autosaveTimerRef.current = window.setTimeout(() => {
-      void (async () => {
-      try {
-        const saved = await saveProject({
-          id: projectId ?? undefined,
-          title: projectTitleFromTopic(topic),
-          topic,
-          slides,
-          format: slideFormat,
-          theme: activeTemplateId,
-          promptVariant,
-          contentMode,
-          niche: niche.trim() || undefined,
-          audience: audience.trim() || undefined,
-          tone,
-          goal,
-          language: "ru",
-          schemaVersion: 1,
-          caption: captionResult
-        });
-
-        autosaveSaveErrorNotifiedRef.current = false;
-
-        if (!projectId || projectId !== saved.id) {
-          setProjectId(saved.id ?? null);
-        }
-
-        if (saved.id && pathname !== `/editor/${saved.id}`) {
-          router.replace(`/editor/${saved.id}`);
-        }
-      } catch (autosaveError) {
-        if (!autosaveSaveErrorNotifiedRef.current) {
-          autosaveSaveErrorNotifiedRef.current = true;
-          setStatus(
-            autosaveError instanceof Error
-              ? autosaveError.message
-              : "Не удалось сохранить проект. Освободите место в браузере и повторите."
-          );
-        }
+    const runAutosave = () => {
+      // Never run two autosaves at once. For a project that has no id yet a
+      // second concurrent run would POST again and create a duplicate row.
+      // Wait for the in-flight save to finish, then retry with the latest state.
+      if (autosaveInFlightRef.current) {
+        autosaveTimerRef.current = window.setTimeout(runAutosave, AUTOSAVE_DEBOUNCE_MS);
+        return;
       }
+
+      autosaveInFlightRef.current = true;
+      void (async () => {
+        try {
+          const saved = await saveProject({
+            id: projectId ?? undefined,
+            title: projectTitleFromTopic(topic),
+            topic,
+            slides,
+            format: slideFormat,
+            theme: activeTemplateId,
+            promptVariant,
+            contentMode,
+            niche: niche.trim() || undefined,
+            audience: audience.trim() || undefined,
+            tone,
+            goal,
+            language: "ru",
+            schemaVersion: 1,
+            caption: captionResult
+          });
+
+          autosaveSaveErrorNotifiedRef.current = false;
+
+          if (!projectId || projectId !== saved.id) {
+            setProjectId(saved.id ?? null);
+          }
+
+          if (saved.id && pathname !== `/editor/${saved.id}`) {
+            router.replace(`/editor/${saved.id}`);
+          }
+        } catch (autosaveError) {
+          if (!autosaveSaveErrorNotifiedRef.current) {
+            autosaveSaveErrorNotifiedRef.current = true;
+            setStatus(
+              autosaveError instanceof Error
+                ? autosaveError.message
+                : "Не удалось сохранить проект. Освободите место в браузере и повторите."
+            );
+          }
+        } finally {
+          autosaveInFlightRef.current = false;
+        }
       })();
-    }, AUTOSAVE_DEBOUNCE_MS);
+    };
+
+    autosaveTimerRef.current = window.setTimeout(runAutosave, AUTOSAVE_DEBOUNCE_MS);
 
     return () => {
       if (autosaveTimerRef.current) {

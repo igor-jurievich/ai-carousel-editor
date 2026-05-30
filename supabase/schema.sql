@@ -134,6 +134,31 @@ before update on public.profiles
 for each row
 execute function public.set_updated_at();
 
+-- Guarantee every auth user has a profile row (with the default credits grant)
+-- even if the onboarding API call to persist profile details fails or is skipped.
+-- Inserting only the id keeps the unique `login` constraint safe; the onboarding
+-- route fills in name/role/topic/login afterwards via upsert.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id)
+  values (new.id)
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+
+create trigger on_auth_user_created
+after insert on auth.users
+for each row
+execute function public.handle_new_user();
+
 revoke insert, update, delete on public.profiles from authenticated;
 grant select on public.profiles to authenticated;
 grant insert (id, name, role, topic, login) on public.profiles to authenticated;
@@ -212,11 +237,6 @@ for delete
 using (auth.uid() = user_id);
 
 drop policy if exists "Users see own projects" on public.projects;
-create policy "Users see own projects"
-on public.projects
-for all
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
 
 drop policy if exists "Users can view own slides" on public.project_slides;
 create policy "Users can view own slides"

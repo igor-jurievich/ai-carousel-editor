@@ -382,11 +382,19 @@ export async function DELETE(_request: Request, context: RouteContext) {
     return jsonResponse({ error: "Требуется авторизация." }, 401);
   }
 
-  const { error } = await supabase.from("projects").delete().eq("id", projectId);
+  const { data, error } = await supabase
+    .from("projects")
+    .delete()
+    .eq("id", projectId)
+    .select("id");
 
   if (error) {
     console.error("Failed to delete project:", error);
     return jsonResponse({ error: "Не удалось удалить проект." }, 500);
+  }
+
+  if (!data?.length) {
+    return jsonResponse({ error: "Проект не найден." }, 404);
   }
 
   return jsonResponse({ ok: true });

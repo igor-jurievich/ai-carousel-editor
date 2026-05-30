@@ -181,7 +181,10 @@ async function requestCarouselCompletion(
   return await openai.responses.create(
     {
       model,
-      max_output_tokens: 4000,
+      // gpt-5.1 — reasoning-модель: токены рассуждения входят в max_output_tokens.
+      // При 4000 рассуждение могло «съесть» бюджет до конца JSON → обрезка/пустой
+      // ответ → парс падает → фолбэк. Биллинг по факту, поэтому запас безопасен.
+      max_output_tokens: 8000,
       input: [
         {
           role: "system",
@@ -3073,7 +3076,8 @@ export async function generateCaptionFromCarousel(
       try {
         const response = await openai.responses.create({
           model,
-          max_output_tokens: 1600,
+          // Запас под reasoning-токены gpt-5.1 + сам JSON подписи (иначе обрезка).
+          max_output_tokens: 3000,
           input: [
             {
               role: "system",

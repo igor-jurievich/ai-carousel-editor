@@ -35,7 +35,6 @@ import type {
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const MIN_TOPIC_CHARS = 1;
 const DEFAULT_GENERATE_TIMEOUT_MS = 90_000;
 const DEFAULT_GENERATE_AUTO_TIMEOUT_MS = 90_000;
 const DEFAULT_GENERATE_NON_SALES_TIMEOUT_MS = 90_000;
@@ -244,13 +243,6 @@ export async function POST(request: Request) {
 
   if (!topic) {
     return NextResponse.json({ error: "Введите тему карусели." }, { status: 400 });
-  }
-
-  if (topic.length < MIN_TOPIC_CHARS) {
-    return NextResponse.json(
-      { error: "Тема слишком короткая — добавьте 2–3 слова." },
-      { status: 400 }
-    );
   }
 
   if (topic.length > MAX_TOPIC_CHARS) {
