@@ -114,16 +114,15 @@ const FORBIDDEN_FIRST_SLIDE_STARTS = [
   "в этом посте",
   "привет"
 ] as const;
-const FORBIDDEN_SLIDE_CONTENT_PATTERNS: RegExp[] = [
-  /(?:^|[^\p{L}])(instagram|инстаграм|инстаграме|инсты)(?=$|[^\p{L}])/iu,
-  /(?:^|[^\p{L}])(карусел[ьи]|слайд[а-яё]*|свайп[а-яё]*|пост[а-яё]*|пользовател[ьяеий]+)(?=$|[^\p{L}])/iu
-];
 
 function resolveModelCandidates(mode: ContentMode = "expert") {
+  // Заданная в ENV модель (напр. gpt-5.5) становится ОСНОВНЫМ кандидатом,
+  // а gpt-5.1/gpt-4o остаются фолбэком: если ENV-модель недоступна (404),
+  // генерация деградирует к проверенной 5.1, а не падает.
   const uniqueCandidates = [
-    ...DEFAULT_MODEL_CANDIDATES,
     process.env.OPENAI_GENERATION_MODEL?.trim(),
-    process.env.OPENAI_MODEL?.trim()
+    process.env.OPENAI_MODEL?.trim(),
+    ...DEFAULT_MODEL_CANDIDATES
   ]
     .filter((value): value is string => Boolean(value))
     .filter((value, index, list) => list.indexOf(value) === index);
@@ -296,7 +295,6 @@ function validateCarouselResponse(
     const bullets = Array.isArray(record.bullets)
       ? record.bullets.map((item) => normalizeText(item, 140)).filter(Boolean)
       : [];
-    const combinedCopy = [title, body, ctaText, before, after, ...bullets].filter(Boolean).join(" ");
 
     if (role !== "example" && !title) {
       errors.push(`Слайд ${i + 1}: нет заголовка`);
@@ -326,9 +324,6 @@ function validateCarouselResponse(
     }
     if (i === 0 && startsWithForbiddenOpening(title)) {
       errors.push("Слайд 1: запрещённое начало hook");
-    }
-    if (hasForbiddenSlideContent(combinedCopy)) {
-      errors.push(`Слайд ${i + 1}: промпт-артефакт или служебное слово в тексте`);
     }
   });
 
@@ -525,41 +520,16 @@ function startsWithForbiddenOpening(value: string) {
   return FORBIDDEN_FIRST_SLIDE_STARTS.some((item) => normalized.startsWith(item));
 }
 
-function hasForbiddenSlideContent(value: string) {
-  const normalized = normalizeText(value, 1200).toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-
-  return FORBIDDEN_SLIDE_CONTENT_PATTERNS.some((pattern) => pattern.test(normalized));
-}
-
 function sanitizeSlideSurfaceText(value: string, maxLength: number) {
-  let next = normalizeText(value, maxLength)
+  // Раньше тут была агрессивная подмена естественных слов (пост→публикация,
+  // контент→материал, слайд→блок, карусель→материал, пользователь→читатель),
+  // из-за чего текст карусели звучал коряво. С сильной моделью это вредит больше,
+  // чем помогает — оставляем только безопасную чистку пробелов/пунктуации.
+  return normalizeText(value, maxLength)
     .replace(/\bпотке\b/giu, "потоке")
-    .replace(/перв(?:ый|ого|ом)\s+пост[а-яё]*/giu, "первую публикацию")
-    .replace(/перв(?:ый|ого|ом)\s+публикаци[яю]/giu, "первую публикацию")
-    .replace(/в\s+ближайшем\s+пост[а-яё]*/giu, "в ближайшей публикации")
-    .replace(/в\s+этом\s+пост[а-яё]*/giu, "в этой публикации")
-    .replace(/контент-план/giu, "план публикаций")
-    .replace(/контента/giu, "материала")
-    .replace(/контентом/giu, "материалом")
-    .replace(/контенте/giu, "материале")
-    .replace(/контент/giu, "материал")
-    .replace(/(?:^|[^\p{L}])(instagram|инстаграм|инстаграме|инсты)(?=$|[^\p{L}])/giu, " профиль ")
-    .replace(/(?:^|[^\p{L}])карусел[ьи](?=$|[^\p{L}])/giu, " материал ")
-    .replace(/(?:^|[^\p{L}])слайд[а-яё]*(?=$|[^\p{L}])/giu, " блок ")
-    .replace(/(?:^|[^\p{L}])свайп[а-яё]*(?=$|[^\p{L}])/giu, " следующий шаг ")
-    .replace(/(?:^|[^\p{L}])пост[а-яё]*(?=$|[^\p{L}])/giu, " публикацию ")
-    .replace(/(?:^|[^\p{L}])пользовател[ьяеий]+(?=$|[^\p{L}])/giu, " читатель ");
-
-  next = normalizeText(next, maxLength)
     .replace(/\s+/gu, " ")
     .replace(/\s+([,.!?;:])/gu, "$1")
-    .replace(/^материал\b/u, "Материал")
     .trim();
-
-  return next;
 }
 
 function normalizeGeneratedCaption(value: unknown) {

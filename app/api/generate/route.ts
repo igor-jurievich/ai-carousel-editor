@@ -12,6 +12,7 @@ import {
 } from "@/lib/openai";
 import { getSupabasePublicConfig } from "@/lib/supabase";
 import { deductCredits, normalizeCredits } from "@/lib/generation/credits";
+import { generateImageViaFal, isFalImageConfigured } from "@/lib/generation/fal-image";
 import {
   consumeGenerateSlot,
   acquireImageGenerationLock,
@@ -865,6 +866,20 @@ async function generateSlideImage(options: {
     niche: niche || undefined,
     mode
   });
+
+  // Основной провайдер картинок — fal GPT Image 2 (лучший рендер текста и
+  // адхеренс промпта). При ошибке/отсутствии ключа падаем на OpenAI gpt-image,
+  // чтобы генерация карусели никогда не ломалась из-за картинок.
+  if (isFalImageConfigured()) {
+    try {
+      return await generateImageViaFal({ prompt: imagePrompt });
+    } catch (falError) {
+      console.warn(
+        "fal GPT Image 2 failed; falling back to OpenAI image model.",
+        falError
+      );
+    }
+  }
 
   const result = await client.images.generate(
     {

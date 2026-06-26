@@ -26,3 +26,9 @@ test-results
 # OS/editor
 .DS_Store
 .vercel
+
+# Local agent/runtime state and internal notes (not part of the app)
+.claude
+data
+2026-06-14
+CODE_REVIEW_REPORT.md
