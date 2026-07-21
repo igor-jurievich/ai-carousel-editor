@@ -9,7 +9,7 @@ import {
   generateCarouselFromTopic,
   generateFallbackCarouselFromTopic,
   type PromptVariant
-} from "@/lib/openai";
+} from "@/lib/generation/engine";
 import { getSupabasePublicConfig } from "@/lib/supabase";
 import { deductCredits, normalizeCredits } from "@/lib/generation/credits";
 import { generateImageViaFal, isFalImageConfigured } from "@/lib/generation/fal-image";

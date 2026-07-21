@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import { generateCaptionFromCarousel } from "@/lib/openai";
+import { generateCaptionFromCarousel } from "@/lib/generation/engine";
 import { getSupabasePublicConfig } from "@/lib/supabase";
 import type { CarouselOutlineSlide, ContentModeInput } from "@/types/editor";
 import type { AppDatabase } from "@/types/supabase";
