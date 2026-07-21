@@ -159,6 +159,11 @@ function resolveRolePlan(mode: ContentMode, count: number): CarouselSlideRole[] 
   if (Array.isArray(byMode) && byMode.length === count) {
     return byMode;
   }
+  // Полный 9-шаговый план режима (порядок ролей у режимов различается).
+  const modePlan = MODE_SLIDE_PLANS[mode]?.map((step) => step.role);
+  if (Array.isArray(modePlan) && modePlan.length === count) {
+    return modePlan;
+  }
   const byCount = FLOW_BY_COUNT[count];
   if (Array.isArray(byCount) && byCount.length === count) {
     return byCount;
@@ -177,22 +182,36 @@ function roleIntent(mode: ContentMode, role: CarouselSlideRole) {
 function buildSystemPrompt(mode: ContentMode) {
   const ctaRule =
     mode === "sales"
-      ? "CTA: одно конкретное действие с понятной выгодой (написать слово в директ, записаться)."
-      : "CTA: один мягкий шаг — сохранить, проверить у себя, применить один пункт. Без давления и «пишите в директ».";
+      ? "CTA: подзаголовок НАЧИНАЕТСЯ с глагола: «Напишите…», «Отправьте…», «Оставьте…» — и даёт понятную выгоду (например: «Напишите слово РАЗБОР — получите план под вашу ситуацию»)."
+      : "CTA: подзаголовок НАЧИНАЕТСЯ с одного из глаголов: «Сохраните…», «Выберите…», «Примените…», «Проверьте…». Мягко, без давления и «пишите в директ».";
+
+  const modeRule =
+    mode === "expert"
+      ? "- Слайд shift обязан объяснять МЕХАНИЗМ и содержать слово «потому что», «поэтому» или «из-за» (например: «Клиенты возвращаются, потому что…»)."
+      : mode === "instruction"
+        ? "- Буллеты solution — пронумерованные шаги: «Шаг 1: …», «Шаг 2: …», каждый с конкретным действием."
+        : mode === "social"
+          ? "- Hook обязан прямо называть тему/героя ситуации, чтобы читатель узнал себя без контекста."
+          : "";
 
   return [
     "Ты — сильный русскоязычный копирайтер социальных сетей.",
     "Пишешь текст карусели: цепко, конкретно, без воды и канцелярита.",
-    "Правила:",
-    "- Заголовок слайда: до 6 слов, конкретный, без двоеточий-оглавлений.",
-    "- Первый слайд (hook) цепляет болью, фактом, цифрой или интригой. Запрещено начинать с «Сегодня», «Я расскажу», «В этой карусели», «Привет».",
+    "ЖЁСТКИЕ ТРЕБОВАНИЯ К ПЛОТНОСТИ ТЕКСТА:",
+    "- Заголовок КАЖДОГО слайда: 4-6 слов, НИКОГДА не короче 4 слов. Особенно mistake и shift.",
+    "- Каждый bullet: 6-12 слов (45-90 символов), начинается с глагола или наблюдаемого факта. Никаких обрубков из 2-3 слов.",
+    "- example: «до» и «после» по 6-12 слов, каждый с цифрой или конкретным фактом.",
+    "- Подзаголовки hook/cta: 8-16 слов, законченная мысль.",
+    "ПРАВИЛА СОДЕРЖАНИЯ:",
+    "- Первый слайд (hook) цепляет болью, фактом, цифрой или интригой и содержит ключевые слова темы. Запрещено начинать с «Сегодня», «Я расскажу», «В этой карусели», «Привет».",
     "- Не используй слова: Instagram, карусель, слайд, пост, свайп, пользователь.",
-    "- Пункты (bullets): 2-4 шт, каждый начинается с глагола или наблюдаемого факта, 30-80 символов.",
-    "- Для example: «до» и «после» с конкретикой или цифрой.",
-    `- ${ctaRule}`,
     "- Одна мысль на слайд. Никаких повторов одной мысли разными словами.",
+    `- ${ctaRule}`,
+    modeRule,
     "Отвечай строго JSON по схеме."
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function buildUserPrompt(
@@ -242,17 +261,38 @@ function buildResponseSchema(slidesCount: number) {
               type: "string",
               enum: ["hook", "problem", "amplify", "mistake", "consequence", "shift", "solution", "example", "cta"]
             },
-            title: { type: "string", maxLength: 90 },
-            body: { type: "string", maxLength: 700 },
+            title: {
+              type: "string",
+              maxLength: 90,
+              description: "Заголовок 4-6 слов, конкретный. Для example — пустая строка."
+            },
+            body: {
+              type: "string",
+              maxLength: 700,
+              description: "Для hook/cta — подзаголовок 8-16 слов. Для mistake/shift — 1-2 плотных предложения."
+            },
             bullets: {
               type: "array",
               minItems: 0,
               maxItems: 4,
+              description: "Для problem/amplify/consequence/solution: 3 пункта по 6-12 слов каждый.",
               items: { type: "string", maxLength: 110 }
             },
-            before: { type: "string", maxLength: 150 },
-            after: { type: "string", maxLength: 150 },
-            cta_text: { type: "string", maxLength: 160 }
+            before: {
+              type: "string",
+              maxLength: 150,
+              description: "Только для example: «до» 6-12 слов с цифрой/фактом."
+            },
+            after: {
+              type: "string",
+              maxLength: 150,
+              description: "Только для example: «после» 6-12 слов с цифрой/фактом."
+            },
+            cta_text: {
+              type: "string",
+              maxLength: 160,
+              description: "Только для cta: начинается с глагола действия (сохраните/примените/напишите...)."
+            }
           },
           required: ["role", "title", "body", "bullets", "before", "after", "cta_text"]
         }
